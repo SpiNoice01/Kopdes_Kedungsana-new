@@ -36,6 +36,46 @@ const initialRows: MemberRow[] = [
   { memberId: "m20", memberName: "NENENG HERLINA", joinDate: "2024-12-20", savingPokok: 100000, savingWajib: 600000, savingSukarela: 513000, serviceContribution: 440000 },
 ];
 
+const formatRelativeDate = (dateStr: string): string => {
+  if (!dateStr) return "-";
+  const date = new Date(dateStr);
+  const now = new Date();
+  
+  if (now < date) return dateStr;
+  
+  let years = now.getFullYear() - date.getFullYear();
+  let months = now.getMonth() - date.getMonth();
+  let days = now.getDate() - date.getDate();
+  
+  if (days < 0) {
+    months -= 1;
+    const prevMonth = new Date(now.getFullYear(), now.getMonth(), 0);
+    days += prevMonth.getDate();
+  }
+  
+  if (months < 0) {
+    years -= 1;
+    months += 12;
+  }
+  
+  const parts: string[] = [];
+  if (years > 0) {
+    parts.push(`${years} thn`);
+    if (months > 0) {
+      parts.push(`${months} bln`);
+    }
+  } else if (months > 0) {
+    parts.push(`${months} bln`);
+    if (days > 0) {
+      parts.push(`${days} hari`);
+    }
+  } else {
+    parts.push(`${days} hari`);
+  }
+  
+  return parts.join(", ");
+};
+
 export default function SpreadsheetModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
   const [rows, setRows] = useState<MemberRow[]>(initialRows);
   const [activeTab, setActiveTab] = useState<"shu" | "simpanan">("simpanan");
@@ -99,7 +139,7 @@ export default function SpreadsheetModal({ isOpen, onClose }: { isOpen: boolean;
     
     switch (selectedCell.colName) {
       case "B": return row.memberName;
-      case "C": return row.joinDate;
+      case "C": return `${row.joinDate} (${formatRelativeDate(row.joinDate)})`;
       case "D": return activeTab === "shu" ? row.totalSaving.toString() : row.savingPokok.toString();
       case "E": return activeTab === "shu" ? row.serviceContribution.toString() : row.savingWajib.toString();
       case "F": return activeTab === "shu" ? row.savingShu.toString() : row.savingSukarela.toString();
@@ -595,7 +635,7 @@ export default function SpreadsheetModal({ isOpen, onClose }: { isOpen: boolean;
                           : "border-slate-200"
                       }`}
                     >
-                      {row.joinDate}
+                      {formatRelativeDate(row.joinDate)}
                     </td>
 
                     {activeTab === "shu" ? (
@@ -725,6 +765,9 @@ export default function SpreadsheetModal({ isOpen, onClose }: { isOpen: boolean;
                 </td>
                 <td className="border border-slate-300 text-left px-2 py-1 text-slate-700">
                   JUMLAH (SUM TOTAL)
+                </td>
+                <td className="border border-slate-300 text-center text-slate-400 py-1">
+                  -
                 </td>
                 {activeTab === "shu" ? (
                   <>
