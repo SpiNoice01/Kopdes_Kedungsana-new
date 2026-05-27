@@ -38,6 +38,8 @@ export default function OverviewPage() {
   const [sumWajib, setSumWajib] = useState(0);
   const [sumSukarela, setSumSukarela] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
+  // Monthly trend: last 6 months label => total savings
+  const [monthlyTrend, setMonthlyTrend] = useState<{ label: string; wajib: number; sukarela: number }[]>([]);
 
   const [inactiveMembers, setInactiveMembers] = useState(0);
 
@@ -76,11 +78,42 @@ export default function OverviewPage() {
           }
         }
 
+        // Build last-6-months trend map
+        const now = new Date();
+        const trendMap: Record<string, { wajib: number; sukarela: number }> = {};
+        for (let i = 5; i >= 0; i--) {
+          const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+          const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+          const shortLabel = d.toLocaleDateString("id-ID", { month: "short", year: "2-digit" });
+          trendMap[key] = { wajib: 0, sukarela: 0 };
+          // Attach label separately
+          (trendMap[key] as any)._label = shortLabel;
+        }
+
         setSumPokok(runningPokok);
         setSumWajib(runningWajib);
         setSumSukarela(runningSukarela);
         setTotalSavings(savingsSum);
         setArrearsCount(inArrears);
+
+        // Aggregate savings per period across all active members (re-use savings fetched above)
+        // We need to refetch since the loop above consumed them; we build a secondary pass
+        for (const member of activeList) {
+          const savings = await memberDependencies.getMemberMonthlySavingsUseCase.execute(member.id);
+          for (const s of savings) {
+            if (trendMap[s.period]) {
+              trendMap[s.period].wajib += s.requiredSaving;
+              trendMap[s.period].sukarela += s.voluntarySaving;
+            }
+          }
+        }
+
+        const trendArr = Object.entries(trendMap).map(([, v]) => ({
+          label: (v as any)._label as string,
+          wajib: v.wajib,
+          sukarela: v.sukarela,
+        }));
+        setMonthlyTrend(trendArr);
       } catch (error) {
         console.error("Failed to load overview analytics data", error);
       } finally {
@@ -444,6 +477,83 @@ export default function OverviewPage() {
           </div>
         </div>
 
+      </div>
+      {/* Monthly Savings Trend Bar Chart */}
+      <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+        <div className="mb-5">
+          <h3 className="text-base font-bold text-slate-800">Tren Simpanan Masuk Per Bulan</h3>
+          <p className="text-xs text-slate-400 mt-0.5">Akumulasi total simpanan wajib dan sukarela yang diterima dalam 6 bulan terakhir.</p>
+        </div>
+
+        {isLoading ? (
+          <div className="h-44 flex items-center justify-center">
+            <div className="w-8 h-8 border-2 border-slate-200 border-t-primary rounded-full animate-spin"></div>
+          </div>
+        ) : (
+          <div className="relative">
+            {/* Bar Chart */}
+            <div className="flex items-end justify-between gap-2 h-44 px-1">
+              {monthlyTrend.map((month, i) => {
+                const maxTotal = Math.max(...monthlyTrend.map((m) => m.wajib + m.sukarela), 1);
+                const total = month.wajib + month.sukarela;
+                const heightPct = (total / maxTotal) * 100;
+                const wajibPct = total > 0 ? (month.wajib / total) * heightPct : 0;
+                const sukarelaPct = total > 0 ? (month.sukarela / total) * heightPct : 0;
+                const isLast = i === monthlyTrend.length - 1;
+
+                return (
+                  <div key={i} className="flex-1 flex flex-col items-center gap-1 group relative">
+                    {/* Tooltip */}
+                    <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 bg-slate-800 text-white text-[10px] rounded-xl px-3 py-2 shadow-lg opacity-0 group-hover:opacity-100 transition-opacity duration-150 pointer-events-none whitespace-nowrap z-10">
+                      <p className="font-bold text-white">{month.label}</p>
+                      <p className="text-slate-300">Wajib: {formatCurrency(month.wajib)}</p>
+                      <p className="text-amber-300">Sukarela: {formatCurrency(month.sukarela)}</p>
+                      <p className="text-emerald-300 border-t border-slate-600 mt-1 pt-1 font-bold">Total: {formatCurrency(total)}</p>
+                    </div>
+
+                    {/* Stacked Bar */}
+                    <div
+                      className="w-full rounded-xl overflow-hidden flex flex-col-reverse transition-all duration-500 ease-out"
+                      style={{ height: `${Math.max(heightPct, total > 0 ? 4 : 0)}%` }}
+                    >
+                      {/* Wajib (bottom, emerald) */}
+                      <div
+                        className={`w-full transition-all duration-500 ${ isLast ? "bg-primary" : "bg-emerald-400" } group-hover:brightness-110`}
+                        style={{ height: `${total > 0 ? (month.wajib / total) * 100 : 0}%`, minHeight: month.wajib > 0 ? "4px" : "0" }}
+                      />
+                      {/* Sukarela (top, amber) */}
+                      <div
+                        className={`w-full transition-all duration-500 ${ isLast ? "bg-primary/40" : "bg-amber-400" } group-hover:brightness-110`}
+                        style={{ height: `${total > 0 ? (month.sukarela / total) * 100 : 0}%`, minHeight: month.sukarela > 0 ? "4px" : "0" }}
+                      />
+                    </div>
+
+                    {/* Month label */}
+                    <span className={`text-[10px] font-bold mt-1 ${ isLast ? "text-primary" : "text-slate-400" }`}>
+                      {month.label}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Legend */}
+            <div className="flex items-center gap-4 mt-4 justify-center text-xs">
+              <div className="flex items-center gap-1.5">
+                <span className="w-3 h-3 rounded-full bg-emerald-400 flex-shrink-0"></span>
+                <span className="text-slate-500">Simpanan Wajib</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="w-3 h-3 rounded-full bg-amber-400 flex-shrink-0"></span>
+                <span className="text-slate-500">Simpanan Sukarela</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="w-3 h-3 rounded-full bg-primary flex-shrink-0"></span>
+                <span className="text-slate-500">Bulan Ini</span>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </section>
   );

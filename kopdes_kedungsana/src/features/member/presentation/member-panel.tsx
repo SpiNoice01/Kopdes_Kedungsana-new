@@ -102,7 +102,7 @@ export function MemberPanel() {
   const [genderFilter, setGenderFilter] = useState<"all" | "laki-laki" | "perempuan">("all");
 
   const filteredMembers = useMemo(() => {
-    return members.filter((member) => {
+    const filtered = members.filter((member) => {
       const matchesSearch =
         member.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         member.nik.includes(searchTerm);
@@ -119,6 +119,15 @@ export function MemberPanel() {
         member.gender.toLowerCase() === genderFilter;
         
       return matchesSearch && matchesArrears && matchesGender;
+    });
+
+    // ✅ Sort: members with arrears float to TOP (descending by arrears amount)
+    // Within each group, sort alphabetically by name
+    return filtered.sort((a, b) => {
+      const arrearsA = calculateArrears(a, savingsMap[a.id] || []).arrears;
+      const arrearsB = calculateArrears(b, savingsMap[b.id] || []).arrears;
+      if (arrearsB !== arrearsA) return arrearsB - arrearsA; // highest arrears first
+      return a.name.localeCompare(b.name, "id"); // then alphabetical
     });
   }, [members, savingsMap, searchTerm, arrearsFilter, genderFilter]);
 
