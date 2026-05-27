@@ -9,4 +9,5 @@ export interface MemberRepository {
   getMonthlySavingsByMemberId(memberId: string): Promise<MemberMonthlySaving[]>;
   addMonthlySaving(saving: MemberMonthlySaving): Promise<void>;
   updatePhoto(id: string, photoUrl: string): Promise<void>;
+  updateStatus(id: string, status: "aktif" | "nonaktif"): Promise<void>;
 }

@@ -52,4 +52,11 @@ export class InMemoryMemberRepository implements MemberRepository {
       members[idx] = { ...members[idx], photoUrl };
     }
   }
+
+  async updateStatus(id: string, status: "aktif" | "nonaktif"): Promise<void> {
+    const idx = members.findIndex((item) => item.id === id);
+    if (idx >= 0) {
+      members[idx] = { ...members[idx], status };
+    }
+  }
 }
