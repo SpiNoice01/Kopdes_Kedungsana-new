@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ReactNode, useMemo, useState } from "react";
+import SpreadsheetModal from "./spreadsheet-modal";
 
 type AdminShellProps = {
   children: ReactNode;
@@ -21,9 +22,13 @@ const navigationItems: NavigationItem[] = [
 
 export function AdminShell({ children }: AdminShellProps) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isSpreadsheetOpen, setIsSpreadsheetOpen] = useState(false);
   const pathname = usePathname();
 
   const currentPageTitle = useMemo(() => {
+    if (pathname.startsWith("/admin/spreadsheet")) {
+      return "Spreadsheet Live";
+    }
     const activeItem = navigationItems.find((item) =>
       pathname.startsWith(item.href),
     );
@@ -83,42 +88,60 @@ export function AdminShell({ children }: AdminShellProps) {
         </aside>
 
         <div className="flex flex-1 flex-col">
-          <header className="border-b border-slate-200 bg-white px-4 py-3 sm:px-6">
-            <h1 className="text-lg font-semibold text-primary flex items-center gap-2">
-              {currentPageTitle}
-              {currentPageTitle === "Quick SHU" && (
-                <span className="group relative inline-flex items-center">
-                  <button
-                    type="button"
-                    aria-label="Lihat rumus SHU"
-                    className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-slate-300 text-[11px] font-semibold leading-none text-slate-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
-                  >
-                    i
-                  </button>
-                  <span
-                    role="tooltip"
-                    className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 w-72 -translate-x-1/2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-700 opacity-0 shadow-sm transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100"
-                  >
-                    <span className="font-semibold">Rumus SHU:</span>
-                    <br />
-                    <span className="font-mono">
-                      SHU Simpanan = (Simpanan Anggota / Total Simpanan) × SHU
-                      Simpanan
+          <header className="border-b border-slate-200 bg-white px-4 py-3 sm:px-6 flex items-center justify-between">
+            <div>
+              <h1 className="text-lg font-semibold text-primary flex items-center gap-2">
+                {currentPageTitle}
+                {currentPageTitle === "Quick SHU" && (
+                  <span className="group relative inline-flex items-center">
+                    <button
+                      type="button"
+                      aria-label="Lihat rumus SHU"
+                      className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-slate-300 text-[11px] font-semibold leading-none text-slate-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+                    >
+                      i
+                    </button>
+                    <span
+                      role="tooltip"
+                      className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 w-72 -translate-x-1/2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-700 opacity-0 shadow-sm transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100"
+                    >
+                      <span className="font-semibold">Rumus SHU:</span>
                       <br />
-                      SHU Jasa = (Jasa Anggota / Total Jasa) × SHU Jasa
+                      <span className="font-mono">
+                        SHU Simpanan = (Simpanan Anggota / Total Simpanan) × SHU
+                        Simpanan
+                        <br />
+                        SHU Jasa = (Jasa Anggota / Total Jasa) × SHU Jasa
+                      </span>
                     </span>
                   </span>
-                </span>
-              )}
-            </h1>
-            <p className="text-sm text-slate-500">
-              Sistem pencatatan koperasi desa
-            </p>
+                )}
+              </h1>
+              <p className="text-sm text-slate-500">
+                Sistem pencatatan koperasi desa
+              </p>
+            </div>
+
+            {/* Appbar Spreadsheet View Trigger Button */}
+            <button
+              onClick={() => setIsSpreadsheetOpen(true)}
+              className="inline-flex items-center gap-2 rounded-xl bg-green-700 hover:bg-green-800 text-white px-4.5 py-2 text-sm font-semibold shadow-sm transition-all hover:shadow-md cursor-pointer border-none outline-none"
+            >
+              <svg className="h-4.5 w-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              <span>Spreadsheet View</span>
+            </button>
           </header>
 
           <main className="flex-1 p-4 sm:p-6">{children}</main>
         </div>
       </div>
+
+      <SpreadsheetModal
+        isOpen={isSpreadsheetOpen}
+        onClose={() => setIsSpreadsheetOpen(false)}
+      />
     </div>
   );
 }
