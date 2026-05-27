@@ -116,7 +116,7 @@ export function MemberDetailPage({ memberId }: MemberDetailPageProps) {
   
   // State for active document printing pratinjau (modal) and browser print template
   const [activePrintJob, setActivePrintJob] = useState<{
-    type: "receipt" | "liquidation";
+    type: "receipt" | "liquidation" | "mutasi";
     data: any;
   } | null>(null);
 
@@ -619,9 +619,22 @@ export function MemberDetailPage({ memberId }: MemberDetailPageProps) {
           description="Sumber data untuk kalkulasi di halaman Quick SHU."
         >
           <div className="space-y-3">
-            <p className="text-sm text-slate-600">
-              Total akumulasi simpanan bulanan: {formatCurrency(totalRecap)}
-            </p>
+            <div className="flex items-center justify-between">
+              <p className="text-sm text-slate-600">
+                Total akumulasi simpanan bulanan: {formatCurrency(totalRecap)}
+              </p>
+              {monthlySavings.length > 0 && (
+                <button
+                  onClick={() => setActivePrintJob({ type: "mutasi", data: monthlySavings })}
+                  className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-700 hover:opacity-80 transition bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-xl cursor-pointer"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                  </svg>
+                  <span>Cetak Buku Mutasi</span>
+                </button>
+              )}
+            </div>
 
             {monthlySavings.length ? (
               <div className="overflow-x-auto rounded-xl border border-slate-200">
@@ -927,6 +940,68 @@ export function MemberDetailPage({ memberId }: MemberDetailPageProps) {
                   <p className="text-slate-500">Penerima Kas Koperasi</p>
                   <div className="h-20"></div>
                   <p className="font-bold text-slate-950 border-t border-slate-400 pt-1 inline-block min-w-[120px]">Admin Kedungsana</p>
+                </div>
+              </div>
+            </div>
+          ) : activePrintJob.type === "mutasi" ? (
+            /* Buku Mutasi Print Layout */
+            <div className="max-w-3xl mx-auto font-mono text-xs space-y-4 p-4">
+              <div className="text-center border-b-4 border-double border-slate-500 pb-4">
+                <h2 className="font-bold text-base uppercase">KOPERASI DESA KEDUNGSANA</h2>
+                <p className="text-[10px] text-slate-500">RT 01/RW 03, Kec. Plumbon, Cirebon — Badan Hukum No: AHU-0012903.AH.01.26</p>
+                <h3 className="text-sm font-bold mt-3 uppercase tracking-wider">BUKU MUTASI SIMPANAN ANGGOTA</h3>
+                <p className="text-[10px] text-slate-400 mt-0.5">Dicetak: {new Date().toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })}</p>
+              </div>
+              <div className="grid grid-cols-2 gap-x-8 gap-y-1 text-[11px] mb-2">
+                <div className="flex"><span className="w-28 text-slate-500">Nama Anggota</span><span className="mr-1">:</span><span className="font-bold">{member.name}</span></div>
+                <div className="flex"><span className="w-28 text-slate-500">Status</span><span className="mr-1">:</span><span className="font-bold uppercase">{member.status}</span></div>
+                <div className="flex"><span className="w-28 text-slate-500">NIK</span><span className="mr-1">:</span><span className="font-bold">{member.nik}</span></div>
+                <div className="flex"><span className="w-28 text-slate-500">Tgl. Bergabung</span><span className="mr-1">:</span><span>{member.joinDate}</span></div>
+                <div className="flex"><span className="w-28 text-slate-500">Simpanan Pokok</span><span className="mr-1">:</span><span className="font-bold">{formatCurrency(principalSavingAmount)}</span></div>
+              </div>
+              <table className="w-full border-collapse text-[10px]">
+                <thead>
+                  <tr className="bg-slate-200 border border-slate-400">
+                    <th className="border border-slate-400 px-2 py-1 text-left">No</th>
+                    <th className="border border-slate-400 px-2 py-1 text-left">Periode</th>
+                    <th className="border border-slate-400 px-2 py-1 text-right">Simp. Wajib</th>
+                    <th className="border border-slate-400 px-2 py-1 text-right">Simp. Sukarela</th>
+                    <th className="border border-slate-400 px-2 py-1 text-right">Total Setor</th>
+                    <th className="border border-slate-400 px-2 py-1 text-center">Tgl Input</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(activePrintJob.data as MemberMonthlySaving[]).map((s: MemberMonthlySaving, i: number) => (
+                    <tr key={s.id} className="border border-slate-300">
+                      <td className="border border-slate-300 px-2 py-0.5 text-center">{i + 1}</td>
+                      <td className="border border-slate-300 px-2 py-0.5">{s.period}</td>
+                      <td className="border border-slate-300 px-2 py-0.5 text-right">{formatCurrency(s.requiredSaving)}</td>
+                      <td className="border border-slate-300 px-2 py-0.5 text-right">{formatCurrency(s.voluntarySaving)}</td>
+                      <td className="border border-slate-300 px-2 py-0.5 text-right font-bold">{formatCurrency(s.totalSaving)}</td>
+                      <td className="border border-slate-300 px-2 py-0.5 text-center">{s.inputDate}</td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr className="bg-slate-200 border-2 border-slate-500 font-extrabold">
+                    <td colSpan={2} className="border border-slate-500 px-2 py-1 uppercase">Grand Total</td>
+                    <td className="border border-slate-500 px-2 py-1 text-right">{formatCurrency(monthlySavings.reduce((s, r) => s + r.requiredSaving, 0))}</td>
+                    <td className="border border-slate-500 px-2 py-1 text-right">{formatCurrency(monthlySavings.reduce((s, r) => s + r.voluntarySaving, 0))}</td>
+                    <td className="border border-slate-500 px-2 py-1 text-right">{formatCurrency(totalRecap)}</td>
+                    <td className="border border-slate-500 px-2 py-1"></td>
+                  </tr>
+                </tfoot>
+              </table>
+              <div className="flex justify-between text-center pt-10 text-[10px]">
+                <div className="w-1/2">
+                  <p>Anggota,</p>
+                  <div className="h-14"></div>
+                  <p className="font-bold border-t border-slate-400 pt-1 inline-block min-w-[100px]">{member.name}</p>
+                </div>
+                <div className="w-1/2">
+                  <p>Admin Koperasi,</p>
+                  <div className="h-14"></div>
+                  <p className="font-bold border-t border-slate-400 pt-1 inline-block min-w-[100px]">Admin Kedungsana</p>
                 </div>
               </div>
             </div>

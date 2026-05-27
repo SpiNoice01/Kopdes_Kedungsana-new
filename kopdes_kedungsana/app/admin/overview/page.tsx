@@ -39,12 +39,18 @@ export default function OverviewPage() {
   const [sumSukarela, setSumSukarela] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
 
+  const [inactiveMembers, setInactiveMembers] = useState(0);
+
   useEffect(() => {
     const fetchDashboardData = async () => {
       try {
         setIsLoading(true);
         const list = await memberDependencies.getMembersUseCase.execute();
-        setTotalMembers(list.length);
+
+        // ✅ Saran 3: Only count ACTIVE members in all operational metrics
+        const activeList = list.filter((m) => m.status === "aktif");
+        setTotalMembers(activeList.length);
+        setInactiveMembers(list.length - activeList.length);
 
         let savingsSum = 0;
         let runningPokok = 0;
@@ -52,10 +58,9 @@ export default function OverviewPage() {
         let runningSukarela = 0;
         let inArrears = 0;
 
-        for (const member of list) {
+        for (const member of activeList) {
           const savings = await memberDependencies.getMemberMonthlySavingsUseCase.execute(member.id);
           
-          // Every active member has standard Rp 100,000 principal savings
           const pokok = 100000;
           const wajib = savings.reduce((sum, s) => sum + s.requiredSaving, 0);
           const sukarela = savings.reduce((sum, s) => sum + s.voluntarySaving, 0);
@@ -191,7 +196,16 @@ export default function OverviewPage() {
           </div>
           <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs">
             <span className="text-slate-400">Status Keanggotaan</span>
-            <span className="text-emerald-600 font-semibold bg-emerald-50 px-2 py-0.5 rounded-full text-[10px]">Aktif</span>
+            <div className="flex items-center gap-1.5">
+              <span className="text-emerald-600 font-semibold bg-emerald-50 px-2 py-0.5 rounded-full text-[10px]">
+                {isLoading ? "-" : `${totalMembers} Aktif`}
+              </span>
+              {!isLoading && inactiveMembers > 0 && (
+                <span className="text-slate-400 font-semibold bg-slate-100 px-2 py-0.5 rounded-full text-[10px]">
+                  {inactiveMembers} Nonaktif
+                </span>
+              )}
+            </div>
           </div>
         </div>
 

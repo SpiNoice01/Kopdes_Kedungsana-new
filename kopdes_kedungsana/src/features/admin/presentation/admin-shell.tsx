@@ -19,6 +19,7 @@ const navigationItems: NavigationItem[] = [
   { href: "/admin/overview", label: "Overview" },
   { href: "/admin/input-data", label: "Input Data" },
   { href: "/admin/quick-shu", label: "Quick SHU" },
+  { href: "/admin/laporan", label: "Laporan Tahunan" },
 ];
 
 export function AdminShell({ children }: AdminShellProps) {
@@ -32,6 +33,9 @@ export function AdminShell({ children }: AdminShellProps) {
     }
     if (pathname.startsWith("/admin/activity-logs")) {
       return "Log Aktivitas";
+    }
+    if (pathname.startsWith("/admin/laporan")) {
+      return "Laporan Tahunan";
     }
     const activeItem = navigationItems.find((item) =>
       pathname.startsWith(item.href),
