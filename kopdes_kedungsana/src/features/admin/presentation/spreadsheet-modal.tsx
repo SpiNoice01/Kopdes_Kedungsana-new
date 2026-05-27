@@ -6,6 +6,7 @@ import { addAuditLog } from "../../../utils/audit-logger";
 type MemberRow = {
   memberId: string;
   memberName: string;
+  joinDate: string;
   savingPokok: number;
   savingWajib: number;
   savingSukarela: number;
@@ -13,26 +14,26 @@ type MemberRow = {
 };
 
 const initialRows: MemberRow[] = [
-  { memberId: "m1", memberName: "OMAN NUROHMAN", savingPokok: 100000, savingWajib: 560000, savingSukarela: 169000, serviceContribution: 0 },
-  { memberId: "m2", memberName: "NENI MULYANI", savingPokok: 100000, savingWajib: 830000, savingSukarela: 690000, serviceContribution: 340000 },
-  { memberId: "m3", memberName: "HJ. DJEDJEH ZAKIAH", savingPokok: 100000, savingWajib: 830000, savingSukarela: 1323000, serviceContribution: 120000 },
-  { memberId: "m4", memberName: "YUYU WAHYUDIN", savingPokok: 0, savingWajib: 0, savingSukarela: 0, serviceContribution: 0 },
-  { memberId: "m5", memberName: "H. KARTAM", savingPokok: 0, savingWajib: 0, savingSukarela: 0, serviceContribution: 0 },
-  { memberId: "m6", memberName: "ERUS RUSMIATI", savingPokok: 100000, savingWajib: 780000, savingSukarela: 1130000, serviceContribution: 640000 },
-  { memberId: "m7", memberName: "SUSI ROSILAWATI", savingPokok: 100000, savingWajib: 800000, savingSukarela: 350000, serviceContribution: 0 },
-  { memberId: "m8", memberName: "ASWETI", savingPokok: 100000, savingWajib: 330000, savingSukarela: 129000, serviceContribution: 0 },
-  { memberId: "m9", memberName: "IKIT MASTIKA", savingPokok: 100000, savingWajib: 830000, savingSukarela: 110000, serviceContribution: 710000 },
-  { memberId: "m10", memberName: "SUKMI", savingPokok: 100000, savingWajib: 800000, savingSukarela: 130000, serviceContribution: 270000 },
-  { memberId: "m11", memberName: "LINDA ERLIA", savingPokok: 100000, savingWajib: 800000, savingSukarela: 320000, serviceContribution: 440000 },
-  { memberId: "m12", memberName: "TITI SUGIARTI", savingPokok: 100000, savingWajib: 850000, savingSukarela: 600000, serviceContribution: 0 },
-  { memberId: "m13", memberName: "KATRIN HALFALIA", savingPokok: 100000, savingWajib: 850000, savingSukarela: 1659000, serviceContribution: 628000 },
-  { memberId: "m14", memberName: "TATI HARYATI", savingPokok: 100000, savingWajib: 900000, savingSukarela: 3320000, serviceContribution: 200000 },
-  { memberId: "m15", memberName: "YATI KASYARTI", savingPokok: 0, savingWajib: 0, savingSukarela: 0, serviceContribution: 0 },
-  { memberId: "m16", memberName: "TRIANI WIDIA NINGRUM", savingPokok: 100000, savingWajib: 500000, savingSukarela: 485000, serviceContribution: 660000 },
-  { memberId: "m17", memberName: "SULASTRI", savingPokok: 0, savingWajib: 0, savingSukarela: 0, serviceContribution: 0 },
-  { memberId: "m18", memberName: "SITI ROHMAH", savingPokok: 100000, savingWajib: 600000, savingSukarela: 496000, serviceContribution: 560000 },
-  { memberId: "m19", memberName: "SUNARTI", savingPokok: 100000, savingWajib: 700000, savingSukarela: 638000, serviceContribution: 670000 },
-  { memberId: "m20", memberName: "NENENG HERLINA", savingPokok: 100000, savingWajib: 600000, savingSukarela: 513000, serviceContribution: 440000 },
+  { memberId: "m1", memberName: "OMAN NUROHMAN", joinDate: "2024-01-10", savingPokok: 100000, savingWajib: 560000, savingSukarela: 169000, serviceContribution: 0 },
+  { memberId: "m2", memberName: "NENI MULYANI", joinDate: "2024-02-15", savingPokok: 100000, savingWajib: 830000, savingSukarela: 690000, serviceContribution: 340000 },
+  { memberId: "m3", memberName: "HJ. DJEDJEH ZAKIAH", joinDate: "2024-03-20", savingPokok: 100000, savingWajib: 830000, savingSukarela: 1323000, serviceContribution: 120000 },
+  { memberId: "m4", memberName: "YUYU WAHYUDIN", joinDate: "2025-01-05", savingPokok: 0, savingWajib: 0, savingSukarela: 0, serviceContribution: 0 },
+  { memberId: "m5", memberName: "H. KARTAM", joinDate: "2025-02-10", savingPokok: 0, savingWajib: 0, savingSukarela: 0, serviceContribution: 0 },
+  { memberId: "m6", memberName: "ERUS RUSMIATI", joinDate: "2024-04-12", savingPokok: 100000, savingWajib: 780000, savingSukarela: 1130000, serviceContribution: 640000 },
+  { memberId: "m7", memberName: "SUSI ROSILAWATI", joinDate: "2024-05-18", savingPokok: 100000, savingWajib: 800000, savingSukarela: 350000, serviceContribution: 0 },
+  { memberId: "m8", memberName: "ASWETI", joinDate: "2024-06-25", savingPokok: 100000, savingWajib: 330000, savingSukarela: 129000, serviceContribution: 0 },
+  { memberId: "m9", memberName: "IKIT MASTIKA", joinDate: "2024-07-30", savingPokok: 100000, savingWajib: 830000, savingSukarela: 110000, serviceContribution: 710000 },
+  { memberId: "m10", memberName: "SUKMI", joinDate: "2024-08-05", savingPokok: 100000, savingWajib: 800000, savingSukarela: 130000, serviceContribution: 270000 },
+  { memberId: "m11", memberName: "LINDA ERLIA", joinDate: "2024-09-12", savingPokok: 100000, savingWajib: 800000, savingSukarela: 320000, serviceContribution: 440000 },
+  { memberId: "m12", memberName: "TITI SUGIARTI", joinDate: "2024-10-15", savingPokok: 100000, savingWajib: 850000, savingSukarela: 600000, serviceContribution: 0 },
+  { memberId: "m13", memberName: "KATRIN HALFALIA", joinDate: "2024-10-20", savingPokok: 100000, savingWajib: 850000, savingSukarela: 1659000, serviceContribution: 628000 },
+  { memberId: "m14", memberName: "TATI HARYATI", joinDate: "2024-11-05", savingPokok: 100000, savingWajib: 900000, savingSukarela: 3320000, serviceContribution: 200000 },
+  { memberId: "m15", memberName: "YATI KASYARTI", joinDate: "2025-03-01", savingPokok: 0, savingWajib: 0, savingSukarela: 0, serviceContribution: 0 },
+  { memberId: "m16", memberName: "TRIANI WIDIA NINGRUM", joinDate: "2024-11-15", savingPokok: 100000, savingWajib: 500000, savingSukarela: 485000, serviceContribution: 660000 },
+  { memberId: "m17", memberName: "SULASTRI", joinDate: "2025-04-10", savingPokok: 0, savingWajib: 0, savingSukarela: 0, serviceContribution: 0 },
+  { memberId: "m18", memberName: "SITI ROHMAH", joinDate: "2024-12-05", savingPokok: 100000, savingWajib: 600000, savingSukarela: 496000, serviceContribution: 560000 },
+  { memberId: "m19", memberName: "SUNARTI", joinDate: "2024-12-12", savingPokok: 100000, savingWajib: 700000, savingSukarela: 638000, serviceContribution: 670000 },
+  { memberId: "m20", memberName: "NENENG HERLINA", joinDate: "2024-12-20", savingPokok: 100000, savingWajib: 600000, savingSukarela: 513000, serviceContribution: 440000 },
 ];
 
 export default function SpreadsheetModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
@@ -98,11 +99,12 @@ export default function SpreadsheetModal({ isOpen, onClose }: { isOpen: boolean;
     
     switch (selectedCell.colName) {
       case "B": return row.memberName;
-      case "C": return activeTab === "shu" ? row.totalSaving.toString() : row.savingPokok.toString();
-      case "D": return activeTab === "shu" ? row.serviceContribution.toString() : row.savingWajib.toString();
-      case "E": return activeTab === "shu" ? row.savingShu.toString() : row.savingSukarela.toString();
-      case "F": return activeTab === "shu" ? row.serviceShu.toString() : row.totalSaving.toString();
-      case "G": return row.totalShu.toString();
+      case "C": return row.joinDate;
+      case "D": return activeTab === "shu" ? row.totalSaving.toString() : row.savingPokok.toString();
+      case "E": return activeTab === "shu" ? row.serviceContribution.toString() : row.savingWajib.toString();
+      case "F": return activeTab === "shu" ? row.savingShu.toString() : row.savingSukarela.toString();
+      case "G": return activeTab === "shu" ? row.serviceShu.toString() : row.totalSaving.toString();
+      case "H": return row.totalShu.toString();
       default: return "";
     }
   }, [selectedCell, computedRows, activeTab]);
@@ -110,9 +112,9 @@ export default function SpreadsheetModal({ isOpen, onClose }: { isOpen: boolean;
   // Check if cell is write-protected (formulas are calculated automatically)
   const isCellCalculated = (colName: string) => {
     if (activeTab === "shu") {
-      return ["C", "E", "F", "G"].includes(colName);
+      return ["D", "F", "G", "H"].includes(colName);
     } else {
-      return ["F"].includes(colName);
+      return ["G"].includes(colName);
     }
   };
 
@@ -122,19 +124,8 @@ export default function SpreadsheetModal({ isOpen, onClose }: { isOpen: boolean;
   };
 
   const handleCellDoubleClick = (rowIdx: number, colName: string) => {
-    if (isCellCalculated(colName)) return; 
-    setSelectedCell({ rowIdx, colName });
-    setEditingCell({ rowIdx, colName });
-    const row = rows[rowIdx];
-    let val = "";
-    switch (colName) {
-      case "B": val = row.memberName; break;
-      case "C": val = activeTab === "shu" ? "" : row.savingPokok.toString(); break;
-      case "D": val = activeTab === "shu" ? row.serviceContribution.toString() : row.savingWajib.toString(); break;
-      case "E": val = activeTab === "shu" ? "" : row.savingSukarela.toString(); break;
-      default: val = "";
-    }
-    setEditValue(val);
+    // Read-only: editing is disabled in spreadsheet view.
+    return;
   };
 
   const handleSaveCell = (rowIdx: number, colName: string, value: string) => {
@@ -224,6 +215,7 @@ export default function SpreadsheetModal({ isOpen, onClose }: { isOpen: boolean;
       {
         memberId: newId,
         memberName: newName,
+        joinDate: "2025-01-01",
         savingPokok: 100000,
         savingWajib: 0,
         savingSukarela: 0,
@@ -282,6 +274,7 @@ export default function SpreadsheetModal({ isOpen, onClose }: { isOpen: boolean;
             <tr>
               <th>NO</th>
               <th>NAMA ANGGOTA</th>
+              <th>TGL BERGABUNG</th>
               <th>JML SIMPANAN</th>
               <th>SETORAN JASA</th>
               <th>SHU SIMPANAN</th>
@@ -294,6 +287,7 @@ export default function SpreadsheetModal({ isOpen, onClose }: { isOpen: boolean;
               <tr>
                 <td class="center">${index + 1}</td>
                 <td>${row.memberName}</td>
+                <td class="center">${row.joinDate}</td>
                 <td class="num">Rp ${row.totalSaving.toLocaleString("id-ID")}</td>
                 <td class="num">Rp ${row.serviceContribution.toLocaleString("id-ID")}</td>
                 <td class="num">Rp ${row.savingShu.toLocaleString("id-ID")}</td>
@@ -302,7 +296,7 @@ export default function SpreadsheetModal({ isOpen, onClose }: { isOpen: boolean;
               </tr>
             `).join("")}
             <tr style="font-weight: bold; background-color: #e2e8f0;">
-              <td colspan="2" class="center">JUMLAH</td>
+              <td colspan="3" class="center">JUMLAH</td>
               <td class="num">Rp ${computedRows.reduce((a, b) => a + b.totalSaving, 0).toLocaleString("id-ID")}</td>
               <td class="num">Rp ${computedRows.reduce((a, b) => a + b.serviceContribution, 0).toLocaleString("id-ID")}</td>
               <td class="num">Rp ${computedRows.reduce((a, b) => a + b.savingShu, 0).toLocaleString("id-ID")}</td>
@@ -339,6 +333,7 @@ export default function SpreadsheetModal({ isOpen, onClose }: { isOpen: boolean;
             <tr>
               <th rowspan="2">NO</th>
               <th rowspan="2">NAMA ANGGOTA</th>
+              <th rowspan="2">TGL BERGABUNG</th>
               <th colspan="3">SIMPANAN</th>
               <th rowspan="2">JUMLAH</th>
             </tr>
@@ -353,6 +348,7 @@ export default function SpreadsheetModal({ isOpen, onClose }: { isOpen: boolean;
               <tr>
                 <td class="center">${index + 1}</td>
                 <td>${row.memberName}</td>
+                <td class="center">${row.joinDate}</td>
                 <td class="num">Rp ${row.savingPokok.toLocaleString("id-ID")}</td>
                 <td class="num">Rp ${row.savingWajib.toLocaleString("id-ID")}</td>
                 <td class="num">Rp ${row.savingSukarela.toLocaleString("id-ID")}</td>
@@ -360,7 +356,7 @@ export default function SpreadsheetModal({ isOpen, onClose }: { isOpen: boolean;
               </tr>
             `).join("")}
             <tr style="font-weight: bold; background-color: #e2e8f0;">
-              <td colspan="2" class="center">JUMLAH</td>
+              <td colspan="3" class="center">JUMLAH</td>
               <td class="num">Rp ${computedRows.reduce((a, b) => a + b.savingPokok, 0).toLocaleString("id-ID")}</td>
               <td class="num">Rp ${computedRows.reduce((a, b) => a + b.savingWajib, 0).toLocaleString("id-ID")}</td>
               <td class="num">Rp ${computedRows.reduce((a, b) => a + b.savingSukarela, 0).toLocaleString("id-ID")}</td>
@@ -443,19 +439,12 @@ export default function SpreadsheetModal({ isOpen, onClose }: { isOpen: boolean;
               </button>
             </div>
 
-            <button
-              onClick={handleAddRow}
-              className="px-3 py-1.5 bg-white/20 hover:bg-white/30 text-white rounded-lg text-xs font-semibold transition"
-            >
-              + Tambah Baris
-            </button>
-
-            <button
-              onClick={handleResetData}
-              className="px-3 py-1.5 bg-white/20 hover:bg-white/30 text-white rounded-lg text-xs font-semibold transition"
-            >
-              Reset
-            </button>
+            <div className="px-3 py-1.5 bg-white/10 border border-white/20 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 select-none">
+              <svg className="h-3.5 w-3.5 text-green-300 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+              </svg>
+              <span>Mode: Lihat Saja (Read-Only)</span>
+            </div>
 
             <button
               onClick={() => setIsExportModalOpen(true)}
@@ -487,16 +476,13 @@ export default function SpreadsheetModal({ isOpen, onClose }: { isOpen: boolean;
           <input
             type="text"
             value={activeCellValue}
-            disabled={!selectedCell || isCellCalculated(selectedCell.colName)}
-            onChange={handleFormulaBarChange}
+            disabled={true}
             placeholder={
               selectedCell 
-                ? isCellCalculated(selectedCell.colName)
-                  ? `Formula Terkunci: ${selectedCell.colName}${selectedCell.rowIdx + 1} dihitung otomatis`
-                  : "Tulis teks atau masukkan angka..."
-                : "Pilih sel untuk mengedit..."
+                ? `Nilai Sel: ${selectedCell.colName}${selectedCell.rowIdx + 1} (Mode Lihat Saja)`
+                : "Pilih sel untuk melihat detail..."
             }
-            className="flex-1 bg-slate-50 border border-slate-200 px-3 py-1 rounded text-xs outline-none focus:bg-white focus:border-green-600 transition font-mono disabled:opacity-75 disabled:cursor-not-allowed"
+            className="flex-1 bg-slate-100 border border-slate-200 px-3 py-1 rounded text-xs outline-none transition font-mono disabled:opacity-75 disabled:cursor-not-allowed select-all"
           />
           <div className="relative w-48 sm:w-64">
             <input
@@ -526,14 +512,16 @@ export default function SpreadsheetModal({ isOpen, onClose }: { isOpen: boolean;
                 <th className="w-40 border border-slate-300 bg-slate-100 text-center font-bold text-slate-500 py-1">D</th>
                 <th className="w-40 border border-slate-300 bg-slate-100 text-center font-bold text-slate-500 py-1">E</th>
                 <th className="w-40 border border-slate-300 bg-slate-100 text-center font-bold text-slate-500 py-1">F</th>
+                <th className="w-40 border border-slate-300 bg-slate-100 text-center font-bold text-slate-500 py-1">G</th>
                 {activeTab === "shu" && (
-                  <th className="w-40 border border-slate-300 bg-slate-100 text-center font-bold text-slate-500 py-1">G</th>
+                  <th className="w-40 border border-slate-300 bg-slate-100 text-center font-bold text-slate-500 py-1">H</th>
                 )}
               </tr>
               <tr>
                 <th className="border border-slate-300 bg-slate-50 text-center text-slate-400 py-0.5 border-l-0"></th>
                 <th className="border border-slate-300 bg-slate-50 text-slate-400 text-center py-0.5 font-normal">NO</th>
                 <th className="border border-slate-300 bg-slate-50 text-slate-400 text-left px-2 py-0.5 font-normal">NAMA ANGGOTA</th>
+                <th className="border border-slate-300 bg-slate-50 text-slate-400 text-center px-2 py-0.5 font-normal">TGL BERGABUNG</th>
                 {activeTab === "shu" ? (
                   <>
                     <th className="border border-slate-300 bg-slate-50 text-slate-400 text-right px-2 py-0.5 font-normal">TOTAL SIMPANAN</th>
@@ -598,13 +586,25 @@ export default function SpreadsheetModal({ isOpen, onClose }: { isOpen: boolean;
                       )}
                     </td>
 
+                    {/* Column C: TGL BERGABUNG */}
+                    <td
+                      onClick={() => handleCellClick(actualRowIdx, "C")}
+                      className={`border px-2 py-1 text-center font-semibold text-slate-500 relative ${
+                        selectedCell?.rowIdx === actualRowIdx && selectedCell?.colName === "C"
+                          ? "ring-2 ring-green-600 z-[1]"
+                          : "border-slate-200"
+                      }`}
+                    >
+                      {row.joinDate}
+                    </td>
+
                     {activeTab === "shu" ? (
                       <>
-                        {/* Column C: Total Savings (Formula) */}
+                        {/* Column D: Total Savings (Formula) */}
                         <td
-                          onClick={() => handleCellClick(actualRowIdx, "C")}
+                          onClick={() => handleCellClick(actualRowIdx, "D")}
                           className={`border px-2 py-1 text-right bg-slate-50/50 font-semibold text-slate-600 relative ${
-                            selectedCell?.rowIdx === actualRowIdx && selectedCell?.colName === "C"
+                            selectedCell?.rowIdx === actualRowIdx && selectedCell?.colName === "D"
                               ? "ring-2 ring-green-600 z-[1]"
                               : "border-slate-200"
                           }`}
@@ -612,47 +612,19 @@ export default function SpreadsheetModal({ isOpen, onClose }: { isOpen: boolean;
                           Rp {row.totalSaving.toLocaleString("id-ID")}
                         </td>
 
-                        {/* Column D: Service Contribution */}
-                        <td
-                          onClick={() => handleCellClick(actualRowIdx, "D")}
-                          onDoubleClick={() => handleCellDoubleClick(actualRowIdx, "D")}
-                          className={`border px-2 py-1 text-right relative ${
-                            selectedCell?.rowIdx === actualRowIdx && selectedCell?.colName === "D"
-                              ? "ring-2 ring-green-600 z-[1]"
-                              : "border-slate-200"
-                          }`}
-                        >
-                          {editingCell?.rowIdx === actualRowIdx && editingCell?.colName === "D" ? (
-                            <input
-                              type="text"
-                              value={editValue}
-                              onChange={(e) => setEditValue(e.target.value)}
-                              onBlur={() => handleSaveCell(actualRowIdx, "D", editValue)}
-                              onKeyDown={(e) => {
-                                if (e.key === "Enter") handleSaveCell(actualRowIdx, "D", editValue);
-                                if (e.key === "Escape") setEditingCell(null);
-                              }}
-                              autoFocus
-                              className="absolute inset-0 w-full h-full px-2 py-1 text-right text-xs outline-none bg-white text-slate-900 border-none"
-                            />
-                          ) : (
-                            `Rp ${row.serviceContribution.toLocaleString("id-ID")}`
-                          )}
-                        </td>
-
-                        {/* Column E: SHU Simpanan (Formula) */}
+                        {/* Column E: Service Contribution */}
                         <td
                           onClick={() => handleCellClick(actualRowIdx, "E")}
-                          className={`border px-2 py-1 text-right bg-slate-50/50 text-slate-700 relative ${
+                          className={`border px-2 py-1 text-right relative ${
                             selectedCell?.rowIdx === actualRowIdx && selectedCell?.colName === "E"
                               ? "ring-2 ring-green-600 z-[1]"
                               : "border-slate-200"
                           }`}
                         >
-                          Rp {row.savingShu.toLocaleString("id-ID")}
+                          Rp {row.serviceContribution.toLocaleString("id-ID")}
                         </td>
 
-                        {/* Column F: SHU Jasa (Formula) */}
+                        {/* Column F: SHU Simpanan (Formula) */}
                         <td
                           onClick={() => handleCellClick(actualRowIdx, "F")}
                           className={`border px-2 py-1 text-right bg-slate-50/50 text-slate-700 relative ${
@@ -661,14 +633,26 @@ export default function SpreadsheetModal({ isOpen, onClose }: { isOpen: boolean;
                               : "border-slate-200"
                           }`}
                         >
+                          Rp {row.savingShu.toLocaleString("id-ID")}
+                        </td>
+
+                        {/* Column G: SHU Jasa (Formula) */}
+                        <td
+                          onClick={() => handleCellClick(actualRowIdx, "G")}
+                          className={`border px-2 py-1 text-right bg-slate-50/50 text-slate-700 relative ${
+                            selectedCell?.rowIdx === actualRowIdx && selectedCell?.colName === "G"
+                              ? "ring-2 ring-green-600 z-[1]"
+                              : "border-slate-200"
+                          }`}
+                        >
                           Rp {row.serviceShu.toLocaleString("id-ID")}
                         </td>
 
-                        {/* Column G: Total SHU (Formula) */}
+                        {/* Column H: Total SHU (Formula) */}
                         <td
-                          onClick={() => handleCellClick(actualRowIdx, "G")}
+                          onClick={() => handleCellClick(actualRowIdx, "H")}
                           className={`border px-2 py-1 text-right bg-green-50/30 text-green-700 font-bold relative ${
-                            selectedCell?.rowIdx === actualRowIdx && selectedCell?.colName === "G"
+                            selectedCell?.rowIdx === actualRowIdx && selectedCell?.colName === "H"
                               ? "ring-2 ring-green-600 z-[1]"
                               : "border-slate-200"
                           }`}
@@ -678,95 +662,47 @@ export default function SpreadsheetModal({ isOpen, onClose }: { isOpen: boolean;
                       </>
                     ) : (
                       <>
-                        {/* Column C: Pokok */}
-                        <td
-                          onClick={() => handleCellClick(actualRowIdx, "C")}
-                          onDoubleClick={() => handleCellDoubleClick(actualRowIdx, "C")}
-                          className={`border px-2 py-1 text-right relative ${
-                            selectedCell?.rowIdx === actualRowIdx && selectedCell?.colName === "C"
-                              ? "ring-2 ring-green-600 z-[1]"
-                              : "border-slate-200"
-                          }`}
-                        >
-                          {editingCell?.rowIdx === actualRowIdx && editingCell?.colName === "C" ? (
-                            <input
-                              type="text"
-                              value={editValue}
-                              onChange={(e) => setEditValue(e.target.value)}
-                              onBlur={() => handleSaveCell(actualRowIdx, "C", editValue)}
-                              onKeyDown={(e) => {
-                                if (e.key === "Enter") handleSaveCell(actualRowIdx, "C", editValue);
-                                if (e.key === "Escape") setEditingCell(null);
-                              }}
-                              autoFocus
-                              className="absolute inset-0 w-full h-full px-2 py-1 text-right text-xs outline-none bg-white text-slate-900 border-none"
-                            />
-                          ) : (
-                            `Rp ${row.savingPokok.toLocaleString("id-ID")}`
-                          )}
-                        </td>
-
-                        {/* Column D: Wajib */}
+                        {/* Column D: Pokok */}
                         <td
                           onClick={() => handleCellClick(actualRowIdx, "D")}
-                          onDoubleClick={() => handleCellDoubleClick(actualRowIdx, "D")}
                           className={`border px-2 py-1 text-right relative ${
                             selectedCell?.rowIdx === actualRowIdx && selectedCell?.colName === "D"
                               ? "ring-2 ring-green-600 z-[1]"
                               : "border-slate-200"
                           }`}
                         >
-                          {editingCell?.rowIdx === actualRowIdx && editingCell?.colName === "D" ? (
-                            <input
-                              type="text"
-                              value={editValue}
-                              onChange={(e) => setEditValue(e.target.value)}
-                              onBlur={() => handleSaveCell(actualRowIdx, "D", editValue)}
-                              onKeyDown={(e) => {
-                                if (e.key === "Enter") handleSaveCell(actualRowIdx, "D", editValue);
-                                if (e.key === "Escape") setEditingCell(null);
-                              }}
-                              autoFocus
-                              className="absolute inset-0 w-full h-full px-2 py-1 text-right text-xs outline-none bg-white text-slate-900 border-none"
-                            />
-                          ) : (
-                            `Rp ${row.savingWajib.toLocaleString("id-ID")}`
-                          )}
+                          Rp {row.savingPokok.toLocaleString("id-ID")}
                         </td>
 
-                        {/* Column E: Sukarela */}
+                        {/* Column E: Wajib */}
                         <td
                           onClick={() => handleCellClick(actualRowIdx, "E")}
-                          onDoubleClick={() => handleCellDoubleClick(actualRowIdx, "E")}
                           className={`border px-2 py-1 text-right relative ${
                             selectedCell?.rowIdx === actualRowIdx && selectedCell?.colName === "E"
                               ? "ring-2 ring-green-600 z-[1]"
                               : "border-slate-200"
                           }`}
                         >
-                          {editingCell?.rowIdx === actualRowIdx && editingCell?.colName === "E" ? (
-                            <input
-                              type="text"
-                              value={editValue}
-                              onChange={(e) => setEditValue(e.target.value)}
-                              onBlur={() => handleSaveCell(actualRowIdx, "E", editValue)}
-                              onKeyDown={(e) => {
-                                if (e.key === "Enter") handleSaveCell(actualRowIdx, "E", editValue);
-                                if (e.key === "Escape") setEditingCell(null);
-                              }}
-                              autoFocus
-                              className="absolute inset-0 w-full h-full px-2 py-1 text-right text-xs outline-none bg-white text-slate-900 border-none"
-                            />
-                          ) : (
-                            `Rp ${row.savingSukarela.toLocaleString("id-ID")}`
-                          )}
+                          Rp {row.savingWajib.toLocaleString("id-ID")}
                         </td>
 
-                        {/* Column F: Total Saving (Formula) */}
+                        {/* Column F: Sukarela */}
                         <td
                           onClick={() => handleCellClick(actualRowIdx, "F")}
-                          className={`border px-2 py-1 text-right bg-green-50/20 text-green-700 font-bold relative ${
+                          className={`border px-2 py-1 text-right relative ${
                             selectedCell?.rowIdx === actualRowIdx && selectedCell?.colName === "F"
+                              ? "ring-2 ring-green-600 z-[1]"
+                              : "border-slate-200"
+                          }`}
+                        >
+                          Rp {row.savingSukarela.toLocaleString("id-ID")}
+                        </td>
+
+                        {/* Column G: Total Saving (Formula) */}
+                        <td
+                          onClick={() => handleCellClick(actualRowIdx, "G")}
+                          className={`border px-2 py-1 text-right bg-green-50/20 text-green-700 font-bold relative ${
+                            selectedCell?.rowIdx === actualRowIdx && selectedCell?.colName === "G"
                               ? "ring-2 ring-green-600 z-[1]"
                               : "border-slate-200"
                           }`}

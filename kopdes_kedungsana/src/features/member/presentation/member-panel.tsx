@@ -2,9 +2,10 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { ChangeEvent, FormEvent, useState } from "react";
+import { ChangeEvent, FormEvent, useEffect, useState } from "react";
 import { addAuditLog } from "../../../utils/audit-logger";
 import type { Member } from "../domain/member";
+import type { MemberMonthlySaving } from "../domain/member-monthly-saving";
 import { memberSeed } from "../infrastructure/member-seed";
 import { memberDependencies } from "../infrastructure/member-dependencies";
 
@@ -53,8 +54,41 @@ const initialKtpFormState: KtpFormState = {
   maritalStatus: "",
   occupation: "",
 };
+
+const formatCurrency = (value: number): string =>
+  new Intl.NumberFormat("id-ID", {
+    style: "currency",
+    currency: "IDR",
+    maximumFractionDigits: 0,
+  }).format(value);
+
+const calculateArrears = (member: Member, savings: MemberMonthlySaving[] = []) => {
+  const monthlyTarget = 10000; // Rp 10.000 per bulan
+  
+  if (!member.joinDate) return { monthsElapsed: 0, target: 0, paid: 0, arrears: 0 };
+  
+  const joinDate = new Date(member.joinDate);
+  const currentDate = new Date();
+  
+  const yearsDiff = currentDate.getFullYear() - joinDate.getFullYear();
+  const monthsDiff = currentDate.getMonth() - joinDate.getMonth();
+  const monthsElapsed = Math.max(1, (yearsDiff * 12) + monthsDiff + 1);
+  
+  const target = monthsElapsed * monthlyTarget;
+  const paid = savings.reduce((sum, s) => sum + s.requiredSaving, 0);
+  const arrears = Math.max(0, target - paid);
+  
+  return {
+    monthsElapsed,
+    target,
+    paid,
+    arrears
+  };
+};
+
 export function MemberPanel() {
   const [members, setMembers] = useState<Member[]>(() => [...memberSeed]);
+  const [savingsMap, setSavingsMap] = useState<Record<string, MemberMonthlySaving[]>>({});
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [ktpForm, setKtpForm] = useState<KtpFormState>(initialKtpFormState);
   const [isLoading, setIsLoading] = useState(false);
@@ -63,6 +97,21 @@ export function MemberPanel() {
   const [isOcrLoading, setIsOcrLoading] = useState(false);
   const [ocrProgress, setOcrProgress] = useState(0);
   const [showValidationErrors, setShowValidationErrors] = useState(false);
+
+  useEffect(() => {
+    const loadMembersAndSavings = async () => {
+      const list = await memberDependencies.getMembersUseCase.execute();
+      setMembers(list);
+      
+      const map: Record<string, MemberMonthlySaving[]> = {};
+      for (const m of list) {
+        const savings = await memberDependencies.getMemberMonthlySavingsUseCase.execute(m.id);
+        map[m.id] = savings;
+      }
+      setSavingsMap(map);
+    };
+    void loadMembersAndSavings();
+  }, []);
 
   const parseKtpText = (text: string) => {
     const result = {
@@ -543,6 +592,10 @@ export function MemberPanel() {
     }
 
     setMembers((previousMembers) => [result.member, ...previousMembers]);
+    setSavingsMap((prev) => ({
+      ...prev,
+      [result.member.id]: [],
+    }));
     addAuditLog(
       "ADD_MEMBER",
       `Berhasil mendaftarkan anggota baru [${result.member.name}] dengan NIK ${result.member.nik} ke dalam database koperasi.`,
@@ -613,9 +666,39 @@ export function MemberPanel() {
             <p className="mt-1 text-sm text-slate-500">
               Jenis Kelamin: {member.gender}
             </p>
-            <p className="mt-3 inline-flex rounded-full bg-primary-soft px-2 py-1 text-xs font-medium text-primary">
-              Status: {member.status}
-            </p>
+            <div className="mt-3 flex items-center justify-between">
+              <span className="inline-flex rounded-full bg-primary-soft px-2.5 py-1 text-xs font-bold text-primary">
+                Status: {member.status}
+              </span>
+              <span className="text-[10px] text-slate-400 font-semibold font-mono">Join: {member.joinDate}</span>
+            </div>
+
+            {/* Arrears status */}
+            <div className="mt-3 pt-3 border-t border-slate-100 flex flex-col gap-1.5">
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Status Tunggakan Wajib:</span>
+              {(() => {
+                const sList = savingsMap[member.id] || [];
+                const info = calculateArrears(member, sList);
+                if (info.arrears > 0) {
+                  return (
+                    <div className="bg-red-50 border border-red-100 rounded-xl p-2 flex flex-col">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-bold text-red-600 uppercase">Menunggak {info.monthsElapsed} Bulan</span>
+                        <span className="text-xs font-extrabold text-red-600">{formatCurrency(info.arrears)}</span>
+                      </div>
+                      <span className="text-[9px] text-red-500 mt-0.5 font-medium">Target: {formatCurrency(info.target)} | Dibayar: {formatCurrency(info.paid)}</span>
+                    </div>
+                  );
+                } else {
+                  return (
+                    <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-2 flex items-center justify-between">
+                      <span className="text-[10px] font-bold text-emerald-600 uppercase">LUNAS / AMAN</span>
+                      <span className="text-xs font-extrabold text-emerald-600">Rp 0</span>
+                    </div>
+                  );
+                }
+              })()}
+            </div>
           </Link>
         ))}
       </div>

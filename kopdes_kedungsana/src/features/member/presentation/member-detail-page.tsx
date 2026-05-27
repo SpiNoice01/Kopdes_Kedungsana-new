@@ -81,6 +81,30 @@ export function MemberDetailPage({ memberId }: MemberDetailPageProps) {
     return monthlySavings.reduce((total, item) => total + item.totalSaving, 0);
   }, [monthlySavings]);
 
+  const arrearsInfo = useMemo(() => {
+    if (!member || !member.joinDate) {
+      return { monthsElapsed: 0, target: 0, paid: 0, arrears: 0 };
+    }
+    const monthlyTarget = 10000; // Rp 10.000 per bulan
+    const joinDate = new Date(member.joinDate);
+    const currentDate = new Date();
+    
+    const yearsDiff = currentDate.getFullYear() - joinDate.getFullYear();
+    const monthsDiff = currentDate.getMonth() - joinDate.getMonth();
+    const monthsElapsed = Math.max(1, (yearsDiff * 12) + monthsDiff + 1);
+    
+    const target = monthsElapsed * monthlyTarget;
+    const paid = monthlySavings.reduce((sum, s) => sum + s.requiredSaving, 0);
+    const arrears = Math.max(0, target - paid);
+    
+    return {
+      monthsElapsed,
+      target,
+      paid,
+      arrears
+    };
+  }, [member, monthlySavings]);
+
   useEffect(() => {
     return () => {
       if (principalProofUrl) {
@@ -309,6 +333,51 @@ export function MemberDetailPage({ memberId }: MemberDetailPageProps) {
         collapsible
         defaultCollapsed
       >
+        <div className="mb-5">
+          {arrearsInfo.arrears > 0 ? (
+            <div className="bg-red-50 border border-red-200 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+              <div className="flex items-start gap-3">
+                <div className="p-2 bg-red-100 text-red-600 rounded-xl mt-0.5">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                  </svg>
+                </div>
+                <div>
+                  <h4 className="text-sm font-bold text-red-800">Terdapat Tunggakan Simpanan Wajib</h4>
+                  <p className="text-xs text-red-600 mt-0.5 leading-relaxed">
+                    Anggota terdaftar sejak <strong>{member.joinDate}</strong> ({arrearsInfo.monthsElapsed} bulan). <br/>
+                    Target akumulasi simpanan wajib: <strong>{formatCurrency(arrearsInfo.target)}</strong> | Sudah dibayar: <strong>{formatCurrency(arrearsInfo.paid)}</strong>
+                  </p>
+                </div>
+              </div>
+              <div className="text-left sm:text-right bg-red-100/50 rounded-xl px-4 py-2 border border-red-100 flex-shrink-0">
+                <span className="text-[10px] font-bold text-red-500 block uppercase">Total Tunggakan</span>
+                <span className="text-lg font-extrabold text-red-700">{formatCurrency(arrearsInfo.arrears)}</span>
+              </div>
+            </div>
+          ) : (
+            <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+              <div className="flex items-start gap-3">
+                <div className="p-2 bg-emerald-100 text-emerald-600 rounded-xl mt-0.5">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </div>
+                <div>
+                  <h4 className="text-sm font-bold text-emerald-800">Simpanan Wajib Lunas</h4>
+                  <p className="text-xs text-emerald-600 mt-0.5 leading-relaxed">
+                    Status iuran simpanan wajib anggota ini aman dan lunas. Seluruh kewajiban pembayaran bulanan hingga bulan ini telah diselesaikan.
+                  </p>
+                </div>
+              </div>
+              <div className="text-left sm:text-right bg-emerald-100/50 rounded-xl px-4 py-2 border border-emerald-100 flex-shrink-0">
+                <span className="text-[10px] font-bold text-emerald-500 block uppercase">Total Tunggakan</span>
+                <span className="text-lg font-extrabold text-emerald-700">Rp 0</span>
+              </div>
+            </div>
+          )}
+        </div>
+
         <form onSubmit={handleSubmit} className="grid gap-3 md:grid-cols-2">
           <label className="space-y-2 text-sm">
             <span className="font-medium text-slate-700">Periode</span>
