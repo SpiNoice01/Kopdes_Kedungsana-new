@@ -3,6 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { ChangeEvent, FormEvent, useState } from "react";
+import { addAuditLog } from "../../../utils/audit-logger";
 import type { Member } from "../domain/member";
 import { memberSeed } from "../infrastructure/member-seed";
 import { memberDependencies } from "../infrastructure/member-dependencies";
@@ -380,6 +381,12 @@ export function MemberPanel() {
         occupation: parsedData.occupation || prev.occupation,
       }));
 
+      addAuditLog(
+        "OCR_SCAN",
+        `Berhasil mengekstrak data identitas KTP secara otomatis untuk calon anggota [${parsedData.name || "NAMA TIDAK TERBACA"}] via OCR Scanner.`,
+        "success"
+      );
+
       setFeedbackState({
         message: "Pemindaian KTP sukses! Data berhasil diisi otomatis. Silakan verifikasi kembali.",
         isError: false,
@@ -536,6 +543,11 @@ export function MemberPanel() {
     }
 
     setMembers((previousMembers) => [result.member, ...previousMembers]);
+    addAuditLog(
+      "ADD_MEMBER",
+      `Berhasil mendaftarkan anggota baru [${result.member.name}] dengan NIK ${result.member.nik} ke dalam database koperasi.`,
+      "success"
+    );
     setFeedbackState({
       message: `Data anggota KTP ${result.member.name} berhasil ditambahkan.`,
       isError: false,

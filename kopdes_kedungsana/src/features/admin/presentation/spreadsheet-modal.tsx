@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { addAuditLog } from "../../../utils/audit-logger";
 
 type MemberRow = {
   memberId: string;
@@ -138,6 +139,50 @@ export default function SpreadsheetModal({ isOpen, onClose }: { isOpen: boolean;
 
   const handleSaveCell = (rowIdx: number, colName: string, value: string) => {
     setEditingCell(null);
+    const row = rows[rowIdx];
+    let columnNameText = "";
+    let oldValueText = "";
+    let newValueText = value;
+
+    if (colName === "B") {
+      columnNameText = "Nama Anggota";
+      oldValueText = row.memberName;
+      newValueText = value.toUpperCase();
+    } else {
+      const num = Math.max(0, parseInt(value.replace(/\D/g, "")) || 0);
+      if (activeTab === "shu") {
+        if (colName === "D") {
+          columnNameText = "Setoran Jasa";
+          oldValueText = `Rp ${row.serviceContribution.toLocaleString("id-ID")}`;
+          newValueText = `Rp ${num.toLocaleString("id-ID")}`;
+        }
+      } else {
+        if (colName === "C") {
+          columnNameText = "Simpanan Pokok";
+          oldValueText = `Rp ${row.savingPokok.toLocaleString("id-ID")}`;
+          newValueText = `Rp ${num.toLocaleString("id-ID")}`;
+        }
+        if (colName === "D") {
+          columnNameText = "Simpanan Wajib";
+          oldValueText = `Rp ${row.savingWajib.toLocaleString("id-ID")}`;
+          newValueText = `Rp ${num.toLocaleString("id-ID")}`;
+        }
+        if (colName === "E") {
+          columnNameText = "Simpanan Sukarela";
+          oldValueText = `Rp ${row.savingSukarela.toLocaleString("id-ID")}`;
+          newValueText = `Rp ${num.toLocaleString("id-ID")}`;
+        }
+      }
+    }
+
+    if (columnNameText && oldValueText !== newValueText) {
+      addAuditLog(
+        "SPREADSHEET_EDIT",
+        `Mengubah sel baris ke-${rowIdx + 1} (${row.memberName}) kolom [${columnNameText}] dari [${oldValueText}] menjadi [${newValueText}] via Spreadsheet Live Editor.`,
+        "info"
+      );
+    }
+
     setRows((prev) => {
       const updated = [...prev];
       const target = { ...updated[rowIdx] };
@@ -168,11 +213,17 @@ export default function SpreadsheetModal({ isOpen, onClose }: { isOpen: boolean;
 
   const handleAddRow = () => {
     const newId = `m${rows.length + 1}`;
+    const newName = "NEW MEMBER " + (rows.length + 1);
+    addAuditLog(
+      "SPREADSHEET_EDIT",
+      `Menambahkan baris anggota baru [${newName}] dengan ID ${newId} di Spreadsheet Live.`,
+      "success"
+    );
     setRows((prev) => [
       ...prev,
       {
         memberId: newId,
-        memberName: "NEW MEMBER " + (rows.length + 1),
+        memberName: newName,
         savingPokok: 100000,
         savingWajib: 0,
         savingSukarela: 0,
@@ -183,6 +234,11 @@ export default function SpreadsheetModal({ isOpen, onClose }: { isOpen: boolean;
 
   const handleResetData = () => {
     if (confirm("Apakah Anda yakin ingin menyetel ulang data ke data awal?")) {
+      addAuditLog(
+        "RESET_DATA",
+        "Mereset seluruh modifikasi data spreadsheet kembali ke data awal bawaan pabrik!",
+        "danger"
+      );
       setRows(initialRows);
       setSelectedCell({ rowIdx: 0, colName: "B" });
       setEditingCell(null);
@@ -318,16 +374,19 @@ export default function SpreadsheetModal({ isOpen, onClose }: { isOpen: boolean;
   };
 
   const handleExportSimpananOnly = () => {
+    addAuditLog("EXPORT_EXCEL", "Mengekspor data Spreadsheet Simpanan Live ke berkas Excel (.xls).", "info");
     downloadExcel(getSimpananHtml(), "SPREADSHEET_SIMPANAN_2024.xls");
     setIsExportModalOpen(false);
   };
 
   const handleExportShuOnly = () => {
+    addAuditLog("EXPORT_EXCEL", "Mengekspor data Spreadsheet SHU Live ke berkas Excel (.xls).", "info");
     downloadExcel(getShuHtml(), "SPREADSHEET_SHU_2024.xls");
     setIsExportModalOpen(false);
   };
 
   const handleExportAll = () => {
+    addAuditLog("EXPORT_EXCEL", "Mengekspor seluruh lembar kerja Spreadsheet Live (Simpanan & SHU) ke berkas Excel (.xls).", "info");
     downloadExcel(getSimpananHtml(), "SPREADSHEET_SIMPANAN_2024.xls");
     setTimeout(() => {
       downloadExcel(getShuHtml(), "SPREADSHEET_SHU_2024.xls");

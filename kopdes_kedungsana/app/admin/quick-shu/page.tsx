@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { addAuditLog } from "../../../src/utils/audit-logger";
 
 type HintProps = {
   text: string;
@@ -221,6 +222,7 @@ export default function QuickShuPage() {
       </body>
       </html>
     `;
+    addAuditLog("EXPORT_EXCEL", "Mengekspor Laporan Pembagian SHU Koperasi format RAT 2024 ke berkas Excel (.xls).", "info");
     downloadExcel(htmlContent, `LAPORAN_SHU_${year}.xls`);
   };
 
@@ -281,6 +283,7 @@ export default function QuickShuPage() {
       </body>
       </html>
     `;
+    addAuditLog("EXPORT_EXCEL", "Mengekspor Daftar Simpanan Anggota format RAT 2024 ke berkas Excel (.xls).", "info");
     downloadExcel(htmlContent, `DAFTAR_SIMPANAN_${year}.xls`);
   };
 

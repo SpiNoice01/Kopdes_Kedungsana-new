@@ -2,8 +2,9 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ReactNode, useMemo, useState } from "react";
+import { ReactNode, useEffect, useMemo, useState } from "react";
 import SpreadsheetModal from "./spreadsheet-modal";
+import { addAuditLog } from "../../../utils/audit-logger";
 
 type AdminShellProps = {
   children: ReactNode;
@@ -29,62 +30,96 @@ export function AdminShell({ children }: AdminShellProps) {
     if (pathname.startsWith("/admin/spreadsheet")) {
       return "Spreadsheet Live";
     }
+    if (pathname.startsWith("/admin/activity-logs")) {
+      return "Log Aktivitas";
+    }
     const activeItem = navigationItems.find((item) =>
       pathname.startsWith(item.href),
     );
     return activeItem?.label ?? "Admin Panel";
   }, [pathname]);
 
+  // Track automatic page navigation
+  useEffect(() => {
+    if (currentPageTitle && currentPageTitle !== "Admin Panel") {
+      addAuditLog("NAVIGATE", `Admin membuka halaman: ${currentPageTitle}`, "info");
+    }
+  }, [pathname, currentPageTitle]);
+
   return (
     <div className="min-h-screen bg-primary-soft text-slate-900">
       <div className="flex min-h-screen">
         <aside
-          className={`border-r border-primary bg-primary px-3 py-4 text-primary-foreground transition-all duration-200 ${
+          className={`border-r border-primary bg-primary px-3 py-4 text-primary-foreground transition-all duration-200 flex flex-col justify-between ${
             isSidebarOpen ? "w-64" : "w-20"
           }`}
         >
-          <div className="flex items-center justify-between gap-2 px-2">
-            <p
-              className={`font-semibold tracking-wide ${isSidebarOpen ? "block" : "hidden"}`}
-            >
-              Kopdes Panel
-            </p>
-            <button
-              type="button"
-              onClick={() => setIsSidebarOpen((previous) => !previous)}
-              className="rounded-lg border border-white/30 px-2 py-1 text-xs hover:bg-white/10"
-              aria-label="Toggle side panel"
-            >
-              {isSidebarOpen ? "Tutup" : "Buka"}
-            </button>
+          <div>
+            <div className="flex items-center justify-between gap-2 px-2">
+              <p
+                className={`font-semibold tracking-wide ${isSidebarOpen ? "block" : "hidden"}`}
+              >
+                Kopdes Panel
+              </p>
+              <button
+                type="button"
+                onClick={() => setIsSidebarOpen((previous) => !previous)}
+                className="rounded-lg border border-white/30 px-2 py-1 text-xs hover:bg-white/10"
+                aria-label="Toggle side panel"
+              >
+                {isSidebarOpen ? "Tutup" : "Buka"}
+              </button>
+            </div>
+
+            <nav className="mt-6 space-y-1">
+              {navigationItems.map((item) => {
+                const isActive = pathname.startsWith(item.href);
+
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className={`flex items-center rounded-xl px-3 py-2 text-sm transition-colors ${
+                      isActive
+                        ? "bg-white text-primary"
+                        : "text-white/90 hover:bg-white/10"
+                    }`}
+                  >
+                    <span className="inline-flex h-6 w-6 items-center justify-center rounded-md bg-white/20 text-xs font-semibold">
+                      {item.label.slice(0, 1)}
+                    </span>
+                    <span
+                      className={`ml-3 ${isSidebarOpen ? "block" : "hidden"}`}
+                    >
+                      {item.label}
+                    </span>
+                  </Link>
+                );
+              })}
+            </nav>
           </div>
 
-          <nav className="mt-6 space-y-1">
-            {navigationItems.map((item) => {
-              const isActive = pathname.startsWith(item.href);
-
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  className={`flex items-center rounded-xl px-3 py-2 text-sm transition-colors ${
-                    isActive
-                      ? "bg-white text-primary"
-                      : "text-white/90 hover:bg-white/10"
-                  }`}
-                >
-                  <span className="inline-flex h-6 w-6 items-center justify-center rounded-md bg-white/20 text-xs font-semibold">
-                    {item.label.slice(0, 1)}
-                  </span>
-                  <span
-                    className={`ml-3 ${isSidebarOpen ? "block" : "hidden"}`}
-                  >
-                    {item.label}
-                  </span>
-                </Link>
-              );
-            })}
-          </nav>
+          <div className="border-t border-white/10 pt-4">
+            <Link
+              href="/admin/activity-logs"
+              className={`flex items-center rounded-xl px-3 py-2 text-sm transition-colors ${
+                pathname.startsWith("/admin/activity-logs")
+                  ? "bg-white text-primary font-semibold"
+                  : "text-white/80 hover:bg-white/10"
+              }`}
+            >
+              <span className="inline-flex h-6 w-6 items-center justify-center text-xs font-semibold">
+                <svg className="h-5 w-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
+                </svg>
+              </span>
+              <span
+                className={`ml-3 ${isSidebarOpen ? "block" : "hidden"}`}
+              >
+                Log Aktivitas
+              </span>
+            </Link>
+          </div>
         </aside>
 
         <div className="flex flex-1 flex-col">
