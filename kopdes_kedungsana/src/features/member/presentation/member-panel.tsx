@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { ChangeEvent, FormEvent, useEffect, useState } from "react";
+import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from "react";
 import { addAuditLog } from "../../../utils/audit-logger";
 import type { Member } from "../domain/member";
 import type { MemberMonthlySaving } from "../domain/member-monthly-saving";
@@ -97,6 +97,30 @@ export function MemberPanel() {
   const [isOcrLoading, setIsOcrLoading] = useState(false);
   const [ocrProgress, setOcrProgress] = useState(0);
   const [showValidationErrors, setShowValidationErrors] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [arrearsFilter, setArrearsFilter] = useState<"all" | "lunas" | "menunggak">("all");
+  const [genderFilter, setGenderFilter] = useState<"all" | "laki-laki" | "perempuan">("all");
+
+  const filteredMembers = useMemo(() => {
+    return members.filter((member) => {
+      const matchesSearch =
+        member.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        member.nik.includes(searchTerm);
+        
+      const sList = savingsMap[member.id] || [];
+      const info = calculateArrears(member, sList);
+      const matchesArrears =
+        arrearsFilter === "all" ||
+        (arrearsFilter === "lunas" && info.arrears === 0) ||
+        (arrearsFilter === "menunggak" && info.arrears > 0);
+        
+      const matchesGender =
+        genderFilter === "all" ||
+        member.gender.toLowerCase() === genderFilter;
+        
+      return matchesSearch && matchesArrears && matchesGender;
+    });
+  }, [members, savingsMap, searchTerm, arrearsFilter, genderFilter]);
 
   useEffect(() => {
     const loadMembersAndSavings = async () => {
@@ -634,83 +658,197 @@ export function MemberPanel() {
         </div>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-        {members.map((member) => (
-          <Link
-            key={member.id}
-            href={`/admin/input-data/${member.id}`}
-            className="flex overflow-hidden rounded-2xl border border-slate-200 bg-white text-left transition hover:border-primary/30 hover:shadow-md min-h-[220px]"
-          >
-            {/* Left Column: Full User Photo */}
-            <div className="relative w-32 sm:w-36 bg-slate-100 flex-shrink-0">
-              {member.photoUrl ? (
-                <Image
-                  src={member.photoUrl}
-                  alt={`Foto ${member.name}`}
-                  fill
-                  sizes="(max-width: 128px) 100vw, 128px"
-                  className="object-cover"
-                />
-              ) : (
-                <div className="absolute inset-0 flex items-center justify-center bg-primary-soft text-2xl font-bold text-primary font-mono uppercase">
-                  {member.name.slice(0, 1).toUpperCase()}
-                </div>
+      {/* Search & Premium Filtering Section */}
+      <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm animate-in fade-in duration-200">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+          {/* Search bar */}
+          <div className="relative flex-1 max-w-md">
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Cari Anggota:</span>
+            <div className="relative">
+              <input
+                type="text"
+                placeholder="Cari berdasarkan nama atau NIK..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full bg-slate-50 border border-slate-200 pl-10 pr-10 py-2 rounded-xl text-sm outline-none focus:bg-white focus:border-primary focus:ring-2 focus:ring-primary/10 transition"
+              />
+              <svg className="absolute left-3.5 top-3 h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+              {searchTerm && (
+                <button
+                  type="button"
+                  onClick={() => setSearchTerm("")}
+                  className="absolute right-3.5 top-3 text-slate-400 hover:text-slate-600 text-xs font-bold font-mono"
+                >
+                  ✕
+                </button>
               )}
             </div>
+          </div>
 
-            {/* Right Column: Profile Details & Real-Time Status */}
-            <div className="flex-1 p-4 flex flex-col justify-between min-w-0">
-              <div>
-                <h3 className="text-base font-bold text-slate-800 truncate leading-snug">
-                  {member.name}
-                </h3>
-                <p className="mt-1 text-xs text-slate-500 font-medium font-mono">NIK: {member.nik}</p>
-                <p className="mt-0.5 text-xs text-slate-500 truncate">
-                  TTL: {member.birthPlace}, {member.birthDate}
-                </p>
-                <p className="mt-0.5 text-xs text-slate-400 font-semibold text-[10px] uppercase tracking-wide">
-                  {member.gender}
-                </p>
-              </div>
-
-              {/* Status & Join Date */}
-              <div className="mt-2.5 flex items-center justify-between gap-1.5 pt-2 border-t border-slate-100">
-                <span className="inline-flex rounded-full bg-primary-soft px-2.5 py-0.5 text-[10px] font-extrabold text-primary uppercase">
-                  {member.status}
-                </span>
-                <span className="text-[10px] text-slate-400 font-bold font-mono">Join: {member.joinDate}</span>
-              </div>
-
-              {/* Arrears status */}
-              <div className="mt-2.5 pt-2 border-t border-slate-100 flex flex-col gap-1">
-                <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Status Tunggakan Wajib:</span>
-                {(() => {
-                  const sList = savingsMap[member.id] || [];
-                  const info = calculateArrears(member, sList);
-                  if (info.arrears > 0) {
-                    return (
-                      <div className="bg-red-50 border border-red-100 rounded-xl p-2 flex flex-col">
-                        <div className="flex items-center justify-between">
-                          <span className="text-[9px] font-extrabold text-red-600 uppercase">Menunggak {info.monthsElapsed} Bulan</span>
-                          <span className="text-xs font-extrabold text-red-600">{formatCurrency(info.arrears)}</span>
-                        </div>
-                        <span className="text-[8px] text-red-500 mt-0.5 font-medium leading-none">Target: {formatCurrency(info.target)} | Dibayar: {formatCurrency(info.paid)}</span>
-                      </div>
-                    );
-                  } else {
-                    return (
-                      <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-2 flex items-center justify-between">
-                        <span className="text-[9px] font-extrabold text-emerald-600 uppercase">Lunas / Aman</span>
-                        <span className="text-xs font-extrabold text-emerald-600">Rp 0</span>
-                      </div>
-                    );
-                  }
-                })()}
+          {/* Filtering dropdowns/controls */}
+          <div className="flex flex-wrap items-center gap-4">
+            {/* Status Tunggakan Filter */}
+            <div className="flex flex-col gap-1">
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Status Tunggakan:</span>
+              <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200">
+                {(["all", "lunas", "menunggak"] as const).map((opt) => (
+                  <button
+                    key={opt}
+                    type="button"
+                    onClick={() => setArrearsFilter(opt)}
+                    className={`px-3.5 py-1.5 rounded-lg text-xs font-bold uppercase transition select-none ${
+                      arrearsFilter === opt
+                        ? "bg-white text-primary shadow-sm"
+                        : "text-slate-500 hover:text-slate-800"
+                    }`}
+                  >
+                    {opt === "all" ? "Semua" : opt === "lunas" ? "Lunas" : "Tunggak"}
+                  </button>
+                ))}
               </div>
             </div>
-          </Link>
-        ))}
+
+            {/* Gender Filter */}
+            <div className="flex flex-col gap-1">
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Jenis Kelamin:</span>
+              <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200">
+                {(["all", "laki-laki", "perempuan"] as const).map((opt) => (
+                  <button
+                    key={opt}
+                    type="button"
+                    onClick={() => setGenderFilter(opt)}
+                    className={`px-3.5 py-1.5 rounded-lg text-xs font-bold uppercase transition select-none ${
+                      genderFilter === opt
+                        ? "bg-white text-primary shadow-sm"
+                        : "text-slate-500 hover:text-slate-800"
+                    }`}
+                  >
+                    {opt === "all" ? "Semua" : opt === "laki-laki" ? "Pria" : "Wanita"}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Reset Filters button */}
+            {(searchTerm || arrearsFilter !== "all" || genderFilter !== "all") && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchTerm("");
+                  setArrearsFilter("all");
+                  setGenderFilter("all");
+                }}
+                className="mt-5 inline-flex items-center gap-1.5 rounded-xl border border-red-200 bg-red-50 px-3.5 py-2 text-xs font-bold text-red-600 hover:bg-red-100 transition"
+              >
+                Reset
+              </button>
+            )}
+          </div>
+        </div>
       </div>
+
+      {filteredMembers.length === 0 ? (
+        <div className="rounded-2xl border border-slate-200 bg-white p-12 text-center shadow-sm animate-in fade-in duration-200">
+          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-slate-50 border border-slate-100 text-slate-400 mb-3">
+            <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </div>
+          <h3 className="text-sm font-bold text-slate-800">Tidak Ada Anggota Ditemukan</h3>
+          <p className="mt-1 text-xs text-slate-500">Coba ubah kata kunci pencarian Anda atau sesuaikan filter status.</p>
+          <button
+            type="button"
+            onClick={() => {
+              setSearchTerm("");
+              setArrearsFilter("all");
+              setGenderFilter("all");
+            }}
+            className="mt-4 rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100 transition cursor-pointer"
+          >
+            Atur Ulang Semua Filter
+          </button>
+        </div>
+      ) : (
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {filteredMembers.map((member) => (
+            <Link
+              key={member.id}
+              href={`/admin/input-data/${member.id}`}
+              className="flex overflow-hidden rounded-2xl border border-slate-200 bg-white text-left transition hover:border-primary/30 hover:shadow-md min-h-[220px]"
+            >
+              {/* Left Column: Full User Photo */}
+              <div className="relative w-32 sm:w-36 bg-slate-100 flex-shrink-0">
+                {member.photoUrl ? (
+                  <Image
+                    src={member.photoUrl}
+                    alt={`Foto ${member.name}`}
+                    fill
+                    sizes="(max-width: 128px) 100vw, 128px"
+                    className="object-cover"
+                  />
+                ) : (
+                  <div className="absolute inset-0 flex items-center justify-center bg-primary-soft text-2xl font-bold text-primary font-mono uppercase">
+                    {member.name.slice(0, 1).toUpperCase()}
+                  </div>
+                )}
+              </div>
+
+              {/* Right Column: Profile Details & Real-Time Status */}
+              <div className="flex-1 p-4 flex flex-col justify-between min-w-0">
+                <div>
+                  <h3 className="text-base font-bold text-slate-800 truncate leading-snug">
+                    {member.name}
+                  </h3>
+                  <p className="mt-1 text-xs text-slate-500 font-medium font-mono">NIK: {member.nik}</p>
+                  <p className="mt-0.5 text-xs text-slate-500 truncate">
+                    TTL: {member.birthPlace}, {member.birthDate}
+                  </p>
+                  <p className="mt-0.5 text-xs text-slate-400 font-semibold text-[10px] uppercase tracking-wide">
+                    {member.gender}
+                  </p>
+                </div>
+
+                {/* Status & Join Date */}
+                <div className="mt-2.5 flex items-center justify-between gap-1.5 pt-2 border-t border-slate-100">
+                  <span className="inline-flex rounded-full bg-primary-soft px-2.5 py-0.5 text-[10px] font-extrabold text-primary uppercase">
+                    {member.status}
+                  </span>
+                  <span className="text-[10px] text-slate-400 font-bold font-mono">Join: {member.joinDate}</span>
+                </div>
+
+                {/* Arrears status */}
+                <div className="mt-2.5 pt-2 border-t border-slate-100 flex flex-col gap-1">
+                  <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Status Tunggakan Wajib:</span>
+                  {(() => {
+                    const sList = savingsMap[member.id] || [];
+                    const info = calculateArrears(member, sList);
+                    if (info.arrears > 0) {
+                      return (
+                        <div className="bg-red-50 border border-red-100 rounded-xl p-2 flex flex-col">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[9px] font-extrabold text-red-600 uppercase">Menunggak {info.monthsElapsed} Bulan</span>
+                            <span className="text-xs font-extrabold text-red-600">{formatCurrency(info.arrears)}</span>
+                          </div>
+                          <span className="text-[8px] text-red-500 mt-0.5 font-medium leading-none">Target: {formatCurrency(info.target)} | Dibayar: {formatCurrency(info.paid)}</span>
+                        </div>
+                      );
+                    } else {
+                      return (
+                        <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-2 flex items-center justify-between">
+                          <span className="text-[9px] font-extrabold text-emerald-600 uppercase">Lunas / Aman</span>
+                          <span className="text-xs font-extrabold text-emerald-600">Rp 0</span>
+                        </div>
+                      );
+                    }
+                  })()}
+                </div>
+              </div>
+            </Link>
+          ))}
+        </div>
+      )}
 
       {isAddModalOpen ? (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-slate-900/40 p-4 backdrop-blur-sm">
