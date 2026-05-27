@@ -9,6 +9,12 @@ export type AddMemberByKtpPayload = {
   birthDate: string;
   gender: "laki-laki" | "perempuan";
   address: string;
+  
+  // Data Tambahan KTP
+  bloodType?: string;
+  religion?: string;
+  maritalStatus?: string;
+  occupation?: string;
 };
 
 type AddMemberByKtpResult =
@@ -32,6 +38,12 @@ const buildMemberFromKtp = (payload: AddMemberByKtpPayload): Member => {
     address: payload.address.trim(),
     joinDate: new Date().toISOString().slice(0, 10),
     status: "aktif",
+    
+    // Data Tambahan KTP
+    bloodType: payload.bloodType || "-",
+    religion: payload.religion || "-",
+    maritalStatus: payload.maritalStatus || "-",
+    occupation: payload.occupation || "-",
   };
 };
 

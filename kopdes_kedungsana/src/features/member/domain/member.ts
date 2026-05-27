@@ -10,4 +10,10 @@ export type Member = {
   address: string;
   joinDate: string;
   status: "aktif" | "nonaktif";
+  
+  // Data Tambahan KTP
+  bloodType?: string;
+  religion?: string;
+  maritalStatus?: string;
+  occupation?: string;
 };

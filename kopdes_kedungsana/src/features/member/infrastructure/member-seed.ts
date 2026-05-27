@@ -13,6 +13,10 @@ export const memberSeed: Member[] = [
     address: "Kedungsana RT 01/RW 03",
     joinDate: "2025-01-05",
     status: "aktif",
+    bloodType: "AB",
+    religion: "Islam",
+    maritalStatus: "Belum Kawin",
+    occupation: "Mahasiswa",
   },
   {
     id: "member-002",
@@ -26,5 +30,9 @@ export const memberSeed: Member[] = [
     address: "Kedungsana RT 02/RW 01",
     joinDate: "2025-03-14",
     status: "aktif",
+    bloodType: "O",
+    religion: "Islam",
+    maritalStatus: "Kawin",
+    occupation: "Wiraswasta",
   },
 ];

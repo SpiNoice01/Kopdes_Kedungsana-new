@@ -230,6 +230,22 @@ export function MemberDetailPage({ memberId }: MemberDetailPageProps) {
               <p className="text-slate-500">Tanggal Bergabung</p>
               <p className="font-medium">{member.joinDate}</p>
             </div>
+            <div>
+              <p className="text-slate-500">Golongan Darah</p>
+              <p className="font-medium">{member.bloodType || "-"}</p>
+            </div>
+            <div>
+              <p className="text-slate-500">Agama</p>
+              <p className="font-medium">{member.religion || "-"}</p>
+            </div>
+            <div>
+              <p className="text-slate-500">Status Perkawinan</p>
+              <p className="font-medium">{member.maritalStatus || "-"}</p>
+            </div>
+            <div>
+              <p className="text-slate-500">Pekerjaan</p>
+              <p className="font-medium">{member.occupation || "-"}</p>
+            </div>
             <div className="sm:col-span-2">
               <p className="text-slate-500">Alamat</p>
               <p className="font-medium">{member.address}</p>
