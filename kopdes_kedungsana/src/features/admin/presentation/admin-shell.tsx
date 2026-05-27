@@ -47,10 +47,10 @@ export function AdminShell({ children }: AdminShellProps) {
   }, [pathname, currentPageTitle]);
 
   return (
-    <div className="min-h-screen bg-primary-soft text-slate-900">
-      <div className="flex min-h-screen">
+    <div className="h-screen w-screen overflow-hidden bg-primary-soft text-slate-900 flex flex-col">
+      <div className="flex flex-1 h-full overflow-hidden">
         <aside
-          className={`border-r border-primary bg-primary px-3 py-4 text-primary-foreground transition-all duration-200 flex flex-col justify-between ${
+          className={`h-full border-r border-primary bg-primary px-3 py-4 text-primary-foreground transition-all duration-200 flex flex-col justify-between flex-shrink-0 ${
             isSidebarOpen ? "w-64" : "w-20"
           }`}
         >
@@ -122,7 +122,7 @@ export function AdminShell({ children }: AdminShellProps) {
           </div>
         </aside>
 
-        <div className="flex flex-1 flex-col">
+        <div className="flex flex-1 flex-col h-full overflow-hidden">
           <header className="border-b border-slate-200 bg-white px-4 py-3 sm:px-6 flex items-center justify-between">
             <div>
               <h1 className="text-lg font-semibold text-primary flex items-center gap-2">
@@ -169,7 +169,7 @@ export function AdminShell({ children }: AdminShellProps) {
             </button>
           </header>
 
-          <main className="flex-1 p-4 sm:p-6">{children}</main>
+          <main className="flex-1 p-4 sm:p-6 overflow-y-auto bg-primary-soft">{children}</main>
         </div>
       </div>
 
