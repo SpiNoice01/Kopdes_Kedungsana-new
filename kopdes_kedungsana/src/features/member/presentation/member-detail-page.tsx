@@ -3,6 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from "react";
+import { addAuditLog } from "../../../utils/audit-logger";
 import { SectionCard } from "@/src/shared/widgets/section-card";
 import { StatusBadge } from "@/src/shared/widgets/status-badge";
 import type { Member } from "../domain/member";
@@ -184,6 +185,54 @@ export function MemberDetailPage({ memberId }: MemberDetailPageProps) {
     setPrincipalProofName(file.name);
   };
 
+  const handleProfilePhotoChange = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      setFeedbackState({
+        message: "File harus berupa gambar (jpg/png/webp).",
+        isError: true,
+      });
+      return;
+    }
+
+    const maxBytes = 2 * 1024 * 1024;
+    if (file.size > maxBytes) {
+      setFeedbackState({
+        message: "Ukuran foto profil maksimal 2MB.",
+        isError: true,
+      });
+      return;
+    }
+
+    const fileReader = new FileReader();
+    fileReader.onload = async () => {
+      const photoUrl = typeof fileReader.result === "string" ? fileReader.result : null;
+      if (!photoUrl) return;
+
+      const result = await memberDependencies.updateMemberPhotoUseCase.execute(memberId, photoUrl);
+      if (result.success) {
+        setMember((prev) => prev ? { ...prev, photoUrl } : null);
+        addAuditLog(
+          "MEMBER_EDIT",
+          `Berhasil memperbarui foto profil untuk anggota [${member?.name || "Anggota"}] dengan ID ${memberId}.`,
+          "success"
+        );
+        setFeedbackState({
+          message: "Foto profil berhasil diperbarui!",
+          isError: false,
+        });
+      } else {
+        setFeedbackState({
+          message: result.message,
+          isError: true,
+        });
+      }
+    };
+    fileReader.readAsDataURL(file);
+  };
+
   if (isLoading) {
     return (
       <section className="rounded-2xl border border-slate-200 bg-white p-5">
@@ -220,21 +269,38 @@ export function MemberDetailPage({ memberId }: MemberDetailPageProps) {
         collapsible
         defaultCollapsed
       >
-        <div className="grid gap-4 md:grid-cols-[160px_1fr]">
-          <div>
-            {member.photoUrl ? (
-              <Image
-                src={member.photoUrl}
-                alt={`Foto ${member.name}`}
-                width={160}
-                height={160}
-                className="h-40 w-40 rounded-2xl object-cover"
+        <div className="grid gap-6 md:grid-cols-[176px_1fr] items-start">
+          <div className="flex flex-col items-center gap-3">
+            <div className="relative w-40 sm:w-44 aspect-[3/4] bg-slate-100 rounded-2xl overflow-hidden shadow-sm border border-slate-200">
+              {member.photoUrl ? (
+                <Image
+                  src={member.photoUrl}
+                  alt={`Foto ${member.name}`}
+                  fill
+                  className="object-cover"
+                />
+              ) : (
+                <div className="absolute inset-0 flex items-center justify-center bg-primary-soft text-4xl font-semibold text-primary font-mono uppercase">
+                  {member.name.slice(0, 1).toUpperCase()}
+                </div>
+              )}
+            </div>
+            
+            <label className="cursor-pointer relative mt-1 select-none">
+              <input
+                type="file"
+                accept="image/png,image/jpeg,image/webp"
+                onChange={handleProfilePhotoChange}
+                className="hidden"
               />
-            ) : (
-              <div className="flex h-40 w-40 items-center justify-center rounded-2xl bg-primary-soft text-4xl font-semibold text-primary">
-                {member.name.slice(0, 1).toUpperCase()}
-              </div>
-            )}
+              <span className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-600 shadow-sm hover:bg-slate-50 transition cursor-pointer">
+                <svg className="w-3.5 h-3.5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+                {member.photoUrl ? "Ganti Foto" : "Unggah Foto"}
+              </span>
+            </label>
           </div>
 
           <div className="grid gap-3 text-sm text-slate-700 sm:grid-cols-2">

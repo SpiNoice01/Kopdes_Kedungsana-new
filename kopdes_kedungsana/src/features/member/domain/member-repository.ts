@@ -8,4 +8,5 @@ export interface MemberRepository {
   add(member: Member): Promise<void>;
   getMonthlySavingsByMemberId(memberId: string): Promise<MemberMonthlySaving[]>;
   addMonthlySaving(saving: MemberMonthlySaving): Promise<void>;
+  updatePhoto(id: string, photoUrl: string): Promise<void>;
 }

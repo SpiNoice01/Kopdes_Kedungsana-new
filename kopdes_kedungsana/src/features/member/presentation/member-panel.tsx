@@ -639,65 +639,74 @@ export function MemberPanel() {
           <Link
             key={member.id}
             href={`/admin/input-data/${member.id}`}
-            className="rounded-2xl border border-slate-200 bg-white p-4 text-left transition hover:border-primary/30"
+            className="flex overflow-hidden rounded-2xl border border-slate-200 bg-white text-left transition hover:border-primary/30 hover:shadow-md min-h-[220px]"
           >
-            <div className="mb-3">
+            {/* Left Column: Full User Photo */}
+            <div className="relative w-32 sm:w-36 bg-slate-100 flex-shrink-0">
               {member.photoUrl ? (
                 <Image
                   src={member.photoUrl}
                   alt={`Foto ${member.name}`}
-                  width={64}
-                  height={64}
-                  className="h-16 w-16 rounded-xl object-cover"
+                  fill
+                  sizes="(max-width: 128px) 100vw, 128px"
+                  className="object-cover"
                 />
               ) : (
-                <div className="flex h-16 w-16 items-center justify-center rounded-xl bg-primary-soft text-lg font-semibold text-primary">
+                <div className="absolute inset-0 flex items-center justify-center bg-primary-soft text-2xl font-bold text-primary font-mono uppercase">
                   {member.name.slice(0, 1).toUpperCase()}
                 </div>
               )}
             </div>
-            <p className="text-base font-semibold text-slate-800">
-              {member.name}
-            </p>
-            <p className="mt-1 text-sm text-slate-500">NIK: {member.nik}</p>
-            <p className="mt-1 text-sm text-slate-500">
-              TTL: {member.birthPlace}, {member.birthDate}
-            </p>
-            <p className="mt-1 text-sm text-slate-500">
-              Jenis Kelamin: {member.gender}
-            </p>
-            <div className="mt-3 flex items-center justify-between">
-              <span className="inline-flex rounded-full bg-primary-soft px-2.5 py-1 text-xs font-bold text-primary">
-                Status: {member.status}
-              </span>
-              <span className="text-[10px] text-slate-400 font-semibold font-mono">Join: {member.joinDate}</span>
-            </div>
 
-            {/* Arrears status */}
-            <div className="mt-3 pt-3 border-t border-slate-100 flex flex-col gap-1.5">
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Status Tunggakan Wajib:</span>
-              {(() => {
-                const sList = savingsMap[member.id] || [];
-                const info = calculateArrears(member, sList);
-                if (info.arrears > 0) {
-                  return (
-                    <div className="bg-red-50 border border-red-100 rounded-xl p-2 flex flex-col">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[10px] font-bold text-red-600 uppercase">Menunggak {info.monthsElapsed} Bulan</span>
-                        <span className="text-xs font-extrabold text-red-600">{formatCurrency(info.arrears)}</span>
+            {/* Right Column: Profile Details & Real-Time Status */}
+            <div className="flex-1 p-4 flex flex-col justify-between min-w-0">
+              <div>
+                <h3 className="text-base font-bold text-slate-800 truncate leading-snug">
+                  {member.name}
+                </h3>
+                <p className="mt-1 text-xs text-slate-500 font-medium font-mono">NIK: {member.nik}</p>
+                <p className="mt-0.5 text-xs text-slate-500 truncate">
+                  TTL: {member.birthPlace}, {member.birthDate}
+                </p>
+                <p className="mt-0.5 text-xs text-slate-400 font-semibold text-[10px] uppercase tracking-wide">
+                  {member.gender}
+                </p>
+              </div>
+
+              {/* Status & Join Date */}
+              <div className="mt-2.5 flex items-center justify-between gap-1.5 pt-2 border-t border-slate-100">
+                <span className="inline-flex rounded-full bg-primary-soft px-2.5 py-0.5 text-[10px] font-extrabold text-primary uppercase">
+                  {member.status}
+                </span>
+                <span className="text-[10px] text-slate-400 font-bold font-mono">Join: {member.joinDate}</span>
+              </div>
+
+              {/* Arrears status */}
+              <div className="mt-2.5 pt-2 border-t border-slate-100 flex flex-col gap-1">
+                <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Status Tunggakan Wajib:</span>
+                {(() => {
+                  const sList = savingsMap[member.id] || [];
+                  const info = calculateArrears(member, sList);
+                  if (info.arrears > 0) {
+                    return (
+                      <div className="bg-red-50 border border-red-100 rounded-xl p-2 flex flex-col">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[9px] font-extrabold text-red-600 uppercase">Menunggak {info.monthsElapsed} Bulan</span>
+                          <span className="text-xs font-extrabold text-red-600">{formatCurrency(info.arrears)}</span>
+                        </div>
+                        <span className="text-[8px] text-red-500 mt-0.5 font-medium leading-none">Target: {formatCurrency(info.target)} | Dibayar: {formatCurrency(info.paid)}</span>
                       </div>
-                      <span className="text-[9px] text-red-500 mt-0.5 font-medium">Target: {formatCurrency(info.target)} | Dibayar: {formatCurrency(info.paid)}</span>
-                    </div>
-                  );
-                } else {
-                  return (
-                    <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-2 flex items-center justify-between">
-                      <span className="text-[10px] font-bold text-emerald-600 uppercase">LUNAS / AMAN</span>
-                      <span className="text-xs font-extrabold text-emerald-600">Rp 0</span>
-                    </div>
-                  );
-                }
-              })()}
+                    );
+                  } else {
+                    return (
+                      <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-2 flex items-center justify-between">
+                        <span className="text-[9px] font-extrabold text-emerald-600 uppercase">Lunas / Aman</span>
+                        <span className="text-xs font-extrabold text-emerald-600">Rp 0</span>
+                      </div>
+                    );
+                  }
+                })()}
+              </div>
             </div>
           </Link>
         ))}
