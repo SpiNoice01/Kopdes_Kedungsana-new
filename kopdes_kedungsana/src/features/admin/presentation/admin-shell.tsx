@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { ReactNode, useEffect, useMemo, useState } from "react";
 import SpreadsheetModal from "./spreadsheet-modal";
@@ -62,16 +63,27 @@ export function AdminShell({ children }: AdminShellProps) {
           }`}
         >
           <div>
-            <div className="flex items-center justify-between gap-2 px-2">
-              <p
-                className={`font-semibold tracking-wide ${isSidebarOpen ? "block" : "hidden"}`}
-              >
-                Kopdes Panel
-              </p>
+            <div className={`flex gap-2 px-2 ${isSidebarOpen ? "flex-row items-center justify-between" : "flex-col items-center"}`}>
+              <div className="flex items-center gap-2.5">
+                <div className="relative h-10 w-10 overflow-hidden rounded-xl flex-shrink-0">
+                  <Image
+                    src="/logo/KDMP.jpg"
+                    alt="Logo KDMP"
+                    fill
+                    className="object-cover"
+                  />
+                </div>
+                {isSidebarOpen && (
+                  <div>
+                    <p className="font-bold text-sm leading-tight tracking-wide text-white">KDMP</p>
+                    <p className="text-[10px] text-white/70 font-medium leading-none">Kedungsana</p>
+                  </div>
+                )}
+              </div>
               <button
                 type="button"
                 onClick={() => setIsSidebarOpen((previous) => !previous)}
-                className="rounded-lg border border-white/30 px-2 py-1 text-xs hover:bg-white/10"
+                className="rounded-lg border border-white/30 px-2 py-1 text-xs hover:bg-white/10 transition-colors"
                 aria-label="Toggle side panel"
               >
                 {isSidebarOpen ? "Tutup" : "Buka"}
