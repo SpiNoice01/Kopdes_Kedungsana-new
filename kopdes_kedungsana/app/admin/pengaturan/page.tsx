@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { addAuditLog } from "@/src/utils/audit-logger";
 
 const SETTINGS_KEY = "kopdes_settings";
 
@@ -46,9 +48,15 @@ const formatCurrency = (value: number) =>
   }).format(value);
 
 export default function PengaturanPage() {
+  const router = useRouter();
   const [form, setForm] = useState<KopdesSettings>(defaultSettings);
   const [isSaved, setIsSaved] = useState(false);
   const [isDirty, setIsDirty] = useState(false);
+
+  const handleLogout = () => {
+    addAuditLog("LOGOUT", "Admin melakukan logout secara manual dari sistem.", "info");
+    router.push("/");
+  };
 
   useEffect(() => {
     setForm(loadSettings());
@@ -244,6 +252,28 @@ export default function PengaturanPage() {
         <div>
           <span className="font-bold text-amber-700 block">Catatan Teknis:</span>
           Pengaturan ini disimpan di <code className="bg-amber-100 px-1 rounded font-mono text-[10px]">localStorage</code> perangkat saat ini. Setelah integrasi database, pengaturan ini akan disinkronkan ke server dan berlaku untuk semua pengguna.
+        </div>
+      </div>
+
+      {/* Section 4: Keluar dari Sistem (Logout) */}
+      <div className="rounded-3xl border border-red-200 bg-red-50/20 p-6 shadow-sm space-y-4">
+        <div className="border-b border-red-200/50 pb-3 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <h3 className="text-sm font-bold text-red-800">Sesi Administrator</h3>
+            <p className="text-xs text-red-600/80 mt-0.5">Keluar dari panel administrasi dan kembali ke halaman login utama.</p>
+          </div>
+          <button
+            onClick={handleLogout}
+            className="inline-flex items-center gap-1.5 rounded-xl bg-red-600 hover:bg-red-700 text-white px-5 py-2.5 text-sm font-bold shadow-sm transition cursor-pointer border-none outline-none self-start sm:self-auto"
+          >
+            <svg className="w-4.5 h-4.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+            </svg>
+            Keluar (Logout)
+          </button>
+        </div>
+        <div className="text-xs text-slate-500">
+          Sesi aktif saat ini: <strong className="text-slate-700">Admin Kopdes Kedungsana</strong> (admin@kopdeskedungsana.id)
         </div>
       </div>
 
