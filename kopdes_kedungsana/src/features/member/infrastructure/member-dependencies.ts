@@ -5,21 +5,26 @@ import { GetMemberMonthlySavingsUseCase } from "../application/get-member-monthl
 import { GetMembersUseCase } from "../application/get-members-use-case";
 import { UpdateMemberPhotoUseCase } from "../application/update-member-photo-use-case";
 import { UpdateMemberStatusUseCase } from "../application/update-member-status-use-case";
+import { GetCooperativeStatsUseCase } from "../application/get-cooperative-stats-use-case";
 import { InMemoryMemberRepository } from "./in-memory-member-repository";
 
 const memberRepository = new InMemoryMemberRepository();
+const getMembersUseCase = new GetMembersUseCase(memberRepository);
+const getMemberMonthlySavingsUseCase = new GetMemberMonthlySavingsUseCase(memberRepository);
 
 export const memberDependencies = {
-  getMembersUseCase: new GetMembersUseCase(memberRepository),
+  getMembersUseCase,
   getMemberByIdUseCase: new GetMemberByIdUseCase(memberRepository),
-  getMemberMonthlySavingsUseCase: new GetMemberMonthlySavingsUseCase(
-    memberRepository,
-  ),
+  getMemberMonthlySavingsUseCase,
   addMemberByKtpUseCase: new AddMemberByKtpUseCase(memberRepository),
   addMemberMonthlySavingUseCase: new AddMemberMonthlySavingUseCase(
     memberRepository,
   ),
   updateMemberPhotoUseCase: new UpdateMemberPhotoUseCase(memberRepository),
   updateMemberStatusUseCase: new UpdateMemberStatusUseCase(memberRepository),
+  getCooperativeStatsUseCase: new GetCooperativeStatsUseCase(
+    getMembersUseCase,
+    getMemberMonthlySavingsUseCase
+  )
 };
 

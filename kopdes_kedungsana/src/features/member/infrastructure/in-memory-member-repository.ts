@@ -4,7 +4,98 @@ import type { MemberRepository } from "../domain/member-repository";
 import { memberSeed } from "./member-seed";
 
 const members: Member[] = [...memberSeed];
-const memberMonthlySavings: MemberMonthlySaving[] = [];
+const memberMonthlySavings: MemberMonthlySaving[] = [
+  {
+    id: "saving-001",
+    memberId: "member-001",
+    period: "2026-01",
+    requiredSaving: 10000,
+    voluntarySaving: 5000,
+    totalSaving: 15000,
+    inputDate: "2026-01-05",
+  },
+  {
+    id: "saving-002",
+    memberId: "member-001",
+    period: "2026-02",
+    requiredSaving: 10000,
+    voluntarySaving: 15000,
+    totalSaving: 25000,
+    inputDate: "2026-02-05",
+  },
+  {
+    id: "saving-003",
+    memberId: "member-001",
+    period: "2026-03",
+    requiredSaving: 10000,
+    voluntarySaving: 0,
+    totalSaving: 10000,
+    inputDate: "2026-03-05",
+  },
+  {
+    id: "saving-004",
+    memberId: "member-001",
+    period: "2026-04",
+    requiredSaving: 10000,
+    voluntarySaving: 20000,
+    totalSaving: 30000,
+    inputDate: "2026-04-05",
+  },
+  {
+    id: "saving-005",
+    memberId: "member-001",
+    period: "2026-05",
+    requiredSaving: 10000,
+    voluntarySaving: 10000,
+    totalSaving: 20000,
+    inputDate: "2026-05-05",
+  },
+  {
+    id: "saving-006",
+    memberId: "member-002",
+    period: "2026-01",
+    requiredSaving: 10000,
+    voluntarySaving: 0,
+    totalSaving: 10000,
+    inputDate: "2026-01-15",
+  },
+  {
+    id: "saving-007",
+    memberId: "member-002",
+    period: "2026-02",
+    requiredSaving: 10000,
+    voluntarySaving: 10000,
+    totalSaving: 20000,
+    inputDate: "2026-02-15",
+  },
+  {
+    id: "saving-008",
+    memberId: "member-002",
+    period: "2026-03",
+    requiredSaving: 10000,
+    voluntarySaving: 5000,
+    totalSaving: 15000,
+    inputDate: "2026-03-15",
+  },
+  {
+    id: "saving-009",
+    memberId: "member-002",
+    period: "2026-04",
+    requiredSaving: 10000,
+    voluntarySaving: 0,
+    totalSaving: 10000,
+    inputDate: "2026-04-15",
+  },
+  {
+    id: "saving-010",
+    memberId: "member-002",
+    period: "2026-05",
+    requiredSaving: 10000,
+    voluntarySaving: 30000,
+    totalSaving: 40000,
+    inputDate: "2026-05-15",
+  },
+];
 
 export class InMemoryMemberRepository implements MemberRepository {
   async getAll(): Promise<Member[]> {
