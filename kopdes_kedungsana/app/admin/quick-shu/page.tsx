@@ -38,7 +38,7 @@ interface MemberRecord {
 
 import { useEffect } from "react";
 import { memberDependencies } from "@/src/features/member/infrastructure/member-dependencies";
-import { loadSettingsAsync, defaultSettings } from "@/app/admin/pengaturan/page";
+import { loadSettingsAsync, defaultSettings } from "@/src/actions/settings-actions";
 import type { KopdesSettings } from "@/src/features/settings/domain/settings";
 
 export default function QuickShuPage() {

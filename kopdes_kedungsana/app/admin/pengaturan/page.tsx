@@ -8,54 +8,8 @@ import { formatCurrency } from "@/src/utils/formatters";
 import { getLastCommitDate } from "@/src/actions/get-build-info";
 import { clearAuthCookie } from "@/src/actions/auth-actions";
 
-const SETTINGS_KEY = "kopdes_settings";
-
-export type KopdesSettings = {
-  id?: string;
-  cooperativeName: string;
-  address: string;
-  legalNumber: string;
-  principalSavingAmount: number;   // Simpanan Pokok (Rp)
-  monthlyDuesAmount: number;       // Iuran Wajib per bulan (Rp)
-  activeFiscalYear: number;
-  pctCadangan: number;             // Cadangan Koperasi (%)
-  pctJasaModal: number;            // Jasa Modal (%)
-  pctJasaTransaksi: number;        // Jasa Transaksi (%)
-  pctPengurus: number;             // Dana Pengurus (%)
-  pctKaryawan: number;             // Dana Karyawan (%)
-  pctPendidikan: number;           // Dana Pendidikan (%)
-  pctSosial: number;               // Dana Sosial (%)
-};
-
-export const defaultSettings: KopdesSettings = {
-  cooperativeName: "Koperasi Desa Kedungsana",
-  address: "RT 01/RW 03, Kecamatan Plumbon, Kabupaten Cirebon",
-  legalNumber: "AHU-0012903.AH.01.26",
-  principalSavingAmount: 100_000,
-  monthlyDuesAmount: 10_000,
-  activeFiscalYear: new Date().getFullYear(),
-  pctCadangan: 40,
-  pctJasaModal: 33.32,
-  pctJasaTransaksi: 6.68,
-  pctPengurus: 5,
-  pctKaryawan: 5,
-  pctPendidikan: 5,
-  pctSosial: 5,
-};
-
-export async function loadSettingsAsync(): Promise<KopdesSettings> {
-  try {
-    const settings = await settingsDependencies.getSettingsUseCase.execute();
-    return settings as KopdesSettings;
-  } catch (error) {
-    console.error("Failed to load settings from Supabase", error);
-    return defaultSettings;
-  }
-}
-
-export async function saveSettingsAsync(settings: KopdesSettings): Promise<void> {
-  await settingsDependencies.updateSettingsUseCase.execute(settings as any);
-}
+import { loadSettingsAsync, saveSettingsAsync, defaultSettings } from "@/src/actions/settings-actions";
+import type { KopdesSettings } from "@/src/features/settings/domain/settings";
 
 export default function PengaturanPage() {
   const router = useRouter();
@@ -63,6 +17,7 @@ export default function PengaturanPage() {
   const [originalForm, setOriginalForm] = useState<KopdesSettings>(defaultSettings);
   const [isSaved, setIsSaved] = useState(false);
   const [isDirty, setIsDirty] = useState(false);
+  const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
   const [lastUpdate, setLastUpdate] = useState("Loading...");
 
   const handleLogout = async () => {
@@ -88,26 +43,29 @@ export default function PengaturanPage() {
     setIsSaved(false);
   };
 
+  const getChanges = () => {
+    const changes: string[] = [];
+    if (form.cooperativeName !== originalForm.cooperativeName) changes.push(`Nama Koperasi [${originalForm.cooperativeName} ➔ ${form.cooperativeName}]`);
+    if (form.address !== originalForm.address) changes.push(`Alamat [${originalForm.address} ➔ ${form.address}]`);
+    if (form.legalNumber !== originalForm.legalNumber) changes.push(`Badan Hukum [${originalForm.legalNumber} ➔ ${form.legalNumber}]`);
+    if (form.principalSavingAmount !== originalForm.principalSavingAmount) changes.push(`Simpanan Pokok [${formatCurrency(originalForm.principalSavingAmount)} ➔ ${formatCurrency(form.principalSavingAmount)}]`);
+    if (form.monthlyDuesAmount !== originalForm.monthlyDuesAmount) changes.push(`Iuran Wajib [${formatCurrency(originalForm.monthlyDuesAmount)} ➔ ${formatCurrency(form.monthlyDuesAmount)}]`);
+    if (form.activeFiscalYear !== originalForm.activeFiscalYear) changes.push(`Tahun Buku [${originalForm.activeFiscalYear} ➔ ${form.activeFiscalYear}]`);
+    if (form.pctCadangan !== originalForm.pctCadangan) changes.push(`Cadangan [${originalForm.pctCadangan}% ➔ ${form.pctCadangan}%]`);
+    if (form.pctJasaModal !== originalForm.pctJasaModal) changes.push(`Jasa Modal [${originalForm.pctJasaModal}% ➔ ${form.pctJasaModal}%]`);
+    if (form.pctJasaTransaksi !== originalForm.pctJasaTransaksi) changes.push(`Jasa Transaksi [${originalForm.pctJasaTransaksi}% ➔ ${form.pctJasaTransaksi}%]`);
+    if (form.pctPengurus !== originalForm.pctPengurus) changes.push(`Pengurus [${originalForm.pctPengurus}% ➔ ${form.pctPengurus}%]`);
+    if (form.pctKaryawan !== originalForm.pctKaryawan) changes.push(`Karyawan [${originalForm.pctKaryawan}% ➔ ${form.pctKaryawan}%]`);
+    if (form.pctPendidikan !== originalForm.pctPendidikan) changes.push(`Pendidikan [${originalForm.pctPendidikan}% ➔ ${form.pctPendidikan}%]`);
+    if (form.pctSosial !== originalForm.pctSosial) changes.push(`Dana Sosial [${originalForm.pctSosial}% ➔ ${form.pctSosial}%]`);
+    return changes;
+  };
+
   const handleSave = async () => {
     setIsLoading(true);
     try {
       await saveSettingsAsync(form);
-
-      const changes: string[] = [];
-      if (form.cooperativeName !== originalForm.cooperativeName) changes.push(`Nama Koperasi [${originalForm.cooperativeName} ➔ ${form.cooperativeName}]`);
-      if (form.address !== originalForm.address) changes.push(`Alamat [${originalForm.address} ➔ ${form.address}]`);
-      if (form.legalNumber !== originalForm.legalNumber) changes.push(`Badan Hukum [${originalForm.legalNumber} ➔ ${form.legalNumber}]`);
-      if (form.principalSavingAmount !== originalForm.principalSavingAmount) changes.push(`Simpanan Pokok [${formatCurrency(originalForm.principalSavingAmount)} ➔ ${formatCurrency(form.principalSavingAmount)}]`);
-      if (form.monthlyDuesAmount !== originalForm.monthlyDuesAmount) changes.push(`Iuran Wajib [${formatCurrency(originalForm.monthlyDuesAmount)} ➔ ${formatCurrency(form.monthlyDuesAmount)}]`);
-      if (form.activeFiscalYear !== originalForm.activeFiscalYear) changes.push(`Tahun Buku [${originalForm.activeFiscalYear} ➔ ${form.activeFiscalYear}]`);
-      if (form.pctCadangan !== originalForm.pctCadangan) changes.push(`Cadangan [${originalForm.pctCadangan}% ➔ ${form.pctCadangan}%]`);
-      if (form.pctJasaModal !== originalForm.pctJasaModal) changes.push(`Jasa Modal [${originalForm.pctJasaModal}% ➔ ${form.pctJasaModal}%]`);
-      if (form.pctJasaTransaksi !== originalForm.pctJasaTransaksi) changes.push(`Jasa Anggota [${originalForm.pctJasaTransaksi}% ➔ ${form.pctJasaTransaksi}%]`);
-      if (form.pctPengurus !== originalForm.pctPengurus) changes.push(`Pengurus [${originalForm.pctPengurus}% ➔ ${form.pctPengurus}%]`);
-      if (form.pctKaryawan !== originalForm.pctKaryawan) changes.push(`Karyawan [${originalForm.pctKaryawan}% ➔ ${form.pctKaryawan}%]`);
-      if (form.pctPendidikan !== originalForm.pctPendidikan) changes.push(`Pendidikan [${originalForm.pctPendidikan}% ➔ ${form.pctPendidikan}%]`);
-      if (form.pctSosial !== originalForm.pctSosial) changes.push(`Dana Sosial [${originalForm.pctSosial}% ➔ ${form.pctSosial}%]`);
-
+      const changes = getChanges();
       const changesMsg = changes.length > 0 ? ` (Rincian: ${changes.join(", ")})` : "";
       
       addAuditLog("UPDATE_SETTINGS", `Admin mengubah konfigurasi pengaturan koperasi ke database.${changesMsg}`, "success");
@@ -115,6 +73,7 @@ export default function PengaturanPage() {
       setOriginalForm(form);
       setIsSaved(true);
       setIsDirty(false);
+      setIsConfirmModalOpen(false);
       setTimeout(() => setIsSaved(false), 3000);
     } catch (e) {
       alert("Gagal menyimpan ke database");
@@ -333,7 +292,7 @@ export default function PengaturanPage() {
           Reset ke Default
         </button>
         <button
-          onClick={handleSave}
+          onClick={() => setIsConfirmModalOpen(true)}
           disabled={!isDirty}
           className="inline-flex items-center gap-1.5 rounded-xl bg-primary hover:opacity-90 disabled:opacity-50 text-primary-foreground px-5 py-2 text-sm font-bold shadow-sm transition cursor-pointer"
         >
@@ -386,6 +345,59 @@ export default function PengaturanPage() {
           Terakhir diperbarui pada {lastUpdate}
         </p>
       </div>
+
+      {/* Confirmation Modal */}
+      {isConfirmModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="w-full max-w-lg rounded-3xl bg-white shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="p-6 border-b border-slate-100 flex items-center gap-4">
+              <div className="w-12 h-12 rounded-full bg-amber-100 flex items-center justify-center text-amber-600 flex-shrink-0">
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-slate-800">Konfirmasi Perubahan</h3>
+                <p className="text-sm text-slate-500 mt-1">Anda akan menyimpan perubahan pengaturan berikut secara permanen.</p>
+              </div>
+            </div>
+            
+            <div className="p-6 overflow-y-auto bg-slate-50/50 flex-1">
+              <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Ringkasan Perubahan:</h4>
+              <ul className="space-y-2 mb-4">
+                {getChanges().map((change, idx) => (
+                  <li key={idx} className="text-sm text-slate-700 bg-white p-3 rounded-xl border border-slate-200 shadow-sm flex items-start gap-2">
+                    <svg className="w-4 h-4 text-emerald-500 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                    <span>{change}</span>
+                  </li>
+                ))}
+              </ul>
+              <div className="rounded-xl bg-amber-50 border border-amber-200/60 p-3 flex gap-2.5 text-xs text-amber-800">
+                <svg className="w-4 h-4 text-amber-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <p>Sebagai bentuk transparansi, seluruh rincian perubahan di atas akan dicatat secara permanen di dalam <strong>Log Aktivitas (Audit Trail)</strong> dan tidak dapat dihapus.</p>
+              </div>
+            </div>
+
+            <div className="p-4 border-t border-slate-100 bg-white flex justify-end gap-3">
+              <button
+                onClick={() => setIsConfirmModalOpen(false)}
+                className="px-5 py-2.5 rounded-xl font-semibold text-slate-600 hover:bg-slate-100 transition"
+              >
+                Batal
+              </button>
+              <button
+                onClick={handleSave}
+                disabled={isLoading}
+                className="px-6 py-2.5 rounded-xl font-bold bg-primary text-white hover:bg-primary/90 shadow-md transition flex items-center gap-2"
+              >
+                {isLoading ? "Menyimpan..." : "Ya, Simpan Perubahan"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </section>
   );

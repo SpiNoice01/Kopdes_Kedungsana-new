@@ -1,6 +1,6 @@
 import { GetMembersUseCase } from "./get-members-use-case";
 import { GetMemberMonthlySavingsUseCase } from "./get-member-monthly-savings-use-case";
-import { loadSettingsAsync } from "@/app/admin/pengaturan/page";
+import { loadSettingsAsync } from "@/src/actions/settings-actions";
 
 export interface CooperativeStats {
   totalMembers: number;

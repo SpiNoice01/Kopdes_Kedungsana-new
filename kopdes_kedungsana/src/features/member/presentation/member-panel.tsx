@@ -7,7 +7,7 @@ import { addAuditLog } from "../../../utils/audit-logger";
 import type { Member } from "../domain/member";
 import type { MemberMonthlySaving } from "../domain/member-monthly-saving";
 import { memberDependencies } from "../infrastructure/member-dependencies";
-import { loadSettingsAsync } from "@/app/admin/pengaturan/page";
+import { loadSettingsAsync } from "@/src/actions/settings-actions";
 import type { KopdesSettings } from "@/src/features/settings/domain/settings";
 import { formatCurrency } from "@/src/utils/formatters";
 import { calculateArrears } from "../domain/member-services";

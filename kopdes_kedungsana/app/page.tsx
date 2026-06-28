@@ -3,7 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { useEffect, useState } from "react";
-import { loadSettingsAsync } from "./admin/pengaturan/page";
+import { loadSettingsAsync } from "@/src/actions/settings-actions";
 import type { KopdesSettings } from "@/src/features/settings/domain/settings";
 import { memberDependencies } from "@/src/features/member/infrastructure/member-dependencies";
 import { CooperativeGrowthChart } from "./components/public-portal/charts";
