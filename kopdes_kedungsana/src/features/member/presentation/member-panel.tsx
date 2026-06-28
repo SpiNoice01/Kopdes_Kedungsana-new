@@ -6,8 +6,11 @@ import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from "react";
 import { addAuditLog } from "../../../utils/audit-logger";
 import type { Member } from "../domain/member";
 import type { MemberMonthlySaving } from "../domain/member-monthly-saving";
-import { memberSeed } from "../infrastructure/member-seed";
 import { memberDependencies } from "../infrastructure/member-dependencies";
+import { loadSettingsAsync } from "@/app/admin/pengaturan/page";
+import type { KopdesSettings } from "@/src/features/settings/domain/settings";
+import { formatCurrency } from "@/src/utils/formatters";
+import { calculateArrears } from "../domain/member-services";
 
 type FeedbackState = {
   message: string;
@@ -55,43 +58,14 @@ const initialKtpFormState: KtpFormState = {
   occupation: "",
 };
 
-const formatCurrency = (value: number): string =>
-  new Intl.NumberFormat("id-ID", {
-    style: "currency",
-    currency: "IDR",
-    maximumFractionDigits: 0,
-  }).format(value);
-
-const calculateArrears = (member: Member, savings: MemberMonthlySaving[] = []) => {
-  const monthlyTarget = 10000; // Rp 10.000 per bulan
-  
-  if (!member.joinDate) return { monthsElapsed: 0, target: 0, paid: 0, arrears: 0 };
-  
-  const joinDate = new Date(member.joinDate);
-  const currentDate = new Date();
-  
-  const yearsDiff = currentDate.getFullYear() - joinDate.getFullYear();
-  const monthsDiff = currentDate.getMonth() - joinDate.getMonth();
-  const monthsElapsed = Math.max(1, (yearsDiff * 12) + monthsDiff + 1);
-  
-  const target = monthsElapsed * monthlyTarget;
-  const paid = savings.reduce((sum, s) => sum + s.requiredSaving, 0);
-  const arrears = Math.max(0, target - paid);
-  
-  return {
-    monthsElapsed,
-    target,
-    paid,
-    arrears
-  };
-};
-
 export function MemberPanel() {
-  const [members, setMembers] = useState<Member[]>(() => [...memberSeed]);
+  const [members, setMembers] = useState<Member[]>([]);
   const [savingsMap, setSavingsMap] = useState<Record<string, MemberMonthlySaving[]>>({});
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [ktpForm, setKtpForm] = useState<KtpFormState>(initialKtpFormState);
   const [isLoading, setIsLoading] = useState(false);
+  const [isInitialLoading, setIsInitialLoading] = useState(true);
+  const [settings, setSettings] = useState<KopdesSettings | null>(null);
   const [feedbackState, setFeedbackState] =
     useState<FeedbackState>(initialFeedbackState);
   const [isOcrLoading, setIsOcrLoading] = useState(false);
@@ -108,7 +82,7 @@ export function MemberPanel() {
         member.nik.includes(searchTerm);
         
       const sList = savingsMap[member.id] || [];
-      const info = calculateArrears(member, sList);
+      const info = calculateArrears(member, sList, settings);
       const matchesArrears =
         arrearsFilter === "all" ||
         (arrearsFilter === "lunas" && info.arrears === 0) ||
@@ -124,8 +98,8 @@ export function MemberPanel() {
     // ✅ Sort: members with arrears float to TOP (descending by arrears amount)
     // Within each group, sort alphabetically by name
     return filtered.sort((a, b) => {
-      const arrearsA = calculateArrears(a, savingsMap[a.id] || []).arrears;
-      const arrearsB = calculateArrears(b, savingsMap[b.id] || []).arrears;
+      const arrearsA = calculateArrears(a, savingsMap[a.id] || [], settings).arrears;
+      const arrearsB = calculateArrears(b, savingsMap[b.id] || [], settings).arrears;
       if (arrearsB !== arrearsA) return arrearsB - arrearsA; // highest arrears first
       return a.name.localeCompare(b.name, "id"); // then alphabetical
     });
@@ -133,15 +107,26 @@ export function MemberPanel() {
 
   useEffect(() => {
     const loadMembersAndSavings = async () => {
-      const list = await memberDependencies.getMembersUseCase.execute();
-      setMembers(list);
-      
-      const map: Record<string, MemberMonthlySaving[]> = {};
-      for (const m of list) {
-        const savings = await memberDependencies.getMemberMonthlySavingsUseCase.execute(m.id);
-        map[m.id] = savings;
+      try {
+        const [list, fetchedSettings] = await Promise.all([
+          memberDependencies.getMembersUseCase.execute(),
+          loadSettingsAsync()
+        ]);
+        
+        const map: Record<string, MemberMonthlySaving[]> = {};
+        for (const m of list) {
+          const savings = await memberDependencies.getMemberMonthlySavingsUseCase.execute(m.id);
+          map[m.id] = savings;
+        }
+        
+        setSettings(fetchedSettings);
+        setSavingsMap(map);
+        setMembers(list);
+      } catch (e) {
+        console.error("Failed to load initial data", e);
+      } finally {
+        setIsInitialLoading(false);
       }
-      setSavingsMap(map);
     };
     void loadMembersAndSavings();
   }, []);
@@ -237,26 +222,54 @@ export function MemberPanel() {
     }
 
     // 3. EXTRACT TEMPAT & TANGGAL LAHIR
-    const lahirLine = lines.find((l) => {
+    // 3. EXTRACT TEMPAT & TANGGAL LAHIR
+    const lahirIndex = lines.findIndex((l) => {
       const lower = l.toLowerCase();
-      return lower.includes("lahir") || lower.includes("tempat/tgl") || lower.includes("tempat/tanggal") || lower.includes("tgl");
+      return lower.includes("lahir") || lower.includes("tempat") || lower.includes("tgl") || lower.includes("tgi");
     });
 
-    if (lahirLine) {
-      const cleanLahir = lahirLine.replace(/^.*(lahir|tgl|tanggal)\s*[:\-]?/i, "").trim();
+    if (lahirIndex !== -1) {
+      let targetLine = lines[lahirIndex];
+      let dateMatch = targetLine.match(/(\d{2})[\s\-\/](\d{2})[\s\-\/](\d{4})/);
       
-      // Resilient Date extraction: matches DD-MM-YYYY, DD/MM/YYYY or DD MM YYYY
-      const dateMatch = cleanLahir.match(/(\d{2})[\s\-\/](\d{2})[\s\-\/](\d{4})/);
+      // If date is not on the same line as the label, it might have been split to the next line
+      if (!dateMatch && lahirIndex + 1 < lines.length) {
+        targetLine = lines[lahirIndex + 1];
+        dateMatch = targetLine.match(/(\d{2})[\s\-\/](\d{2})[\s\-\/](\d{4})/);
+      }
+      
       if (dateMatch) {
+        const dateStr = dateMatch[0];
         const day = dateMatch[1];
         const month = dateMatch[2];
         const year = dateMatch[3];
-        result.birthDate = `${year}-${month}-${day}`; // ISO format YYYY-MM-DD
+        result.birthDate = `${year}-${month}-${day}`;
         
-        // Extract place by taking everything before the date and any commas
-        let placePart = cleanLahir.split(dateMatch[0])[0].replace(/,/g, "").trim();
-        result.birthPlace = placePart.replace(/[^a-zA-Z\s]/g, "").trim().toUpperCase();
+        // Extract the place (everything before the date on that line)
+        const beforeDate = targetLine.split(dateStr)[0];
+        let cleanPlace = beforeDate
+          .replace(/.*(lahir|tgl|tanggal|tgi)\s*[:\-]?/i, "") // Remove label if it's on this line
+          .replace(/[^a-zA-Z\s]/g, "") // Keep only letters
+          .trim()
+          .toUpperCase();
+          
+        // If cleanPlace is empty, it means the place was on the previous line!
+        // e.g. Line 1: "Tempat/Tgl Lahir : LOREM,"
+        //      Line 2: "25-10-1990"
+        if (!cleanPlace && targetLine === lines[lahirIndex + 1]) {
+          cleanPlace = lines[lahirIndex]
+            .replace(/.*(lahir|tgl|tanggal|tgi)\s*[:\-]?/i, "")
+            .replace(/[^a-zA-Z\s]/g, "")
+            .trim()
+            .toUpperCase();
+        }
+        
+        if (cleanPlace) {
+          result.birthPlace = cleanPlace;
+        }
       } else {
+        // Ultimate fallback: just take text after label
+        const cleanLahir = lines[lahirIndex].replace(/.*(lahir|tgl|tanggal|tgi)\s*[:\-]?/i, "").trim();
         const commaParts = cleanLahir.split(",");
         if (commaParts.length > 0) {
           result.birthPlace = commaParts[0].replace(/[^a-zA-Z\s]/g, "").trim().toUpperCase();
@@ -264,7 +277,7 @@ export function MemberPanel() {
       }
     }
 
-    // Secondary fallback for Date scan (anywhere in KTP text)
+    // Secondary fallback for Date scan (anywhere in KTP text) if everything else failed
     if (!result.birthDate) {
       const globalDateMatch = text.match(/(\d{2})[\s\-\/](\d{2})[\s\-\/](\d{4})/);
       if (globalDateMatch) {
@@ -272,6 +285,13 @@ export function MemberPanel() {
         const month = globalDateMatch[2];
         const year = globalDateMatch[3];
         result.birthDate = `${year}-${month}-${day}`;
+        
+        // Try to grab the word immediately before this date
+        const fullText = text.replace(/\n/g, " ");
+        const placeMatch = fullText.match(new RegExp(`([a-zA-Z]+)[^a-zA-Z0-9]*${globalDateMatch[0]}`));
+        if (placeMatch && !result.birthPlace) {
+           result.birthPlace = placeMatch[1].toUpperCase();
+        }
       }
     }
 
@@ -283,70 +303,45 @@ export function MemberPanel() {
       result.gender = "laki-laki";
     }
 
-    // 5. EXTRACT ALAMAT LENGKAP (Resilient component extraction for RT/RW, Kel/Desa, Kecamatan)
-    let coreAlamat = "";
-    let rtrw = "";
-    let keldesa = "";
-    let kecamatan = "";
-
-    // Find main Alamat line
-    const alamatIndex = lines.findIndex((l) => {
-      const lower = l.toLowerCase();
-      return (lower.includes("alamat") || lower.includes("alama") || lower.includes("alamt") || lower.includes("alamar")) && 
-             !lower.includes("provinsi") && !lower.includes("kabupaten") && !lower.includes("kota");
-    });
-
-    if (alamatIndex !== -1) {
-      coreAlamat = lines[alamatIndex]
-        .replace(/^(alamat|alama|alamt|alamar)\s*[:\-]?/i, "")
-        .replace(/rt\/rw.*/i, "") // Avoid capturing RT/RW if it leaked into same line
-        .trim()
-        .toUpperCase();
-    }
-
-    // Find RT/RW line
-    const rtrwLine = lines.find((l) => {
-      const lower = l.toLowerCase();
-      return lower.includes("rt/rw") || lower.includes("rt / rw") || lower.includes("rt/rvv") || (lower.includes("rt") && lower.includes("rw"));
-    });
-    if (rtrwLine) {
-      const rtMatch = rtrwLine.match(/(\d{3}\s*\/\s*\d{3})/);
-      if (rtMatch) {
-        rtrw = `RT. ${rtMatch[0].replace(/\s/g, "")}`;
-      } else {
-        const cleanRtRw = rtrwLine.replace(/^(rt\/rw|rt\s*\/rw|rt\/rvv)\s*[:\-]?/i, "").trim().toUpperCase();
-        if (cleanRtRw && cleanRtRw.length > 2) rtrw = `RT/RW ${cleanRtRw}`;
+    // 5. EXTRACT ALAMAT LENGKAP (Block-based extraction, 100% resilient to line splits)
+    const rawTextClean = text.replace(/\n/g, " "); // Flatten everything to a single line
+    
+    // The address on a KTP is always sandwiched between "Alamat" and "Agama" (or Status Perkawinan)
+    const blockMatch = rawTextClean.match(/(alamat|alama|alarnat|alamt)[\s:;\-|]*(.*?)(agama|agam|status|kawin)/i);
+    
+    if (blockMatch) {
+      let addressBlock = blockMatch[2].toUpperCase();
+      
+      // Normalize the sub-labels (RT/RW, Kel/Desa, Kecamatan) into comma-separated values
+      addressBlock = addressBlock
+        // Normalize RT/RW
+        .replace(/(RT\s*[/|I1l\\]\s*RW|RT\s*RW)[\s:;\-|.]*/ig, ", RT/RW ")
+        // Normalize Kel/Desa
+        .replace(/(KEL\s*[/|I1l\\]\s*DESA|KELURAHAN|DESA)[\s:;\-|.]*/ig, ", DESA/KEL ")
+        // Normalize Kecamatan
+        .replace(/(KECAMATAN|KECAM|KEC\.)[\s:;\-|.]*/ig, ", KEC. ");
+        
+      // Clean up unwanted characters (keep letters, numbers, spaces, commas, dots, slashes)
+      addressBlock = addressBlock
+        .replace(/[^A-Z0-9\s.,/]/g, "")
+        .replace(/\s+/g, " ")     // Remove extra spaces
+        .replace(/\s,/g, ",")     // Fix spaces before commas
+        .replace(/,+/g, ",")      // Fix double commas
+        .trim();
+        
+      // Remove any leading or trailing commas/dots
+      addressBlock = addressBlock.replace(/^[,.\s]+|[,.\s]+$/g, "");
+      
+      result.address = addressBlock;
+    } else {
+      // Ultimate fallback if Agama boundary isn't found
+      const alamatIndex = lines.findIndex(l => l.toLowerCase().includes("alamat"));
+      if (alamatIndex !== -1) {
+         let fallback = lines[alamatIndex].replace(/.*(alamat|alama)\s*[:\-]?/i, "").trim();
+         if (!fallback && alamatIndex + 1 < lines.length) fallback = lines[alamatIndex + 1];
+         result.address = fallback.replace(/[^A-Z0-9\s.,/]/ig, "").toUpperCase();
       }
     }
-
-    // Find Kel/Desa line
-    const keldesaLine = lines.find((l) => {
-      const lower = l.toLowerCase();
-      return lower.includes("kel/") || lower.includes("kel/desa") || lower.includes("desa") || lower.includes("kelurahan") || lower.includes("keli") || lower.includes("ke/desa");
-    });
-    if (keldesaLine) {
-      const cleanKel = keldesaLine.replace(/^(kel\/desa|kel\/|desa|kelurahan|keli|ke\/desa)\s*[:\-]?/i, "").trim().toUpperCase();
-      if (cleanKel && !cleanKel.includes("KECAMATAN")) keldesa = `DESA ${cleanKel}`;
-    }
-
-    // Find Kecamatan line
-    const kecLine = lines.find((l) => {
-      const lower = l.toLowerCase();
-      return lower.includes("kecamatan") || lower.includes("kecam") || lower.includes("kec.");
-    });
-    if (kecLine) {
-      const cleanKec = kecLine.replace(/^(kecamatan|kecam|kec\.)\s*[:\-]?/i, "").trim().toUpperCase();
-      if (cleanKec) kecamatan = `KEC. ${cleanKec}`;
-    }
-
-    // Synthesize structured address
-    const addressParts = [];
-    if (coreAlamat && coreAlamat.length > 3) addressParts.push(coreAlamat);
-    if (rtrw) addressParts.push(rtrw);
-    if (keldesa) addressParts.push(keldesa);
-    if (kecamatan) addressParts.push(kecamatan);
-
-    result.address = addressParts.join(", ");
 
     // 6. EXTRACT GOLONGAN DARAH
     const darahLine = lines.find((l) => l.toLowerCase().includes("darah") || l.toLowerCase().includes("gol"));
@@ -427,27 +422,87 @@ export function MemberPanel() {
       message: "Menginisialisasi pemindaian OCR...",
       isError: false,
     });
+    
+    // Auto-fill the image URL directly from the uploaded file
+    const fileReader = new FileReader();
+    const imageUrlPromise = new Promise<string | null>((resolve) => {
+      fileReader.onload = () => {
+        resolve(typeof fileReader.result === "string" ? fileReader.result : null);
+      };
+      fileReader.readAsDataURL(file);
+    });
+
+    const cropKtpPhoto = (imgSrc: string): Promise<string> => {
+      return new Promise((resolve) => {
+        const img = new globalThis.Image();
+        img.onload = () => {
+          const canvas = document.createElement("canvas");
+          // Approximate KTP photo position
+          const cropX = img.width * 0.70;
+          const cropY = img.height * 0.22;
+          const cropWidth = img.width * 0.25;
+          const cropHeight = img.height * 0.54;
+          
+          canvas.width = cropWidth;
+          canvas.height = cropHeight;
+          const ctx = canvas.getContext("2d");
+          if (!ctx) return resolve(imgSrc); // Fallback to full image
+          
+          ctx.drawImage(img, cropX, cropY, cropWidth, cropHeight, 0, 0, cropWidth, cropHeight);
+          resolve(canvas.toDataURL("image/jpeg", 0.9));
+        };
+        img.onerror = () => resolve(imgSrc); // Fallback
+        img.src = imgSrc;
+      });
+    };
 
     try {
-      const Tesseract = (await import("tesseract.js")).default;
-      const result = await Tesseract.recognize(
-        file,
-        "ind+eng",
-        {
-          logger: (m) => {
-            if (m.status === "recognizing text") {
-              setOcrProgress(Math.round(m.progress * 100));
-              setFeedbackState({
-                message: `Memindai teks KTP... (${Math.round(m.progress * 100)}%)`,
-                isError: false,
-              });
-            }
-          },
+      const imageUrl = await imageUrlPromise;
+      let croppedPhotoUrl = imageUrl;
+      if (imageUrl) {
+        try {
+          croppedPhotoUrl = await cropKtpPhoto(imageUrl);
+        } catch (e) {
+          console.error("Gagal meng-crop foto", e);
         }
-      );
+      }
 
-      const text = result.data.text;
-      const parsedData = parseKtpText(text);
+      setOcrProgress(50);
+      setFeedbackState({
+        message: "Menganalisis KTP dengan Google Gemini AI...",
+        isError: false,
+      });
+
+      if (!imageUrl) throw new Error("Gagal membaca gambar KTP.");
+      
+      const base64Data = imageUrl.split(",")[1];
+      const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
+      
+      if (!apiKey) throw new Error("Gemini API Key tidak ditemukan!");
+
+      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{
+            parts: [
+              { text: "Anda adalah sistem ahli ekstraksi data KTP Indonesia. Ekstrak data dari gambar KTP ini ke dalam format JSON. Kunci JSON harus persis: 'nik', 'name', 'birthPlace', 'birthDate' (format YYYY-MM-DD), 'gender' (hanya 'laki-laki' atau 'perempuan'), 'address' (gabungkan jalan, RT/RW, kel/desa, dan kecamatan menjadi satu string dengan koma), 'bloodType' (hanya 'A', 'B', 'AB', 'O', atau '-'), 'religion' (hanya 'Islam', 'Kristen', 'Katolik', 'Hindu', 'Buddha', 'Khonghucu'), 'maritalStatus' (hanya 'Belum Kawin', 'Kawin', 'Cerai Hidup', 'Cerai Mati'), 'occupation'. Hanya kembalikan output JSON tanpa format markdown." },
+              { inlineData: { mimeType: "image/jpeg", data: base64Data } }
+            ]
+          }],
+          generationConfig: {
+            temperature: 0.1,
+            responseMimeType: "application/json"
+          }
+        })
+      });
+
+      const responseData = await response.json();
+      if (!response.ok) throw new Error(responseData.error?.message || "Gagal menghubungi Gemini API");
+      
+      const rawText = responseData.candidates[0].content.parts[0].text;
+      const parsedData = JSON.parse(rawText);
+      setOcrProgress(100);
 
       setKtpForm((prev) => ({
         ...prev,
@@ -461,6 +516,8 @@ export function MemberPanel() {
         religion: parsedData.religion || prev.religion,
         maritalStatus: parsedData.maritalStatus || prev.maritalStatus,
         occupation: parsedData.occupation || prev.occupation,
+        // Auto-fill photos with the cropped face scan if not already filled
+        photoUrl: prev.photoUrl || croppedPhotoUrl,
       }));
 
       addAuditLog(
@@ -576,13 +633,11 @@ export function MemberPanel() {
     const isBirthPlaceInvalid = !ktpForm.birthPlace.trim();
     const isBirthDateInvalid = !ktpForm.birthDate.trim();
     const isGenderInvalid = !ktpForm.gender;
-    const isPhoneInvalid = !ktpForm.phone.trim();
     const isAddressInvalid = !ktpForm.address.trim();
     const isReligionInvalid = !ktpForm.religion;
     const isMaritalStatusInvalid = !ktpForm.maritalStatus;
     const isOccupationInvalid = !ktpForm.occupation.trim();
     const isPhotoInvalid = !ktpForm.photoUrl;
-    const isProofInvalid = !ktpForm.principalProofUrl;
 
     if (
       isNikInvalid ||
@@ -590,13 +645,11 @@ export function MemberPanel() {
       isBirthPlaceInvalid ||
       isBirthDateInvalid ||
       isGenderInvalid ||
-      isPhoneInvalid ||
       isAddressInvalid ||
       isReligionInvalid ||
       isMaritalStatusInvalid ||
       isOccupationInvalid ||
-      isPhotoInvalid ||
-      isProofInvalid
+      isPhotoInvalid
     ) {
       setShowValidationErrors(true);
       setFeedbackState({
@@ -624,10 +677,29 @@ export function MemberPanel() {
       return;
     }
 
+    let initialSavings: import("../domain/member-monthly-saving").MemberMonthlySaving[] = [];
+
+    // Jika pengguna mengunggah bukti simpanan pokok, otomatis catat pembayaran simpanan pokok
+    if (ktpForm.principalProofUrl) {
+      const savingPayload = {
+        memberId: result.member.id,
+        period: "POKOK", // Kode khusus untuk Simpanan Pokok
+        requiredSaving: 100000,
+        voluntarySaving: 0,
+        totalSaving: 100000,
+        inputDate: new Date().toISOString().slice(0, 10),
+      };
+      
+      const savingResult = await memberDependencies.addMemberMonthlySavingUseCase.execute(savingPayload);
+      if (savingResult.success && savingResult.saving) {
+        initialSavings = [savingResult.saving];
+      }
+    }
+
     setMembers((previousMembers) => [result.member, ...previousMembers]);
     setSavingsMap((prev) => ({
       ...prev,
-      [result.member.id]: [],
+      [result.member.id]: initialSavings,
     }));
     addAuditLog(
       "ADD_MEMBER",
@@ -758,7 +830,17 @@ export function MemberPanel() {
         </div>
       </div>
 
-      {filteredMembers.length === 0 ? (
+      {isInitialLoading ? (
+        <div className="rounded-2xl border border-slate-200 bg-white p-12 text-center shadow-sm animate-in fade-in duration-200">
+          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-slate-50 border border-slate-100 text-primary mb-3 animate-pulse">
+            <svg className="h-6 w-6 animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+          </div>
+          <h3 className="text-sm font-bold text-slate-800">Menyinkronkan Data...</h3>
+          <p className="mt-1 text-xs text-slate-500">Mengkalkulasi akumulasi simpanan dan tunggakan anggota</p>
+        </div>
+      ) : filteredMembers.length === 0 ? (
         <div className="rounded-2xl border border-slate-200 bg-white p-12 text-center shadow-sm animate-in fade-in duration-200">
           <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-slate-50 border border-slate-100 text-slate-400 mb-3">
             <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -832,7 +914,7 @@ export function MemberPanel() {
                   <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Status Tunggakan Wajib:</span>
                   {(() => {
                     const sList = savingsMap[member.id] || [];
-                    const info = calculateArrears(member, sList);
+                    const info = calculateArrears(member, sList, settings);
                     if (info.arrears > 0) {
                       return (
                         <div className="bg-red-50 border border-red-100 rounded-xl p-2 flex flex-col">
@@ -845,9 +927,13 @@ export function MemberPanel() {
                       );
                     } else {
                       return (
-                        <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-2 flex items-center justify-between">
-                          <span className="text-[9px] font-extrabold text-emerald-600 uppercase">Lunas / Aman</span>
-                          <span className="text-xs font-extrabold text-emerald-600">Rp 0</span>
+                        <div className="flex items-center pt-0.5">
+                          <span className="inline-flex items-center gap-1 text-[10px] font-extrabold text-emerald-500 uppercase bg-emerald-50 px-2 py-1 rounded-md border border-emerald-100/50">
+                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 13l4 4L19 7" />
+                            </svg>
+                            Lunas Tanpa Tunggakan
+                          </span>
                         </div>
                       );
                     }
@@ -1246,7 +1332,7 @@ export function MemberPanel() {
                       }`}>
                         <label className="block space-y-1.5 text-sm">
                           <span className="font-semibold text-slate-700">
-                            Bukti Simpanan Pokok 100000 ribu
+                            Bukti Simpanan Pokok
                           </span>
                           <input
                             type="file"

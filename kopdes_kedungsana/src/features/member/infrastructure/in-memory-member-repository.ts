@@ -150,4 +150,11 @@ export class InMemoryMemberRepository implements MemberRepository {
       members[idx] = { ...members[idx], status };
     }
   }
+
+  async updateProfile(id: string, profile: Partial<Member>): Promise<void> {
+    const idx = members.findIndex((item) => item.id === id);
+    if (idx >= 0) {
+      members[idx] = { ...members[idx], ...profile };
+    }
+  }
 }

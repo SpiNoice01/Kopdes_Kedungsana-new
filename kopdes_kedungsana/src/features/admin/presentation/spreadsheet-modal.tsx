@@ -13,28 +13,8 @@ type MemberRow = {
   serviceContribution: number;
 };
 
-const initialRows: MemberRow[] = [
-  { memberId: "m1", memberName: "OMAN NUROHMAN", joinDate: "2024-01-10", savingPokok: 100000, savingWajib: 560000, savingSukarela: 169000, serviceContribution: 0 },
-  { memberId: "m2", memberName: "NENI MULYANI", joinDate: "2024-02-15", savingPokok: 100000, savingWajib: 830000, savingSukarela: 690000, serviceContribution: 340000 },
-  { memberId: "m3", memberName: "HJ. DJEDJEH ZAKIAH", joinDate: "2024-03-20", savingPokok: 100000, savingWajib: 830000, savingSukarela: 1323000, serviceContribution: 120000 },
-  { memberId: "m4", memberName: "YUYU WAHYUDIN", joinDate: "2025-01-05", savingPokok: 0, savingWajib: 0, savingSukarela: 0, serviceContribution: 0 },
-  { memberId: "m5", memberName: "H. KARTAM", joinDate: "2025-02-10", savingPokok: 0, savingWajib: 0, savingSukarela: 0, serviceContribution: 0 },
-  { memberId: "m6", memberName: "ERUS RUSMIATI", joinDate: "2024-04-12", savingPokok: 100000, savingWajib: 780000, savingSukarela: 1130000, serviceContribution: 640000 },
-  { memberId: "m7", memberName: "SUSI ROSILAWATI", joinDate: "2024-05-18", savingPokok: 100000, savingWajib: 800000, savingSukarela: 350000, serviceContribution: 0 },
-  { memberId: "m8", memberName: "ASWETI", joinDate: "2024-06-25", savingPokok: 100000, savingWajib: 330000, savingSukarela: 129000, serviceContribution: 0 },
-  { memberId: "m9", memberName: "IKIT MASTIKA", joinDate: "2024-07-30", savingPokok: 100000, savingWajib: 830000, savingSukarela: 110000, serviceContribution: 710000 },
-  { memberId: "m10", memberName: "SUKMI", joinDate: "2024-08-05", savingPokok: 100000, savingWajib: 800000, savingSukarela: 130000, serviceContribution: 270000 },
-  { memberId: "m11", memberName: "LINDA ERLIA", joinDate: "2024-09-12", savingPokok: 100000, savingWajib: 800000, savingSukarela: 320000, serviceContribution: 440000 },
-  { memberId: "m12", memberName: "TITI SUGIARTI", joinDate: "2024-10-15", savingPokok: 100000, savingWajib: 850000, savingSukarela: 600000, serviceContribution: 0 },
-  { memberId: "m13", memberName: "KATRIN HALFALIA", joinDate: "2024-10-20", savingPokok: 100000, savingWajib: 850000, savingSukarela: 1659000, serviceContribution: 628000 },
-  { memberId: "m14", memberName: "TATI HARYATI", joinDate: "2024-11-05", savingPokok: 100000, savingWajib: 900000, savingSukarela: 3320000, serviceContribution: 200000 },
-  { memberId: "m15", memberName: "YATI KASYARTI", joinDate: "2025-03-01", savingPokok: 0, savingWajib: 0, savingSukarela: 0, serviceContribution: 0 },
-  { memberId: "m16", memberName: "TRIANI WIDIA NINGRUM", joinDate: "2024-11-15", savingPokok: 100000, savingWajib: 500000, savingSukarela: 485000, serviceContribution: 660000 },
-  { memberId: "m17", memberName: "SULASTRI", joinDate: "2025-04-10", savingPokok: 0, savingWajib: 0, savingSukarela: 0, serviceContribution: 0 },
-  { memberId: "m18", memberName: "SITI ROHMAH", joinDate: "2024-12-05", savingPokok: 100000, savingWajib: 600000, savingSukarela: 496000, serviceContribution: 560000 },
-  { memberId: "m19", memberName: "SUNARTI", joinDate: "2024-12-12", savingPokok: 100000, savingWajib: 700000, savingSukarela: 638000, serviceContribution: 670000 },
-  { memberId: "m20", memberName: "NENENG HERLINA", joinDate: "2024-12-20", savingPokok: 100000, savingWajib: 600000, savingSukarela: 513000, serviceContribution: 440000 },
-];
+import { useEffect } from "react";
+import { memberDependencies } from "../../member/infrastructure/member-dependencies";
 
 const formatRelativeDate = (dateStr: string): string => {
   if (!dateStr) return "-";
@@ -77,10 +57,63 @@ const formatRelativeDate = (dateStr: string): string => {
 };
 
 export default function SpreadsheetModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
-  const [rows, setRows] = useState<MemberRow[]>(initialRows);
+  const [rows, setRows] = useState<MemberRow[]>([]);
+  const [originalRows, setOriginalRows] = useState<MemberRow[]>([]);
   const [activeTab, setActiveTab] = useState<"shu" | "simpanan">("simpanan");
   const [searchQuery, setSearchQuery] = useState("");
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    
+    const fetchData = async () => {
+      try {
+        setIsLoading(true);
+        const members = await memberDependencies.getMembersUseCase.execute();
+        
+        const records: MemberRow[] = [];
+        
+        for (const member of members) {
+          if (member.status !== "aktif") continue;
+
+          const savings = await memberDependencies.getMemberMonthlySavingsUseCase.execute(member.id);
+          
+          let savingPokok = 0;
+          let savingWajib = 0;
+          let savingSukarela = 0;
+          
+          for (const s of savings) {
+            if (s.period === "POKOK") {
+              savingPokok += s.requiredSaving;
+            } else {
+              savingWajib += s.requiredSaving;
+              savingSukarela += s.voluntarySaving;
+            }
+          }
+          
+          records.push({
+            memberId: member.id,
+            memberName: member.name.toUpperCase(),
+            joinDate: member.joinDate,
+            savingPokok,
+            savingWajib,
+            savingSukarela,
+            serviceContribution: 0,
+          });
+        }
+        
+        setRows(records);
+        setOriginalRows([...records]);
+      } catch (e) {
+        console.error("Failed to load Spreadsheet Live data", e);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    
+    void fetchData();
+  }, [isOpen]);
   
   // Spreadsheet coordinate states
   const [selectedCell, setSelectedCell] = useState<{ rowIdx: number; colName: string } | null>({ rowIdx: 0, colName: "B" });
@@ -268,10 +301,10 @@ export default function SpreadsheetModal({ isOpen, onClose }: { isOpen: boolean;
     if (confirm("Apakah Anda yakin ingin menyetel ulang data ke data awal?")) {
       addAuditLog(
         "RESET_DATA",
-        "Mereset seluruh modifikasi data spreadsheet kembali ke data awal bawaan pabrik!",
+        "Mereset seluruh modifikasi data spreadsheet kembali ke data dari database Supabase!",
         "danger"
       );
-      setRows(initialRows);
+      setRows([...originalRows]);
       setSelectedCell({ rowIdx: 0, colName: "B" });
       setEditingCell(null);
     }
@@ -583,7 +616,16 @@ export default function SpreadsheetModal({ isOpen, onClose }: { isOpen: boolean;
 
             {/* GRID CELLS */}
             <tbody className="bg-white">
-              {filteredRows.map((row, index) => {
+              {isLoading ? (
+                <tr>
+                  <td colSpan={activeTab === "shu" ? 9 : 8} className="py-20 text-center">
+                    <div className="flex flex-col items-center justify-center gap-3">
+                      <div className="w-8 h-8 border-2 border-slate-200 border-t-green-600 rounded-full animate-spin"></div>
+                      <p className="text-slate-500 font-sans">Mengambil data dari Supabase Database...</p>
+                    </div>
+                  </td>
+                </tr>
+              ) : filteredRows.map((row, index) => {
                 const actualRowIdx = rows.findIndex((r) => r.memberId === row.memberId);
                 
                 return (

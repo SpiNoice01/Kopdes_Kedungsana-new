@@ -51,8 +51,10 @@ export default function LaporanPage() {
 
           const wajib = savingsInYear.reduce((sum, s) => sum + s.requiredSaving, 0);
           const sukarela = savingsInYear.reduce((sum, s) => sum + s.voluntarySaving, 0);
-          // Pokok only counted once per member regardless of year
-          const pokok = 100_000;
+          
+          // Hitung simpanan pokok (hanya yang sudah bayar, ditandai dengan periode 'POKOK')
+          const pokokRecord = allSavings.find((s) => s.period === "POKOK");
+          const pokok = pokokRecord ? pokokRecord.requiredSaving : 0;
 
           results.push({
             member,
