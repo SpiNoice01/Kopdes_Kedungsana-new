@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { addAuditLog } from "@/src/utils/audit-logger";
 import { settingsDependencies } from "@/src/features/settings/infrastructure/settings-dependencies";
 import { formatCurrency } from "@/src/utils/formatters";
+import { getLastCommitDate } from "@/src/actions/get-build-info";
 
 const SETTINGS_KEY = "kopdes_settings";
 
@@ -58,8 +59,10 @@ export async function saveSettingsAsync(settings: KopdesSettings): Promise<void>
 export default function PengaturanPage() {
   const router = useRouter();
   const [form, setForm] = useState<KopdesSettings>(defaultSettings);
+  const [originalForm, setOriginalForm] = useState<KopdesSettings>(defaultSettings);
   const [isSaved, setIsSaved] = useState(false);
   const [isDirty, setIsDirty] = useState(false);
+  const [lastUpdate, setLastUpdate] = useState("Loading...");
 
   const handleLogout = () => {
     addAuditLog("LOGOUT", "Admin melakukan logout secara manual dari sistem.", "info");
@@ -71,8 +74,10 @@ export default function PengaturanPage() {
   useEffect(() => {
     loadSettingsAsync().then((data) => {
       setForm(data);
+      setOriginalForm(data);
       setIsLoading(false);
     });
+    getLastCommitDate().then(setLastUpdate);
   }, []);
 
   const handleChange = (field: keyof KopdesSettings, value: string | number) => {
@@ -85,6 +90,27 @@ export default function PengaturanPage() {
     setIsLoading(true);
     try {
       await saveSettingsAsync(form);
+
+      const changes: string[] = [];
+      if (form.cooperativeName !== originalForm.cooperativeName) changes.push(`Nama Koperasi [${originalForm.cooperativeName} ➔ ${form.cooperativeName}]`);
+      if (form.address !== originalForm.address) changes.push(`Alamat [${originalForm.address} ➔ ${form.address}]`);
+      if (form.legalNumber !== originalForm.legalNumber) changes.push(`Badan Hukum [${originalForm.legalNumber} ➔ ${form.legalNumber}]`);
+      if (form.principalSavingAmount !== originalForm.principalSavingAmount) changes.push(`Simpanan Pokok [${formatCurrency(originalForm.principalSavingAmount)} ➔ ${formatCurrency(form.principalSavingAmount)}]`);
+      if (form.monthlyDuesAmount !== originalForm.monthlyDuesAmount) changes.push(`Iuran Wajib [${formatCurrency(originalForm.monthlyDuesAmount)} ➔ ${formatCurrency(form.monthlyDuesAmount)}]`);
+      if (form.activeFiscalYear !== originalForm.activeFiscalYear) changes.push(`Tahun Buku [${originalForm.activeFiscalYear} ➔ ${form.activeFiscalYear}]`);
+      if (form.pctCadangan !== originalForm.pctCadangan) changes.push(`Cadangan [${originalForm.pctCadangan}% ➔ ${form.pctCadangan}%]`);
+      if (form.pctJasaModal !== originalForm.pctJasaModal) changes.push(`Jasa Modal [${originalForm.pctJasaModal}% ➔ ${form.pctJasaModal}%]`);
+      if (form.pctJasaTransaksi !== originalForm.pctJasaTransaksi) changes.push(`Jasa Anggota [${originalForm.pctJasaTransaksi}% ➔ ${form.pctJasaTransaksi}%]`);
+      if (form.pctPengurus !== originalForm.pctPengurus) changes.push(`Pengurus [${originalForm.pctPengurus}% ➔ ${form.pctPengurus}%]`);
+      if (form.pctKaryawan !== originalForm.pctKaryawan) changes.push(`Karyawan [${originalForm.pctKaryawan}% ➔ ${form.pctKaryawan}%]`);
+      if (form.pctPendidikan !== originalForm.pctPendidikan) changes.push(`Pendidikan [${originalForm.pctPendidikan}% ➔ ${form.pctPendidikan}%]`);
+      if (form.pctSosial !== originalForm.pctSosial) changes.push(`Dana Sosial [${originalForm.pctSosial}% ➔ ${form.pctSosial}%]`);
+
+      const changesMsg = changes.length > 0 ? ` (Rincian: ${changes.join(", ")})` : "";
+      
+      addAuditLog("UPDATE_SETTINGS", `Admin mengubah konfigurasi pengaturan koperasi ke database.${changesMsg}`, "success");
+      
+      setOriginalForm(form);
       setIsSaved(true);
       setIsDirty(false);
       setTimeout(() => setIsSaved(false), 3000);
@@ -99,7 +125,9 @@ export default function PengaturanPage() {
     try {
       const def = { ...defaultSettings, id: form.id };
       await saveSettingsAsync(def as any);
+      addAuditLog("RESET_SETTINGS", "Admin mereset seluruh pengaturan koperasi kembali ke bawaan pabrik (default). Semua konfigurasi kembali seperti semula.", "danger");
       setForm(def as any);
+      setOriginalForm(def as any);
       setIsDirty(false);
       setIsSaved(true);
       setTimeout(() => setIsSaved(false), 3000);
@@ -124,7 +152,7 @@ export default function PengaturanPage() {
           <div>
             <h2 className="text-xl font-semibold text-slate-800">Pengaturan Koperasi</h2>
             <p className="text-xs text-slate-500 mt-1 max-w-xl">
-              Konfigurasi identitas, nominal iuran, dan tahun buku aktif koperasi. Perubahan disimpan di perangkat lokal dan berlaku di seluruh modul sistem.
+              Konfigurasi identitas, nominal iuran, dan tahun buku aktif koperasi. Perubahan langsung tersimpan ke database dan berlaku di seluruh modul sistem.
             </p>
           </div>
         </div>
@@ -136,7 +164,7 @@ export default function PengaturanPage() {
           <svg className="w-4 h-4 text-emerald-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
-          Pengaturan berhasil disimpan ke localStorage!
+          Pengaturan berhasil disimpan ke database!
         </div>
       )}
 
@@ -345,6 +373,16 @@ export default function PengaturanPage() {
         <div className="text-xs text-slate-500">
           Sesi aktif saat ini: <strong className="text-slate-700">Admin Kopdes Kedungsana</strong> (admin@kopdeskedungsana.id)
         </div>
+      </div>
+
+      {/* Watermark Last Updated */}
+      <div className="mt-8 pt-6 border-t border-slate-200/50 text-center flex flex-col items-center justify-center gap-1 opacity-70">
+        <p className="text-[11px] font-medium text-slate-400 uppercase tracking-widest">
+          Versi Sistem v0.1.0-alpha
+        </p>
+        <p className="text-[10px] text-slate-400">
+          Terakhir diperbarui pada {lastUpdate}
+        </p>
       </div>
 
     </section>
