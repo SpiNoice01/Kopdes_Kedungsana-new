@@ -95,18 +95,25 @@ export default function LaporanPage() {
 
   const handleExportCsv = () => {
     const header = ["No", "Nama Anggota", "NIK", "Simpanan Pokok", "Simpanan Wajib", "Simpanan Sukarela", "Total Simpanan"];
+    
+    const escapeCsv = (val: any) => `"${String(val).replace(/"/g, '""')}"`;
+    // Memaksa Excel membaca string panjang murni sebagai teks (mencegah scientific notation E+15)
+    const forceTextCsv = (val: any) => `="${String(val)}"`;
+
     const rows = summaries.map((r, i) => [
       i + 1,
-      r.member.name,
-      r.member.nik,
+      escapeCsv(r.member.name),
+      forceTextCsv(r.member.nik),
       r.pokok,
       r.wajib,
       r.sukarela,
       r.total,
     ]);
-    const footer = ["", "GRAND TOTAL", "", grandTotal.pokok, grandTotal.wajib, grandTotal.sukarela, grandTotal.total];
+    const footer = ["", escapeCsv("GRAND TOTAL"), "", grandTotal.pokok, grandTotal.wajib, grandTotal.sukarela, grandTotal.total];
 
-    const csvContent = [header, ...rows, footer]
+    // Menggunakan koma (,) standar CSV dan menambahkan magic header `sep=,` 
+    // agar Excel (apapun region-nya) dipaksa membaca koma sebagai pemisah kolom.
+    const csvContent = "sep=,\n" + [header, ...rows, footer]
       .map((row) => row.join(","))
       .join("\n");
 
