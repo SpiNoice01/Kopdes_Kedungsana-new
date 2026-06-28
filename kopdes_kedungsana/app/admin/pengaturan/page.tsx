@@ -6,6 +6,7 @@ import { addAuditLog } from "@/src/utils/audit-logger";
 import { settingsDependencies } from "@/src/features/settings/infrastructure/settings-dependencies";
 import { formatCurrency } from "@/src/utils/formatters";
 import { getLastCommitDate } from "@/src/actions/get-build-info";
+import { clearAuthCookie } from "@/src/actions/auth-actions";
 
 const SETTINGS_KEY = "kopdes_settings";
 
@@ -64,8 +65,9 @@ export default function PengaturanPage() {
   const [isDirty, setIsDirty] = useState(false);
   const [lastUpdate, setLastUpdate] = useState("Loading...");
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     addAuditLog("LOGOUT", "Admin melakukan logout secara manual dari sistem.", "info");
+    await clearAuthCookie();
     router.push("/");
   };
 
