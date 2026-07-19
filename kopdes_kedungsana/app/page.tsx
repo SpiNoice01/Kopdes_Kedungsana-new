@@ -3,18 +3,14 @@
 import Link from "next/link";
 import Image from "next/image";
 import { useEffect, useState } from "react";
-import { loadSettings, type KopdesSettings } from "./admin/pengaturan/page";
+import { loadSettingsAsync } from "@/src/actions/settings-actions";
+import type { KopdesSettings } from "@/src/features/settings/domain/settings";
 import { memberDependencies } from "@/src/features/member/infrastructure/member-dependencies";
 import { CooperativeGrowthChart } from "./components/public-portal/charts";
 import { CooperativeTransparency } from "./components/public-portal/transparency";
 import { regulationsList } from "./components/public-portal/landing-data";
 
-const formatCurrency = (value: number): string =>
-  new Intl.NumberFormat("id-ID", {
-    style: "currency",
-    currency: "IDR",
-    maximumFractionDigits: 0,
-  }).format(value);
+import { formatCurrency } from "@/src/utils/formatters";
 
 interface GlobalStatsData {
   totalMembers: number;
@@ -34,10 +30,14 @@ export default function PublicHomePage() {
   const [activeRegulationTab, setActiveRegulationTab] = useState<number>(0);
 
   useEffect(() => {
-    const loadedSettings = loadSettings();
-    setSettings(loadedSettings);
-
-    const loadGlobalStats = async () => {
+    const fetchInitialData = async () => {
+      try {
+        const loadedSettings = await loadSettingsAsync();
+        setSettings(loadedSettings);
+      } catch (e) {
+        console.error("Failed to load settings", e);
+      }
+      
       try {
         const stats = await memberDependencies.getCooperativeStatsUseCase.execute();
         setGlobalStats(stats);
@@ -45,7 +45,7 @@ export default function PublicHomePage() {
         console.error("Failed to load global stats", e);
       }
     };
-    loadGlobalStats();
+    fetchInitialData();
   }, []);
 
   const activeCooperativeName = settings?.cooperativeName || "Koperasi Desa Kedungsana";

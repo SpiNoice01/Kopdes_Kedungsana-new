@@ -9,6 +9,7 @@ export type AddMemberByKtpPayload = {
   birthDate: string;
   gender: "laki-laki" | "perempuan";
   address: string;
+  phone?: string;
   
   // Data Tambahan KTP
   bloodType?: string;
@@ -27,14 +28,14 @@ const buildMemberFromKtp = (payload: AddMemberByKtpPayload): Member => {
   const nik = normalizeNik(payload.nik);
 
   return {
-    id: `member-${Date.now()}`,
+    id: crypto.randomUUID(),
     nik,
     name: payload.name.trim(),
     photoUrl: payload.photoUrl,
     birthPlace: payload.birthPlace.trim(),
     birthDate: payload.birthDate,
     gender: payload.gender,
-    phone: "-",
+    phone: payload.phone && payload.phone.trim() !== "" ? payload.phone : "-",
     address: payload.address.trim(),
     joinDate: new Date().toISOString().slice(0, 10),
     status: "aktif",

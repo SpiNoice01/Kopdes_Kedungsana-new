@@ -1,5 +1,8 @@
 "use client";
 
+import { buildSimpananSheet, buildShuSheet, downloadExcelBuffer } from "@/src/features/admin/utils/excel-exporter";
+import type { ExcelExportRow } from "@/src/features/admin/utils/excel-exporter";
+import ExcelJS from "exceljs";
 import { useMemo, useState } from "react";
 import { addAuditLog } from "../../../utils/audit-logger";
 
@@ -13,28 +16,15 @@ type MemberRow = {
   serviceContribution: number;
 };
 
-const initialRows: MemberRow[] = [
-  { memberId: "m1", memberName: "OMAN NUROHMAN", joinDate: "2024-01-10", savingPokok: 100000, savingWajib: 560000, savingSukarela: 169000, serviceContribution: 0 },
-  { memberId: "m2", memberName: "NENI MULYANI", joinDate: "2024-02-15", savingPokok: 100000, savingWajib: 830000, savingSukarela: 690000, serviceContribution: 340000 },
-  { memberId: "m3", memberName: "HJ. DJEDJEH ZAKIAH", joinDate: "2024-03-20", savingPokok: 100000, savingWajib: 830000, savingSukarela: 1323000, serviceContribution: 120000 },
-  { memberId: "m4", memberName: "YUYU WAHYUDIN", joinDate: "2025-01-05", savingPokok: 0, savingWajib: 0, savingSukarela: 0, serviceContribution: 0 },
-  { memberId: "m5", memberName: "H. KARTAM", joinDate: "2025-02-10", savingPokok: 0, savingWajib: 0, savingSukarela: 0, serviceContribution: 0 },
-  { memberId: "m6", memberName: "ERUS RUSMIATI", joinDate: "2024-04-12", savingPokok: 100000, savingWajib: 780000, savingSukarela: 1130000, serviceContribution: 640000 },
-  { memberId: "m7", memberName: "SUSI ROSILAWATI", joinDate: "2024-05-18", savingPokok: 100000, savingWajib: 800000, savingSukarela: 350000, serviceContribution: 0 },
-  { memberId: "m8", memberName: "ASWETI", joinDate: "2024-06-25", savingPokok: 100000, savingWajib: 330000, savingSukarela: 129000, serviceContribution: 0 },
-  { memberId: "m9", memberName: "IKIT MASTIKA", joinDate: "2024-07-30", savingPokok: 100000, savingWajib: 830000, savingSukarela: 110000, serviceContribution: 710000 },
-  { memberId: "m10", memberName: "SUKMI", joinDate: "2024-08-05", savingPokok: 100000, savingWajib: 800000, savingSukarela: 130000, serviceContribution: 270000 },
-  { memberId: "m11", memberName: "LINDA ERLIA", joinDate: "2024-09-12", savingPokok: 100000, savingWajib: 800000, savingSukarela: 320000, serviceContribution: 440000 },
-  { memberId: "m12", memberName: "TITI SUGIARTI", joinDate: "2024-10-15", savingPokok: 100000, savingWajib: 850000, savingSukarela: 600000, serviceContribution: 0 },
-  { memberId: "m13", memberName: "KATRIN HALFALIA", joinDate: "2024-10-20", savingPokok: 100000, savingWajib: 850000, savingSukarela: 1659000, serviceContribution: 628000 },
-  { memberId: "m14", memberName: "TATI HARYATI", joinDate: "2024-11-05", savingPokok: 100000, savingWajib: 900000, savingSukarela: 3320000, serviceContribution: 200000 },
-  { memberId: "m15", memberName: "YATI KASYARTI", joinDate: "2025-03-01", savingPokok: 0, savingWajib: 0, savingSukarela: 0, serviceContribution: 0 },
-  { memberId: "m16", memberName: "TRIANI WIDIA NINGRUM", joinDate: "2024-11-15", savingPokok: 100000, savingWajib: 500000, savingSukarela: 485000, serviceContribution: 660000 },
-  { memberId: "m17", memberName: "SULASTRI", joinDate: "2025-04-10", savingPokok: 0, savingWajib: 0, savingSukarela: 0, serviceContribution: 0 },
-  { memberId: "m18", memberName: "SITI ROHMAH", joinDate: "2024-12-05", savingPokok: 100000, savingWajib: 600000, savingSukarela: 496000, serviceContribution: 560000 },
-  { memberId: "m19", memberName: "SUNARTI", joinDate: "2024-12-12", savingPokok: 100000, savingWajib: 700000, savingSukarela: 638000, serviceContribution: 670000 },
-  { memberId: "m20", memberName: "NENENG HERLINA", joinDate: "2024-12-20", savingPokok: 100000, savingWajib: 600000, savingSukarela: 513000, serviceContribution: 440000 },
-];
+interface ComputedMemberRow extends ExcelExportRow {
+  memberId: string;
+  joinDate: string;
+}
+
+import { useEffect } from "react";
+import { memberDependencies } from "../../member/infrastructure/member-dependencies";
+import { loadSettingsAsync, defaultSettings } from "@/src/actions/settings-actions";
+import type { KopdesSettings } from "@/src/features/settings/domain/settings";
 
 const formatRelativeDate = (dateStr: string): string => {
   if (!dateStr) return "-";
@@ -77,12 +67,81 @@ const formatRelativeDate = (dateStr: string): string => {
 };
 
 export default function SpreadsheetModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
-  const [rows, setRows] = useState<MemberRow[]>(initialRows);
+  const [rows, setRows] = useState<MemberRow[]>([]);
+  const [originalRows, setOriginalRows] = useState<MemberRow[]>([]);
   const [activeTab, setActiveTab] = useState<"shu" | "simpanan">("simpanan");
   const [searchQuery, setSearchQuery] = useState("");
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [settings, setSettings] = useState<KopdesSettings>(defaultSettings);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    
+    const fetchData = async () => {
+      try {
+        setIsLoading(true);
+        const [members, fetchedSettings] = await Promise.all([
+          memberDependencies.getMembersUseCase.execute(),
+          loadSettingsAsync()
+        ]);
+        setSettings(fetchedSettings);
+        
+        const records: MemberRow[] = [];
+        
+        for (const member of members) {
+          if (member.status !== "aktif") continue;
+
+          const joinYear = new Date(member.joinDate).getFullYear();
+          if (joinYear > fetchedSettings.activeFiscalYear) continue;
+
+          const savings = await memberDependencies.getMemberMonthlySavingsUseCase.execute(member.id);
+          
+          let savingPokok = 0;
+          let savingWajib = 0;
+          let savingSukarela = 0;
+          
+          for (const s of savings) {
+            let sYear;
+            if (s.period === "POKOK") {
+              sYear = new Date(s.inputDate).getFullYear();
+            } else {
+              sYear = parseInt(s.period.split("-")[0]);
+            }
+
+            if (sYear <= fetchedSettings.activeFiscalYear) {
+              if (s.period === "POKOK") {
+                savingPokok += s.requiredSaving;
+              } else {
+                savingWajib += s.requiredSaving;
+                savingSukarela += s.voluntarySaving;
+              }
+            }
+          }
+          
+          records.push({
+            memberId: member.id,
+            memberName: member.name.toUpperCase(),
+            joinDate: member.joinDate,
+            savingPokok,
+            savingWajib,
+            savingSukarela,
+            serviceContribution: 0,
+          });
+        }
+        
+        setRows(records);
+        setOriginalRows([...records]);
+      } catch (e) {
+        console.error("Failed to load Spreadsheet Live data", e);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    
+    void fetchData();
+  }, [isOpen]);
   
-  // Spreadsheet coordinate states
   const [selectedCell, setSelectedCell] = useState<{ rowIdx: number; colName: string } | null>({ rowIdx: 0, colName: "B" });
   const [editingCell, setEditingCell] = useState<{ rowIdx: number; colName: string } | null>(null);
   const [editValue, setEditValue] = useState("");
@@ -90,7 +149,6 @@ export default function SpreadsheetModal({ isOpen, onClose }: { isOpen: boolean;
   const DANA_SHU_SIMPANAN = 3942359;
   const DANA_SHU_JASA = 790641;
 
-  // Real-time globally computed bases
   const totalSimpananBasis = useMemo(() => {
     return rows.reduce((sum, r) => sum + r.savingPokok + r.savingWajib + r.savingSukarela, 0);
   }, [rows]);
@@ -99,8 +157,7 @@ export default function SpreadsheetModal({ isOpen, onClose }: { isOpen: boolean;
     return rows.reduce((sum, r) => sum + r.serviceContribution, 0);
   }, [rows]);
 
-  // Compute calculated metrics for each row in real-time
-  const computedRows = useMemo(() => {
+  const computedRows: ComputedMemberRow[] = useMemo(() => {
     return rows.map((row) => {
       const totalSaving = row.savingPokok + row.savingWajib + row.savingSukarela;
       
@@ -131,7 +188,6 @@ export default function SpreadsheetModal({ isOpen, onClose }: { isOpen: boolean;
     );
   }, [computedRows, searchQuery]);
 
-  // Get active cell value for the formula bar
   const activeCellValue = useMemo(() => {
     if (!selectedCell) return "";
     const row = computedRows[selectedCell.rowIdx];
@@ -149,7 +205,6 @@ export default function SpreadsheetModal({ isOpen, onClose }: { isOpen: boolean;
     }
   }, [selectedCell, computedRows, activeTab]);
 
-  // Check if cell is write-protected (formulas are calculated automatically)
   const isCellCalculated = (colName: string) => {
     if (activeTab === "shu") {
       return ["D", "F", "G", "H"].includes(colName);
@@ -164,7 +219,6 @@ export default function SpreadsheetModal({ isOpen, onClose }: { isOpen: boolean;
   };
 
   const handleCellDoubleClick = (rowIdx: number, colName: string) => {
-    // Read-only: editing is disabled in spreadsheet view.
     return;
   };
 
@@ -236,197 +290,31 @@ export default function SpreadsheetModal({ isOpen, onClose }: { isOpen: boolean;
     });
   };
 
-  const handleFormulaBarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!selectedCell || isCellCalculated(selectedCell.colName)) return;
-    const { rowIdx, colName } = selectedCell;
-    handleSaveCell(rowIdx, colName, e.target.value);
-  };
-
-  const handleAddRow = () => {
-    const newId = `m${rows.length + 1}`;
-    const newName = "NEW MEMBER " + (rows.length + 1);
-    addAuditLog(
-      "SPREADSHEET_EDIT",
-      `Menambahkan baris anggota baru [${newName}] dengan ID ${newId} di Spreadsheet Live.`,
-      "success"
-    );
-    setRows((prev) => [
-      ...prev,
-      {
-        memberId: newId,
-        memberName: newName,
-        joinDate: "2025-01-01",
-        savingPokok: 100000,
-        savingWajib: 0,
-        savingSukarela: 0,
-        serviceContribution: 0,
-      },
-    ]);
-  };
-
-  const handleResetData = () => {
-    if (confirm("Apakah Anda yakin ingin menyetel ulang data ke data awal?")) {
-      addAuditLog(
-        "RESET_DATA",
-        "Mereset seluruh modifikasi data spreadsheet kembali ke data awal bawaan pabrik!",
-        "danger"
-      );
-      setRows(initialRows);
-      setSelectedCell({ rowIdx: 0, colName: "B" });
-      setEditingCell(null);
-    }
-  };
-
-  const downloadExcel = (content: string, filename: string) => {
-    const blob = new Blob([content], { type: "application/vnd.ms-excel" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.setAttribute("download", filename);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
-
-  const getShuHtml = () => {
-    const year = "2024";
-    const coopName = "KOPERASI DESA MERAH PUTIH KEDUNGSANA";
-    return `
-      <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
-      <head>
-        <meta charset="utf-8">
-        <style>
-          .title { font-size: 14pt; font-weight: bold; text-align: center; }
-          .subtitle { font-size: 12pt; font-weight: bold; text-align: center; }
-          table { border-collapse: collapse; width: 100%; }
-          th { border: 1px solid black; background-color: #f2f2f2; font-weight: bold; padding: 5px; text-align: center; }
-          td { border: 1px solid black; padding: 4px; }
-          .num { text-align: right; }
-          .center { text-align: center; }
-        </style>
-      </head>
-      <body>
-        <div class="title">DAFTAR PEMBAGIAN SHU (SPREADSHEET LIVE)</div>
-        <div class="subtitle">${coopName}</div>
-        <br/>
-        <table>
-          <thead>
-            <tr>
-              <th>NO</th>
-              <th>NAMA ANGGOTA</th>
-              <th>TGL BERGABUNG</th>
-              <th>JML SIMPANAN</th>
-              <th>SETORAN JASA</th>
-              <th>SHU SIMPANAN</th>
-              <th>SHU JASA</th>
-              <th>JUMLAH SHU</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${computedRows.map((row, index) => `
-              <tr>
-                <td class="center">${index + 1}</td>
-                <td>${row.memberName}</td>
-                <td class="center">${row.joinDate}</td>
-                <td class="num">Rp ${row.totalSaving.toLocaleString("id-ID")}</td>
-                <td class="num">Rp ${row.serviceContribution.toLocaleString("id-ID")}</td>
-                <td class="num">Rp ${row.savingShu.toLocaleString("id-ID")}</td>
-                <td class="num">Rp ${row.serviceShu.toLocaleString("id-ID")}</td>
-                <td class="num" style="font-weight: bold;">Rp ${row.totalShu.toLocaleString("id-ID")}</td>
-              </tr>
-            `).join("")}
-            <tr style="font-weight: bold; background-color: #e2e8f0;">
-              <td colspan="3" class="center">JUMLAH</td>
-              <td class="num">Rp ${computedRows.reduce((a, b) => a + b.totalSaving, 0).toLocaleString("id-ID")}</td>
-              <td class="num">Rp ${computedRows.reduce((a, b) => a + b.serviceContribution, 0).toLocaleString("id-ID")}</td>
-              <td class="num">Rp ${computedRows.reduce((a, b) => a + b.savingShu, 0).toLocaleString("id-ID")}</td>
-              <td class="num">Rp ${computedRows.reduce((a, b) => a + b.serviceShu, 0).toLocaleString("id-ID")}</td>
-              <td class="num">Rp ${computedRows.reduce((a, b) => a + b.totalShu, 0).toLocaleString("id-ID")}</td>
-            </tr>
-          </tbody>
-        </table>
-      </body>
-      </html>
-    `;
-  };
-
-  const getSimpananHtml = () => {
-    const year = "2024";
-    return `
-      <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
-      <head>
-        <meta charset="utf-8">
-        <style>
-          .title { font-size: 14pt; font-weight: bold; text-align: center; }
-          table { border-collapse: collapse; width: 100%; }
-          th { border: 1px solid black; background-color: #f2f2f2; padding: 5px; }
-          td { border: 1px solid black; padding: 4px; }
-          .num { text-align: right; }
-          .center { text-align: center; }
-        </style>
-      </head>
-      <body>
-        <div class="title">DAFTAR SIMPANAN ANGGOTA (SPREADSHEET LIVE)</div>
-        <br/>
-        <table>
-          <thead>
-            <tr>
-              <th rowspan="2">NO</th>
-              <th rowspan="2">NAMA ANGGOTA</th>
-              <th rowspan="2">TGL BERGABUNG</th>
-              <th colspan="3">SIMPANAN</th>
-              <th rowspan="2">JUMLAH</th>
-            </tr>
-            <tr>
-              <th>POKOK</th>
-              <th>WAJIB</th>
-              <th>SUKARELA</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${computedRows.map((row, index) => `
-              <tr>
-                <td class="center">${index + 1}</td>
-                <td>${row.memberName}</td>
-                <td class="center">${row.joinDate}</td>
-                <td class="num">Rp ${row.savingPokok.toLocaleString("id-ID")}</td>
-                <td class="num">Rp ${row.savingWajib.toLocaleString("id-ID")}</td>
-                <td class="num">Rp ${row.savingSukarela.toLocaleString("id-ID")}</td>
-                <td class="num" style="font-weight: bold;">Rp ${row.totalSaving.toLocaleString("id-ID")}</td>
-              </tr>
-            `).join("")}
-            <tr style="font-weight: bold; background-color: #e2e8f0;">
-              <td colspan="3" class="center">JUMLAH</td>
-              <td class="num">Rp ${computedRows.reduce((a, b) => a + b.savingPokok, 0).toLocaleString("id-ID")}</td>
-              <td class="num">Rp ${computedRows.reduce((a, b) => a + b.savingWajib, 0).toLocaleString("id-ID")}</td>
-              <td class="num">Rp ${computedRows.reduce((a, b) => a + b.savingSukarela, 0).toLocaleString("id-ID")}</td>
-              <td class="num">Rp ${computedRows.reduce((a, b) => a + b.totalSaving, 0).toLocaleString("id-ID")}</td>
-            </tr>
-          </tbody>
-        </table>
-      </body>
-      </html>
-    `;
-  };
-
-  const handleExportSimpananOnly = () => {
-    addAuditLog("EXPORT_EXCEL", "Mengekspor data Spreadsheet Simpanan Live ke berkas Excel (.xls).", "info");
-    downloadExcel(getSimpananHtml(), "SPREADSHEET_SIMPANAN_2024.xls");
+  const handleExportSimpananOnly = async () => {
+    addAuditLog("EXPORT_EXCEL", "Mengekspor data Spreadsheet Simpanan Live ke berkas Excel (.xlsx).", "info");
+    const wb = new ExcelJS.Workbook();
+    buildSimpananSheet(wb, settings, computedRows);
+    const buffer = await wb.xlsx.writeBuffer();
+    downloadExcelBuffer(buffer as ExcelJS.Buffer, `SPREADSHEET_SIMPANAN_${settings.activeFiscalYear}.xlsx`);
     setIsExportModalOpen(false);
   };
 
-  const handleExportShuOnly = () => {
-    addAuditLog("EXPORT_EXCEL", "Mengekspor data Spreadsheet SHU Live ke berkas Excel (.xls).", "info");
-    downloadExcel(getShuHtml(), "SPREADSHEET_SHU_2024.xls");
+  const handleExportShuOnly = async () => {
+    addAuditLog("EXPORT_EXCEL", "Mengekspor data Spreadsheet SHU Live ke berkas Excel (.xlsx).", "info");
+    const wb = new ExcelJS.Workbook();
+    buildShuSheet(wb, settings, computedRows);
+    const buffer = await wb.xlsx.writeBuffer();
+    downloadExcelBuffer(buffer as ExcelJS.Buffer, `SPREADSHEET_SHU_${settings.activeFiscalYear}.xlsx`);
     setIsExportModalOpen(false);
   };
 
-  const handleExportAll = () => {
-    addAuditLog("EXPORT_EXCEL", "Mengekspor seluruh lembar kerja Spreadsheet Live (Simpanan & SHU) ke berkas Excel (.xls).", "info");
-    downloadExcel(getSimpananHtml(), "SPREADSHEET_SIMPANAN_2024.xls");
-    setTimeout(() => {
-      downloadExcel(getShuHtml(), "SPREADSHEET_SHU_2024.xls");
-    }, 400);
+  const handleExportAll = async () => {
+    addAuditLog("EXPORT_EXCEL", "Mengekspor seluruh lembar kerja Spreadsheet Live (Simpanan & SHU) ke dalam satu berkas Excel (.xlsx).", "info");
+    const wb = new ExcelJS.Workbook();
+    buildSimpananSheet(wb, settings, computedRows);
+    buildShuSheet(wb, settings, computedRows);
+    const buffer = await wb.xlsx.writeBuffer();
+    downloadExcelBuffer(buffer as ExcelJS.Buffer, `SPREADSHEET_BUNDEL_RAT_${settings.activeFiscalYear}.xlsx`);
     setIsExportModalOpen(false);
   };
 
@@ -583,7 +471,16 @@ export default function SpreadsheetModal({ isOpen, onClose }: { isOpen: boolean;
 
             {/* GRID CELLS */}
             <tbody className="bg-white">
-              {filteredRows.map((row, index) => {
+              {isLoading ? (
+                <tr>
+                  <td colSpan={activeTab === "shu" ? 9 : 8} className="py-20 text-center">
+                    <div className="flex flex-col items-center justify-center gap-3">
+                      <div className="w-8 h-8 border-2 border-slate-200 border-t-green-600 rounded-full animate-spin"></div>
+                      <p className="text-slate-500 font-sans">Mengambil data dari Supabase Database...</p>
+                    </div>
+                  </td>
+                </tr>
+              ) : filteredRows.map((row, index) => {
                 const actualRowIdx = rows.findIndex((r) => r.memberId === row.memberId);
                 
                 return (

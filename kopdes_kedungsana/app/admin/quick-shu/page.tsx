@@ -1,7 +1,9 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import ExcelJS from "exceljs";
 import { addAuditLog } from "../../../src/utils/audit-logger";
+import { buildSimpananSheet, buildShuSheet, downloadExcelBuffer } from "@/src/features/admin/utils/excel-exporter";
 
 type HintProps = {
   text: string;
@@ -36,43 +38,100 @@ interface MemberRecord {
   serviceContribution: number;
 }
 
-const rawMembersSeed: MemberRecord[] = [
-  { memberId: "m1", memberName: "OMAN NUROHMAN", savingPokok: 100000, savingWajib: 560000, savingSukarela: 169000, serviceContribution: 0 },
-  { memberId: "m2", memberName: "NENI MULYANI", savingPokok: 100000, savingWajib: 830000, savingSukarela: 690000, serviceContribution: 340000 },
-  { memberId: "m3", memberName: "HJ. DJEDJEH ZAKIAH", savingPokok: 100000, savingWajib: 830000, savingSukarela: 1323000, serviceContribution: 120000 },
-  { memberId: "m4", memberName: "YUYU WAHYUDIN", savingPokok: 0, savingWajib: 0, savingSukarela: 0, serviceContribution: 0 },
-  { memberId: "m5", memberName: "H. KARTAM", savingPokok: 0, savingWajib: 0, savingSukarela: 0, serviceContribution: 0 },
-  { memberId: "m6", memberName: "ERUS RUSMIATI", savingPokok: 100000, savingWajib: 780000, savingSukarela: 1130000, serviceContribution: 640000 },
-  { memberId: "m7", memberName: "SUSI ROSILAWATI", savingPokok: 100000, savingWajib: 800000, savingSukarela: 350000, serviceContribution: 0 },
-  { memberId: "m8", memberName: "ASWETI", savingPokok: 100000, savingWajib: 330000, savingSukarela: 129000, serviceContribution: 0 },
-  { memberId: "m9", memberName: "IKIT MASTIKA", savingPokok: 100000, savingWajib: 830000, savingSukarela: 110000, serviceContribution: 710000 },
-  { memberId: "m10", memberName: "SUKMI", savingPokok: 100000, savingWajib: 800000, savingSukarela: 130000, serviceContribution: 270000 },
-  { memberId: "m11", memberName: "LINDA ERLIA", savingPokok: 100000, savingWajib: 800000, savingSukarela: 320000, serviceContribution: 440000 },
-  { memberId: "m12", memberName: "TITI SUGIARTI", savingPokok: 100000, savingWajib: 850000, savingSukarela: 600000, serviceContribution: 0 },
-  { memberId: "m13", memberName: "KATRIN HALFALIA", savingPokok: 100000, savingWajib: 850000, savingSukarela: 1659000, serviceContribution: 628000 },
-  { memberId: "m14", memberName: "TATI HARYATI", savingPokok: 100000, savingWajib: 900000, savingSukarela: 3320000, serviceContribution: 200000 },
-  { memberId: "m15", memberName: "YATI KASYARTI", savingPokok: 0, savingWajib: 0, savingSukarela: 0, serviceContribution: 0 },
-  { memberId: "m16", memberName: "TRIANI WIDIA NINGRUM", savingPokok: 100000, savingWajib: 500000, savingSukarela: 485000, serviceContribution: 660000 },
-  { memberId: "m17", memberName: "SULASTRI", savingPokok: 0, savingWajib: 0, savingSukarela: 0, serviceContribution: 0 },
-  { memberId: "m18", memberName: "SITI ROHMAH", savingPokok: 100000, savingWajib: 600000, savingSukarela: 496000, serviceContribution: 560000 },
-  { memberId: "m19", memberName: "SUNARTI", savingPokok: 100000, savingWajib: 700000, savingSukarela: 638000, serviceContribution: 670000 },
-  { memberId: "m20", memberName: "NENENG HERLINA", savingPokok: 100000, savingWajib: 600000, savingSukarela: 513000, serviceContribution: 440000 },
-];
+import { useEffect } from "react";
+import { memberDependencies } from "@/src/features/member/infrastructure/member-dependencies";
+import { loadSettingsAsync, defaultSettings } from "@/src/actions/settings-actions";
+import type { KopdesSettings } from "@/src/features/settings/domain/settings";
 
 export default function QuickShuPage() {
   const [activeTab, setActiveTab] = useState<"shu" | "simpanan">("shu");
   const [sortKey, setSortKey] = useState<keyof MemberRecord | "totalSaving" | "savingShu" | "serviceShu" | "totalShu">("memberName");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
+  const [isSimulasiOpen, setIsSimulasiOpen] = useState(false);
+  const [rawMembers, setRawMembers] = useState<MemberRecord[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  const [settings, setSettings] = useState<KopdesSettings>(defaultSettings);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        setIsLoading(true);
+        const [members, loadedSettings] = await Promise.all([
+          memberDependencies.getMembersUseCase.execute(),
+          loadSettingsAsync()
+        ]);
+        setSettings(loadedSettings);
+
+        const records: MemberRecord[] = [];
+        
+        for (const member of members) {
+          if (member.status !== "aktif") continue;
+
+          const joinYear = new Date(member.joinDate).getFullYear();
+          if (joinYear > loadedSettings.activeFiscalYear) continue;
+
+          const savings = await memberDependencies.getMemberMonthlySavingsUseCase.execute(member.id);
+          
+          let savingPokok = 0;
+          let savingWajib = 0;
+          let savingSukarela = 0;
+          
+          for (const s of savings) {
+            let sYear;
+            if (s.period === "POKOK") {
+              sYear = new Date(s.inputDate).getFullYear();
+            } else {
+              sYear = parseInt(s.period.split("-")[0]);
+            }
+
+            if (sYear <= loadedSettings.activeFiscalYear) {
+              if (s.period === "POKOK") {
+                savingPokok += s.requiredSaving;
+              } else {
+                savingWajib += s.requiredSaving;
+                savingSukarela += s.voluntarySaving;
+              }
+            }
+          }
+          
+          records.push({
+            memberId: member.id,
+            memberName: member.name,
+            savingPokok,
+            savingWajib,
+            savingSukarela,
+            serviceContribution: 0, // Belum ada modul pinjaman di DB
+          });
+        }
+        
+        setRawMembers(records);
+        
+        // Auto-calculate a realistic default SHU Kotor based on 10% of total savings 
+        // (since this is just a simulator and there is no real accounting table yet)
+        const totalSimpanan = records.reduce((sum, r) => sum + r.savingPokok + r.savingWajib + r.savingSukarela, 0);
+        setTotalShuKotor(Math.round(totalSimpanan * 0.10));
+      } catch (e) {
+        console.error("Failed to load Quick SHU data", e);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    void fetchData();
+  }, []);
 
   // DYNAMIC AD/ART SIMULATOR STATE
-  const [totalShuKotor, setTotalShuKotor] = useState(11832500); // Default Gross SHU
-  const [pctCadangan, setPctCadangan] = useState(40);
-  const [pctJasaModal, setPctJasaModal] = useState(33.32);
-  const [pctJasaUsaha, setPctJasaUsaha] = useState(6.68);
-  const [pctPengurus, setPctPengurus] = useState(5);
-  const [pctKaryawan, setPctKaryawan] = useState(5);
-  const [pctPendidikan, setPctPendidikan] = useState(5);
-  const [pctSosial, setPctSosial] = useState(5);
+  const [totalShuKotor, setTotalShuKotor] = useState(0); // Will be dynamically set after fetch
+  
+  // Settings are populated async but default to defaultSettings on first render
+
+  const pctCadangan = settings.pctCadangan;
+  const pctJasaModal = settings.pctJasaModal;
+  const pctJasaUsaha = settings.pctJasaTransaksi;
+  const pctPengurus = settings.pctPengurus;
+  const pctKaryawan = settings.pctKaryawan;
+  const pctPendidikan = settings.pctPendidikan;
+  const pctSosial = settings.pctSosial;
 
   const totalPercentage = useMemo(() => {
     return pctCadangan + pctJasaModal + pctJasaUsaha + pctPengurus + pctKaryawan + pctPendidikan + pctSosial;
@@ -89,16 +148,16 @@ export default function QuickShuPage() {
 
   // Dynamic computation basis of members
   const totalSimpananBasis = useMemo(() => {
-    return rawMembersSeed.reduce((sum, r) => sum + r.savingPokok + r.savingWajib + r.savingSukarela, 0);
-  }, []);
+    return rawMembers.reduce((sum, r) => sum + r.savingPokok + r.savingWajib + r.savingSukarela, 0);
+  }, [rawMembers]);
 
   const totalJasaBasis = useMemo(() => {
-    return rawMembersSeed.reduce((sum, r) => sum + r.serviceContribution, 0);
-  }, []);
+    return rawMembers.reduce((sum, r) => sum + r.serviceContribution, 0);
+  }, [rawMembers]);
 
   // Compute calculated metrics for each row in real-time
   const computedRows = useMemo(() => {
-    return rawMembersSeed.map((row) => {
+    return rawMembers.map((row) => {
       const totalSaving = row.savingPokok + row.savingWajib + row.savingSukarela;
       
       const savingShu = totalSimpananBasis > 0 
@@ -149,153 +208,26 @@ export default function QuickShuPage() {
     }
   };
 
-  const year = "2024";
-  const coopName = "KOPERASI DESA MERAH PUTIH KEDUNGSANA";
-  const location = "KECAMATAN PLUMBON, KABUPATEN CIREBON";
+  const year = settings.activeFiscalYear.toString();
+  const coopName = settings.cooperativeName.toUpperCase();
+  const location = settings.district.toUpperCase();
+  const printLocation = settings.printLocation;
+  const formattedDate = new Intl.DateTimeFormat('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }).format(new Date());
 
-  const handleExportSHU = () => {
-    const htmlContent = `
-      <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
-      <head>
-        <meta charset="utf-8">
-        <style>
-          .title { font-size: 14pt; font-weight: bold; text-align: center; }
-          .subtitle { font-size: 12pt; font-weight: bold; text-align: center; }
-          table { border-collapse: collapse; width: 100%; }
-          th { border: 1px solid black; background-color: #f2f2f2; font-weight: bold; padding: 5px; text-align: center; }
-          td { border: 1px solid black; padding: 4px; }
-          .num { text-align: right; }
-          .center { text-align: center; }
-          .footer-section { margin-top: 30px; }
-          .signature-table { border: none !important; width: 100%; margin-top: 40px; }
-          .signature-table td { border: none !important; text-align: center; height: 80px; vertical-align: bottom; }
-        </style>
-      </head>
-      <body>
-        <div class="title">DAFTAR PEMBAGIAN SHU</div>
-        <div class="subtitle">${coopName}</div>
-        <div class="subtitle">${location}</div>
-        <div class="subtitle">PER 31 DESEMBER ${year}</div>
-        <br/>
-        <table>
-          <thead>
-            <tr>
-              <th>NO</th>
-              <th>NAMA ANGGOTA</th>
-              <th>JML SIMPANAN</th>
-              <th>SETORAN JASA</th>
-              <th>SHU SIMPANAN</th>
-              <th>SHU JASA</th>
-              <th>JUMLAH</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${sortedRows.map((row, index) => `
-              <tr>
-                <td class="center">${index + 1}</td>
-                <td>${row.memberName}</td>
-                <td class="num">Rp ${row.totalSaving.toLocaleString("id-ID")}</td>
-                <td class="num">Rp ${row.serviceContribution.toLocaleString("id-ID")}</td>
-                <td class="num">Rp ${row.savingShu.toLocaleString("id-ID")}</td>
-                <td class="num">Rp ${row.serviceShu.toLocaleString("id-ID")}</td>
-                <td class="num" style="font-weight: bold;">Rp ${row.totalShu.toLocaleString("id-ID")}</td>
-              </tr>
-            `).join('')}
-            <tr style="font-weight: bold; background-color: #e2e8f0;">
-              <td colspan="2" class="center">JUMLAH</td>
-              <td class="num">Rp ${totalSimpananBasis.toLocaleString("id-ID")}</td>
-              <td class="num">Rp ${totalJasaBasis.toLocaleString("id-ID")}</td>
-              <td class="num">Rp ${valJasaModal.toLocaleString("id-ID")}</td>
-              <td class="num">Rp ${valJasaUsaha.toLocaleString("id-ID")}</td>
-              <td class="num">Rp ${(valJasaModal + valJasaUsaha).toLocaleString("id-ID")}</td>
-            </tr>
-          </tbody>
-        </table>
-        <div class="footer-section">
-          <p>Kuningan, 31 Desember ${year}</p>
-          <p>Pengurus ${coopName}</p>
-          <table class="signature-table">
-            <tr><td>Ketua</td><td>Sekretaris</td><td>Bendahara</td></tr>
-            <tr><td>(........................)</td><td>(........................)</td><td>(........................)</td></tr>
-          </table>
-        </div>
-      </body>
-      </html>
-    `;
-    addAuditLog("EXPORT_EXCEL", "Mengekspor Laporan Pembagian SHU Koperasi format RAT 2024 ke berkas Excel (.xls).", "info");
-    downloadExcel(htmlContent, `LAPORAN_SHU_${year}.xls`);
+  const handleExportSHU = async () => {
+    addAuditLog("EXPORT_EXCEL", `Mengekspor Laporan Pembagian SHU Koperasi format RAT ${year} ke berkas Excel (.xlsx).`, "info");
+    const wb = new ExcelJS.Workbook();
+    buildShuSheet(wb, settings, sortedRows);
+    const buffer = await wb.xlsx.writeBuffer();
+    downloadExcelBuffer(buffer as ExcelJS.Buffer, `LAPORAN_SHU_${year}.xlsx`);
   };
 
-  const handleExportSimpanan = () => {
-    const htmlContent = `
-      <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
-      <head>
-        <meta charset="utf-8">
-        <style>
-          .title { font-size: 14pt; font-weight: bold; text-align: center; }
-          .subtitle { font-size: 12pt; font-weight: bold; text-align: center; }
-          table { border-collapse: collapse; width: 100%; }
-          th { border: 1px solid black; background-color: #f2f2f2; padding: 5px; }
-          td { border: 1px solid black; padding: 4px; }
-          .num { text-align: right; }
-          .center { text-align: center; }
-        </style>
-      </head>
-      <body>
-        <div class="title">DAFTAR SIMPANAN ANGGOTA</div>
-        <div class="subtitle">${coopName}</div>
-        <div class="subtitle">PER 31 DESEMBER ${year}</div>
-        <br/>
-        <table>
-          <thead>
-            <tr>
-              <th rowspan="2">NO</th>
-              <th rowspan="2">NAMA ANGGOTA</th>
-              <th colspan="3">SIMPANAN</th>
-              <th rowspan="2">JUMLAH</th>
-            </tr>
-            <tr>
-              <th>POKOK</th>
-              <th>WAJIB</th>
-              <th>SUKARELA</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${sortedRows.map((row, index) => `
-              <tr>
-                <td class="center">${index + 1}</td>
-                <td>${row.memberName}</td>
-                <td class="num">Rp ${row.savingPokok.toLocaleString("id-ID")}</td>
-                <td class="num">Rp ${row.savingWajib.toLocaleString("id-ID")}</td>
-                <td class="num">Rp ${row.savingSukarela.toLocaleString("id-ID")}</td>
-                <td class="num" style="font-weight: bold;">Rp ${row.totalSaving.toLocaleString("id-ID")}</td>
-              </tr>
-            `).join('')}
-            <tr style="font-weight: bold; background-color: #e2e8f0;">
-              <td colspan="2" class="center">JUMLAH</td>
-              <td class="num">Rp ${sortedRows.reduce((a, b) => a + b.savingPokok, 0).toLocaleString("id-ID")}</td>
-              <td class="num">Rp ${sortedRows.reduce((a, b) => a + b.savingWajib, 0).toLocaleString("id-ID")}</td>
-              <td class="num">Rp ${sortedRows.reduce((a, b) => a + b.savingSukarela, 0).toLocaleString("id-ID")}</td>
-              <td class="num">Rp ${totalSimpananBasis.toLocaleString("id-ID")}</td>
-            </tr>
-          </tbody>
-        </table>
-      </body>
-      </html>
-    `;
-    addAuditLog("EXPORT_EXCEL", "Mengekspor Daftar Simpanan Anggota format RAT 2024 ke berkas Excel (.xls).", "info");
-    downloadExcel(htmlContent, `DAFTAR_SIMPANAN_${year}.xls`);
-  };
-
-  const downloadExcel = (content: string, filename: string) => {
-    const blob = new Blob([content], { type: "application/vnd.ms-excel" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.setAttribute("download", filename);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+  const handleExportSimpanan = async () => {
+    addAuditLog("EXPORT_EXCEL", `Mengekspor Daftar Simpanan Anggota format RAT ${year} ke berkas Excel (.xlsx).`, "info");
+    const wb = new ExcelJS.Workbook();
+    buildSimpananSheet(wb, settings, sortedRows);
+    const buffer = await wb.xlsx.writeBuffer();
+    downloadExcelBuffer(buffer as ExcelJS.Buffer, `DAFTAR_SIMPANAN_${year}.xlsx`);
   };
 
   const SortIndicator = ({ active, direction }: { active: boolean; direction: "asc" | "desc" }) => (
@@ -320,40 +252,60 @@ export default function QuickShuPage() {
   return (
     <section className="space-y-6">
       
-      {/* SIMULATOR & TRANSPARANSI ALOKASI AD/ART */}
-      <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm space-y-6">
-        <div className="flex flex-wrap items-center justify-between gap-4">
+      {/* TRANSPARANSI ALOKASI AD/ART */}
+      <div className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+        {/* Accordion Header */}
+        <button
+          onClick={() => setIsSimulasiOpen(!isSimulasiOpen)}
+          className="w-full p-6 flex flex-wrap items-center justify-between gap-4 bg-white hover:bg-slate-50 transition-colors cursor-pointer text-left focus:outline-none"
+        >
           <div>
             <h3 className="text-base sm:text-lg font-bold text-slate-800 flex items-center gap-2">
               <svg className="h-5.5 w-5.5 text-green-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
               </svg>
-              Simulasi & Transparansi Alokasi SHU AD/ART
+              Transparansi Alokasi SHU AD/ART
             </h3>
             <p className="text-xs text-slate-500 mt-0.5">
-              Simulasikan pembagian keuntungan bersih tahunan koperasi secara transparan berdasarkan asas AD/ART & keputusan RAT.
+              Kalkulasi pembagian keuntungan bersih tahunan koperasi secara transparan berdasarkan asas AD/ART & keputusan RAT.
             </p>
           </div>
-
-          <div className="flex items-center gap-2.5">
-            <div className="flex items-center gap-1">
-              <span className="text-xs font-bold text-slate-600">Total SHU Kotor Koperasi (Gross):</span>
-              <Hint text="Jumlah seluruh keuntungan bersih koperasi (sisa hasil usaha) dalam satu tahun buku sebelum dialokasikan ke masing-masing pos." />
+          
+          <div className="flex items-center gap-3">
+            <div className="text-right hidden sm:block">
+              <p className="text-[10px] font-bold text-slate-400 uppercase">Total SHU Kotor</p>
+              <p className="text-sm font-extrabold text-green-700">Rp {totalShuKotor.toLocaleString("id-ID")}</p>
             </div>
-            <div className="relative">
-              <span className="absolute left-3.5 top-2 text-xs font-bold text-slate-400">Rp</span>
-              <input
-                type="text"
-                value={totalShuKotor.toLocaleString("id-ID")}
-                onChange={(e) => {
-                  const val = parseInt(e.target.value.replace(/\D/g, "")) || 0;
-                  setTotalShuKotor(val);
-                }}
-                className="w-44 bg-slate-50 border border-slate-200 pl-9 pr-4 py-1.5 rounded-xl text-xs font-bold text-slate-800 focus:bg-white focus:border-green-600 focus:ring-1 focus:ring-green-600 outline-none transition"
-              />
+            <div className={`p-1.5 rounded-full bg-slate-100 text-slate-500 transition-transform duration-300 ${isSimulasiOpen ? 'rotate-180' : ''}`}>
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
             </div>
           </div>
-        </div>
+        </button>
+
+        {/* Accordion Body */}
+        <div 
+          className={`transition-all duration-300 ease-in-out overflow-hidden ${isSimulasiOpen ? 'max-h-[2000px] opacity-100 border-t border-slate-100' : 'max-h-0 opacity-0'}`}
+        >
+          <div className="p-6 space-y-6">
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <div className="flex items-center gap-2.5">
+                <div className="flex items-center gap-1">
+                  <span className="text-xs font-bold text-slate-600">Total SHU Kotor Koperasi (Gross):</span>
+                  <Hint text="Jumlah seluruh keuntungan bersih koperasi (sisa hasil usaha) dalam satu tahun buku sebelum dialokasikan ke masing-masing pos." />
+                </div>
+                <div className="relative bg-slate-100 border border-slate-200 rounded-xl px-4 py-2 flex items-center gap-1.5 cursor-not-allowed">
+                  <span className="text-xs font-bold text-slate-400">Rp</span>
+                  <span className="text-xs font-bold text-slate-700 select-all">
+                    {totalShuKotor.toLocaleString("id-ID")}
+                  </span>
+                  <span className="ml-1 text-[10px] bg-slate-200 text-slate-500 px-1.5 py-0.5 rounded font-semibold uppercase tracking-wider">
+                    Read Only
+                  </span>
+                </div>
+              </div>
+            </div>
 
         <div className="grid gap-6 lg:grid-cols-12">
           {/* Inputs Column */}
@@ -372,15 +324,9 @@ export default function QuickShuPage() {
                   <label className="text-xs font-medium text-slate-600">1. Cadangan Koperasi</label>
                   <Hint text="Bagian SHU yang disisihkan untuk memupuk modal sendiri, membiayai pengembangan usaha, serta menutup potensi kerugian koperasi di masa depan." />
                 </div>
-                <div className="relative w-24">
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={pctCadangan}
-                    onChange={(e) => setPctCadangan(parseFloat(e.target.value) || 0)}
-                    className="w-full bg-white border border-slate-200 px-3 py-1 rounded-lg text-xs font-bold text-slate-800 text-right pr-7 outline-none focus:border-green-600"
-                  />
-                  <span className="absolute right-2.5 top-1.5 text-xs text-slate-400 font-bold">%</span>
+                <div className="relative w-24 flex items-center justify-end pr-2 bg-slate-50 border border-slate-200 rounded-lg">
+                  <span className="text-xs font-bold text-slate-800 py-1.5">{pctCadangan}</span>
+                  <span className="ml-1 text-xs text-slate-400 font-bold">%</span>
                 </div>
               </div>
 
@@ -390,15 +336,9 @@ export default function QuickShuPage() {
                   <label className="text-xs font-medium text-slate-600">2. Jasa Modal (Simpanan)</label>
                   <Hint text="Porsi balas jasa yang dikembalikan kepada anggota sebanding dengan jumlah simpanan (modal) mereka di koperasi." />
                 </div>
-                <div className="relative w-24">
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={pctJasaModal}
-                    onChange={(e) => setPctJasaModal(parseFloat(e.target.value) || 0)}
-                    className="w-full bg-white border border-slate-200 px-3 py-1 rounded-lg text-xs font-bold text-slate-800 text-right pr-7 outline-none focus:border-green-600"
-                  />
-                  <span className="absolute right-2.5 top-1.5 text-xs text-slate-400 font-bold">%</span>
+                <div className="relative w-24 flex items-center justify-end pr-2 bg-slate-50 border border-slate-200 rounded-lg">
+                  <span className="text-xs font-bold text-slate-800 py-1.5">{pctJasaModal}</span>
+                  <span className="ml-1 text-xs text-slate-400 font-bold">%</span>
                 </div>
               </div>
 
@@ -408,15 +348,9 @@ export default function QuickShuPage() {
                   <label className="text-xs font-medium text-slate-600">3. Jasa Transaksi (Jasa)</label>
                   <Hint text="Porsi balas jasa yang dibagikan kepada anggota sebanding dengan partisipasi aktif transaksi mereka di layanan usaha koperasi." />
                 </div>
-                <div className="relative w-24">
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={pctJasaUsaha}
-                    onChange={(e) => setPctJasaUsaha(parseFloat(e.target.value) || 0)}
-                    className="w-full bg-white border border-slate-200 px-3 py-1 rounded-lg text-xs font-bold text-slate-800 text-right pr-7 outline-none focus:border-green-600"
-                  />
-                  <span className="absolute right-2.5 top-1.5 text-xs text-slate-400 font-bold">%</span>
+                <div className="relative w-24 flex items-center justify-end pr-2 bg-slate-50 border border-slate-200 rounded-lg">
+                  <span className="text-xs font-bold text-slate-800 py-1.5">{pctJasaUsaha}</span>
+                  <span className="ml-1 text-xs text-slate-400 font-bold">%</span>
                 </div>
               </div>
 
@@ -426,15 +360,9 @@ export default function QuickShuPage() {
                   <label className="text-xs font-medium text-slate-600">4. Dana Pengurus & Manajemen</label>
                   <Hint text="Insentif tahunan bagi jajaran pengurus dan pengawas atas dedikasi mereka memimpin dan mengelola administrasi koperasi." />
                 </div>
-                <div className="relative w-24">
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={pctPengurus}
-                    onChange={(e) => setPctPengurus(parseFloat(e.target.value) || 0)}
-                    className="w-full bg-white border border-slate-200 px-3 py-1 rounded-lg text-xs font-bold text-slate-800 text-right pr-7 outline-none focus:border-green-600"
-                  />
-                  <span className="absolute right-2.5 top-1.5 text-xs text-slate-400 font-bold">%</span>
+                <div className="relative w-24 flex items-center justify-end pr-2 bg-slate-50 border border-slate-200 rounded-lg">
+                  <span className="text-xs font-bold text-slate-800 py-1.5">{pctPengurus}</span>
+                  <span className="ml-1 text-xs text-slate-400 font-bold">%</span>
                 </div>
               </div>
 
@@ -444,15 +372,9 @@ export default function QuickShuPage() {
                   <label className="text-xs font-medium text-slate-600">5. Dana Karyawan / Pegawai</label>
                   <Hint text="Bonus penghargaan tahunan bagi staf pengelola teknis operasional harian koperasi agar terus termotivasi." />
                 </div>
-                <div className="relative w-24">
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={pctKaryawan}
-                    onChange={(e) => setPctKaryawan(parseFloat(e.target.value) || 0)}
-                    className="w-full bg-white border border-slate-200 px-3 py-1 rounded-lg text-xs font-bold text-slate-800 text-right pr-7 outline-none focus:border-green-600"
-                  />
-                  <span className="absolute right-2.5 top-1.5 text-xs text-slate-400 font-bold">%</span>
+                <div className="relative w-24 flex items-center justify-end pr-2 bg-slate-50 border border-slate-200 rounded-lg">
+                  <span className="text-xs font-bold text-slate-800 py-1.5">{pctKaryawan}</span>
+                  <span className="ml-1 text-xs text-slate-400 font-bold">%</span>
                 </div>
               </div>
 
@@ -462,15 +384,9 @@ export default function QuickShuPage() {
                   <label className="text-xs font-medium text-slate-600">6. Dana Pendidikan Koperasi</label>
                   <Hint text="Dana untuk membiayai program diklat perkoperasian dan kewirausahaan bagi seluruh komponen anggota, pengurus, maupun pengawas." />
                 </div>
-                <div className="relative w-24">
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={pctPendidikan}
-                    onChange={(e) => setPctPendidikan(parseFloat(e.target.value) || 0)}
-                    className="w-full bg-white border border-slate-200 px-3 py-1 rounded-lg text-xs font-bold text-slate-800 text-right pr-7 outline-none focus:border-green-600"
-                  />
-                  <span className="absolute right-2.5 top-1.5 text-xs text-slate-400 font-bold">%</span>
+                <div className="relative w-24 flex items-center justify-end pr-2 bg-slate-50 border border-slate-200 rounded-lg">
+                  <span className="text-xs font-bold text-slate-800 py-1.5">{pctPendidikan}</span>
+                  <span className="ml-1 text-xs text-slate-400 font-bold">%</span>
                 </div>
               </div>
 
@@ -480,15 +396,9 @@ export default function QuickShuPage() {
                   <label className="text-xs font-medium text-slate-600">7. Dana Sosial & Pembangunan</label>
                   <Hint text="Dialokasikan untuk dana kemanusiaan, sosial kemasyarakatan, serta pembangunan fasilitas umum di wilayah kerja koperasi." />
                 </div>
-                <div className="relative w-24">
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={pctSosial}
-                    onChange={(e) => setPctSosial(parseFloat(e.target.value) || 0)}
-                    className="w-full bg-white border border-slate-200 px-3 py-1 rounded-lg text-xs font-bold text-slate-800 text-right pr-7 outline-none focus:border-green-600"
-                  />
-                  <span className="absolute right-2.5 top-1.5 text-xs text-slate-400 font-bold">%</span>
+                <div className="relative w-24 flex items-center justify-end pr-2 bg-slate-50 border border-slate-200 rounded-lg">
+                  <span className="text-xs font-bold text-slate-800 py-1.5">{pctSosial}</span>
+                  <span className="ml-1 text-xs text-slate-400 font-bold">%</span>
                 </div>
               </div>
             </div>
@@ -559,6 +469,8 @@ export default function QuickShuPage() {
                 <span className="font-bold text-slate-800">Rp {valSosial.toLocaleString("id-ID")}</span>
               </div>
             </div>
+          </div>
+        </div>
           </div>
         </div>
       </div>
@@ -703,7 +615,7 @@ export default function QuickShuPage() {
               <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
               </svg>
-              Export Format RAT 2024
+              Export Format RAT {year}
             </button>
           </div>
 
@@ -767,8 +679,24 @@ export default function QuickShuPage() {
                 )}
               </thead>
               <tbody className="divide-y divide-slate-100 bg-white text-slate-700">
-                {sortedRows.map((row, index) => (
-                  <tr key={row.memberId} className="hover:bg-slate-50 transition-colors">
+                {isLoading ? (
+                  <tr>
+                    <td colSpan={6} className="px-3 py-10 text-center text-slate-500">
+                      <div className="flex flex-col items-center justify-center gap-3">
+                        <div className="w-8 h-8 border-2 border-slate-200 border-t-primary rounded-full animate-spin"></div>
+                        <p className="text-sm">Menghitung Data SHU dari Database...</p>
+                      </div>
+                    </td>
+                  </tr>
+                ) : sortedRows.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="px-3 py-10 text-center text-slate-500 text-sm">
+                      Belum ada data anggota aktif untuk dihitung.
+                    </td>
+                  </tr>
+                ) : (
+                  sortedRows.map((row, index) => (
+                    <tr key={row.memberId} className="hover:bg-slate-50 transition-colors">
                     {activeTab === "shu" ? (
                       <>
                         <td className="px-3 py-2 font-medium">{row.memberName}</td>
@@ -789,7 +717,7 @@ export default function QuickShuPage() {
                       </>
                     )}
                   </tr>
-                ))}
+                )))}
 
                 {/* SUM FOOTER ROW */}
                 <tr className="bg-slate-100 font-bold border-t border-slate-300">

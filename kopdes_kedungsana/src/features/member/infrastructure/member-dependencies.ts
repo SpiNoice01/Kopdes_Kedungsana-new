@@ -5,10 +5,11 @@ import { GetMemberMonthlySavingsUseCase } from "../application/get-member-monthl
 import { GetMembersUseCase } from "../application/get-members-use-case";
 import { UpdateMemberPhotoUseCase } from "../application/update-member-photo-use-case";
 import { UpdateMemberStatusUseCase } from "../application/update-member-status-use-case";
+import { UpdateMemberProfileUseCase } from "../application/update-member-profile-use-case";
 import { GetCooperativeStatsUseCase } from "../application/get-cooperative-stats-use-case";
-import { InMemoryMemberRepository } from "./in-memory-member-repository";
+import { SupabaseMemberRepository } from "./supabase-member-repository";
 
-const memberRepository = new InMemoryMemberRepository();
+const memberRepository = new SupabaseMemberRepository();
 const getMembersUseCase = new GetMembersUseCase(memberRepository);
 const getMemberMonthlySavingsUseCase = new GetMemberMonthlySavingsUseCase(memberRepository);
 
@@ -22,6 +23,7 @@ export const memberDependencies = {
   ),
   updateMemberPhotoUseCase: new UpdateMemberPhotoUseCase(memberRepository),
   updateMemberStatusUseCase: new UpdateMemberStatusUseCase(memberRepository),
+  updateMemberProfileUseCase: new UpdateMemberProfileUseCase(memberRepository),
   getCooperativeStatsUseCase: new GetCooperativeStatsUseCase(
     getMembersUseCase,
     getMemberMonthlySavingsUseCase

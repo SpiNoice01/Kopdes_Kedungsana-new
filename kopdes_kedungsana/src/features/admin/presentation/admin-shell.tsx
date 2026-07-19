@@ -19,7 +19,7 @@ type NavigationItem = {
 const navigationItems: NavigationItem[] = [
   { href: "/admin/overview", label: "Overview" },
   { href: "/admin/input-data", label: "Input Data" },
-  { href: "/admin/quick-shu", label: "Quick SHU" },
+  { href: "/admin/quick-shu", label: "SHU Cepat" },
   { href: "/admin/laporan", label: "Laporan Tahunan" },
 ];
 
@@ -55,10 +55,10 @@ export function AdminShell({ children }: AdminShellProps) {
   }, [pathname, currentPageTitle]);
 
   return (
-    <div className="h-screen w-screen overflow-hidden bg-primary-soft text-slate-900 flex flex-col">
-      <div className="flex flex-1 h-full overflow-hidden">
+    <div className="h-screen w-screen overflow-hidden bg-primary-soft text-slate-900 flex flex-col print:h-auto print:w-auto print:overflow-visible print:block print:bg-white">
+      <div className="flex flex-1 h-full overflow-hidden print:overflow-visible print:block">
         <aside
-          className={`h-full border-r border-primary bg-primary px-3 py-4 text-primary-foreground transition-all duration-200 flex flex-col justify-between flex-shrink-0 ${
+          className={`h-full border-r border-primary bg-primary px-3 py-4 text-primary-foreground transition-all duration-200 flex flex-col justify-between flex-shrink-0 print:hidden ${
             isSidebarOpen ? "w-64" : "w-20"
           }`}
         >
@@ -160,8 +160,8 @@ export function AdminShell({ children }: AdminShellProps) {
           </div>
         </aside>
 
-        <div className="flex flex-1 flex-col h-full overflow-hidden">
-          <header className="border-b border-slate-200 bg-white px-4 py-3 sm:px-6 flex items-center justify-between">
+        <div className="flex flex-1 flex-col h-full overflow-hidden print:overflow-visible print:block">
+          <header className="border-b border-slate-200 bg-white px-4 py-3 sm:px-6 flex items-center justify-between print:hidden">
             <div>
               <h1 className="text-lg font-semibold text-primary flex items-center gap-2">
                 {currentPageTitle}
@@ -207,7 +207,7 @@ export function AdminShell({ children }: AdminShellProps) {
             </button>
           </header>
 
-          <main className="flex-1 p-4 sm:p-6 overflow-y-auto bg-primary-soft">{children}</main>
+          <main className="flex-1 p-4 sm:p-6 overflow-y-auto bg-primary-soft print:p-0 print:overflow-visible print:bg-white print:block">{children}</main>
         </div>
       </div>
 

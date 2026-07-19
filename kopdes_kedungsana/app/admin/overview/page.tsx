@@ -12,23 +12,6 @@ const formatCurrency = (value: number): string =>
     maximumFractionDigits: 0,
   }).format(value);
 
-const calculateArrears = (member: Member, savings: MemberMonthlySaving[] = []) => {
-  const monthlyTarget = 10000; // Rp 10.000 per bulan
-  if (!member.joinDate) return { arrears: 0 };
-  
-  const joinDate = new Date(member.joinDate);
-  const currentDate = new Date();
-  
-  const yearsDiff = currentDate.getFullYear() - joinDate.getFullYear();
-  const monthsDiff = currentDate.getMonth() - joinDate.getMonth();
-  const monthsElapsed = Math.max(1, (yearsDiff * 12) + monthsDiff + 1);
-  
-  const target = monthsElapsed * monthlyTarget;
-  const paid = savings.reduce((sum, s) => sum + s.requiredSaving, 0);
-  const arrears = Math.max(0, target - paid);
-  
-  return { arrears };
-};
 
 export default function OverviewPage() {
   const [totalMembers, setTotalMembers] = useState(0);
@@ -47,36 +30,18 @@ export default function OverviewPage() {
     const fetchDashboardData = async () => {
       try {
         setIsLoading(true);
+        const stats = await memberDependencies.getCooperativeStatsUseCase.execute();
+        
+        setTotalMembers(stats.totalMembers);
+        setSumPokok(stats.sumPokok);
+        setSumWajib(stats.sumWajib);
+        setSumSukarela(stats.sumSukarela);
+        setTotalSavings(stats.totalSavings);
+        setArrearsCount(stats.arrearsCount);
+
         const list = await memberDependencies.getMembersUseCase.execute();
-
-        // ✅ Saran 3: Only count ACTIVE members in all operational metrics
         const activeList = list.filter((m) => m.status === "aktif");
-        setTotalMembers(activeList.length);
         setInactiveMembers(list.length - activeList.length);
-
-        let savingsSum = 0;
-        let runningPokok = 0;
-        let runningWajib = 0;
-        let runningSukarela = 0;
-        let inArrears = 0;
-
-        for (const member of activeList) {
-          const savings = await memberDependencies.getMemberMonthlySavingsUseCase.execute(member.id);
-          
-          const pokok = 100000;
-          const wajib = savings.reduce((sum, s) => sum + s.requiredSaving, 0);
-          const sukarela = savings.reduce((sum, s) => sum + s.voluntarySaving, 0);
-          
-          runningPokok += pokok;
-          runningWajib += wajib;
-          runningSukarela += sukarela;
-          savingsSum += (pokok + wajib + sukarela);
-
-          const arrearsInfo = calculateArrears(member, savings);
-          if (arrearsInfo.arrears > 0) {
-            inArrears += 1;
-          }
-        }
 
         // Build last-6-months trend map
         const now = new Date();
@@ -89,12 +54,6 @@ export default function OverviewPage() {
           // Attach label separately
           (trendMap[key] as any)._label = shortLabel;
         }
-
-        setSumPokok(runningPokok);
-        setSumWajib(runningWajib);
-        setSumSukarela(runningSukarela);
-        setTotalSavings(savingsSum);
-        setArrearsCount(inArrears);
 
         // Aggregate savings per period across all active members (re-use savings fetched above)
         // We need to refetch since the loop above consumed them; we build a secondary pass
