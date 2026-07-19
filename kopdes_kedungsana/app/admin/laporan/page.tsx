@@ -32,9 +32,14 @@ export default function LaporanPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [settings, setSettings] = useState<KopdesSettings>(defaultSettings);
 
-  // Build the selectable year range (5 years back to current)
+  // Build the selectable year range (down to 2025)
   const yearOptions = useMemo(() => {
-    return Array.from({ length: 6 }, (_, i) => currentYear - i);
+    const minYear = 2025;
+    const years = [];
+    for (let y = currentYear; y >= minYear; y--) {
+      years.push(y);
+    }
+    return years;
   }, [currentYear]);
 
   useEffect(() => {
@@ -51,17 +56,24 @@ export default function LaporanPage() {
         const results: MemberAnnualSummary[] = [];
 
         for (const member of activeMembers) {
-          const allSavings = await memberDependencies.getMemberMonthlySavingsUseCase.execute(member.id);
-          // Filter only savings records in the selected year
-          const savingsInYear = allSavings.filter((s) =>
-            s.period.startsWith(String(selectedYear))
-          );
+          const joinYear = new Date(member.joinDate).getFullYear();
+          if (joinYear > selectedYear) continue;
 
-          const wajib = savingsInYear.reduce((sum, s) => sum + s.requiredSaving, 0);
-          const sukarela = savingsInYear.reduce((sum, s) => sum + s.voluntarySaving, 0);
+          const allSavings = await memberDependencies.getMemberMonthlySavingsUseCase.execute(member.id);
           
-          // Hitung simpanan pokok (hanya yang sudah bayar, ditandai dengan periode 'POKOK')
-          const pokokRecord = allSavings.find((s) => s.period === "POKOK");
+          // Akumulasi simpanan hingga akhir tahun buku yang dipilih (saldo akhir)
+          const savingsUpToYear = allSavings.filter((s) => {
+            if (s.period === "POKOK") {
+              return new Date(s.inputDate).getFullYear() <= selectedYear;
+            }
+            const savingYear = parseInt(s.period.split("-")[0]);
+            return savingYear <= selectedYear;
+          });
+
+          const wajib = savingsUpToYear.reduce((sum, s) => sum + s.requiredSaving, 0);
+          const sukarela = savingsUpToYear.reduce((sum, s) => sum + s.voluntarySaving, 0);
+          
+          const pokokRecord = savingsUpToYear.find((s) => s.period === "POKOK");
           const pokok = pokokRecord ? pokokRecord.requiredSaving : 0;
 
           results.push({
@@ -70,7 +82,7 @@ export default function LaporanPage() {
             wajib,
             sukarela,
             total: pokok + wajib + sukarela,
-            savingsInYear,
+            savingsInYear: savingsUpToYear,
           });
         }
 

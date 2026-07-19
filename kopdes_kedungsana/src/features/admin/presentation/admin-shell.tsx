@@ -19,7 +19,7 @@ type NavigationItem = {
 const navigationItems: NavigationItem[] = [
   { href: "/admin/overview", label: "Overview" },
   { href: "/admin/input-data", label: "Input Data" },
-  { href: "/admin/quick-shu", label: "Quick SHU" },
+  { href: "/admin/quick-shu", label: "SHU Cepat" },
   { href: "/admin/laporan", label: "Laporan Tahunan" },
 ];
 

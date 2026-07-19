@@ -92,6 +92,9 @@ export default function SpreadsheetModal({ isOpen, onClose }: { isOpen: boolean;
         for (const member of members) {
           if (member.status !== "aktif") continue;
 
+          const joinYear = new Date(member.joinDate).getFullYear();
+          if (joinYear > fetchedSettings.activeFiscalYear) continue;
+
           const savings = await memberDependencies.getMemberMonthlySavingsUseCase.execute(member.id);
           
           let savingPokok = 0;
@@ -99,11 +102,20 @@ export default function SpreadsheetModal({ isOpen, onClose }: { isOpen: boolean;
           let savingSukarela = 0;
           
           for (const s of savings) {
+            let sYear;
             if (s.period === "POKOK") {
-              savingPokok += s.requiredSaving;
+              sYear = new Date(s.inputDate).getFullYear();
             } else {
-              savingWajib += s.requiredSaving;
-              savingSukarela += s.voluntarySaving;
+              sYear = parseInt(s.period.split("-")[0]);
+            }
+
+            if (sYear <= fetchedSettings.activeFiscalYear) {
+              if (s.period === "POKOK") {
+                savingPokok += s.requiredSaving;
+              } else {
+                savingWajib += s.requiredSaving;
+                savingSukarela += s.voluntarySaving;
+              }
             }
           }
           
