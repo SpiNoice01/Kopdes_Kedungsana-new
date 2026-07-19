@@ -12,10 +12,10 @@ type AddMemberMonthlySavingResult =
   | { success: true; saving: MemberMonthlySaving }
   | { success: false; message: string };
 
-const isValidPeriod = (value: string): boolean => /^\d{4}-\d{2}$/.test(value);
+const isValidPeriod = (value: string): boolean => value === "POKOK" || /^\d{4}-\d{2}$/.test(value);
 
 export class AddMemberMonthlySavingUseCase {
-  constructor(private readonly memberRepository: MemberRepository) {}
+  constructor(private readonly memberRepository: MemberRepository) { }
 
   async execute(
     payload: AddMemberMonthlySavingPayload,
@@ -54,7 +54,7 @@ export class AddMemberMonthlySavingUseCase {
     }
 
     const saving: MemberMonthlySaving = {
-      id: `saving-${Date.now()}`,
+      id: crypto.randomUUID(),
       memberId: payload.memberId,
       period: payload.period,
       requiredSaving,

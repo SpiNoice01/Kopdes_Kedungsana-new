@@ -1,6 +1,6 @@
 import { GetMembersUseCase } from "./get-members-use-case";
 import { GetMemberMonthlySavingsUseCase } from "./get-member-monthly-savings-use-case";
-import { loadSettings } from "@/app/admin/pengaturan/page";
+import { loadSettingsAsync } from "@/src/actions/settings-actions";
 
 export interface CooperativeStats {
   totalMembers: number;
@@ -18,7 +18,7 @@ export class GetCooperativeStatsUseCase {
   ) {}
 
   async execute(): Promise<CooperativeStats> {
-    const loadedSettings = loadSettings();
+    const loadedSettings = await loadSettingsAsync();
     const allMembers = await this.getMembersUseCase.execute();
     const activeList = allMembers.filter((m) => m.status === "aktif");
 
@@ -29,9 +29,16 @@ export class GetCooperativeStatsUseCase {
 
     for (const member of activeList) {
       const savings = await this.getMemberMonthlySavingsUseCase.execute(member.id);
-      const pokok = loadedSettings.principalSavingAmount;
-      const wajib = savings.reduce((sum, s) => sum + s.requiredSaving, 0);
-      const sukarela = savings.reduce((sum, s) => sum + s.voluntarySaving, 0);
+      const pokokRecord = savings.find((s) => s.period === "POKOK");
+      const pokok = pokokRecord ? pokokRecord.requiredSaving : 0;
+      
+      const wajib = savings
+        .filter((s) => s.period !== "POKOK")
+        .reduce((sum, s) => sum + s.requiredSaving, 0);
+        
+      const sukarela = savings
+        .filter((s) => s.period !== "POKOK")
+        .reduce((sum, s) => sum + s.voluntarySaving, 0);
 
       runningPokok += pokok;
       runningWajib += wajib;

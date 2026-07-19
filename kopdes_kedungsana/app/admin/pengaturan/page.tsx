@@ -3,63 +3,38 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { addAuditLog } from "@/src/utils/audit-logger";
+import { settingsDependencies } from "@/src/features/settings/infrastructure/settings-dependencies";
+import { formatCurrency } from "@/src/utils/formatters";
+import { getLastCommitDate } from "@/src/actions/get-build-info";
+import { clearAuthCookie } from "@/src/actions/auth-actions";
 
-const SETTINGS_KEY = "kopdes_settings";
-
-export type KopdesSettings = {
-  cooperativeName: string;
-  address: string;
-  legalNumber: string;
-  principalSavingAmount: number;   // Simpanan Pokok (Rp)
-  monthlyDuesAmount: number;       // Iuran Wajib per bulan (Rp)
-  activeFiscalYear: number;
-};
-
-export const defaultSettings: KopdesSettings = {
-  cooperativeName: "Koperasi Desa Kedungsana",
-  address: "RT 01/RW 03, Kecamatan Plumbon, Kabupaten Cirebon",
-  legalNumber: "AHU-0012903.AH.01.26",
-  principalSavingAmount: 100_000,
-  monthlyDuesAmount: 10_000,
-  activeFiscalYear: new Date().getFullYear(),
-};
-
-export function loadSettings(): KopdesSettings {
-  if (typeof window === "undefined") return defaultSettings;
-  try {
-    const raw = localStorage.getItem(SETTINGS_KEY);
-    if (!raw) return defaultSettings;
-    return { ...defaultSettings, ...JSON.parse(raw) };
-  } catch {
-    return defaultSettings;
-  }
-}
-
-export function saveSettings(settings: KopdesSettings): void {
-  if (typeof window === "undefined") return;
-  localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
-}
-
-const formatCurrency = (value: number) =>
-  new Intl.NumberFormat("id-ID", {
-    style: "currency",
-    currency: "IDR",
-    maximumFractionDigits: 0,
-  }).format(value);
+import { loadSettingsAsync, saveSettingsAsync, defaultSettings } from "@/src/actions/settings-actions";
+import type { KopdesSettings } from "@/src/features/settings/domain/settings";
 
 export default function PengaturanPage() {
   const router = useRouter();
   const [form, setForm] = useState<KopdesSettings>(defaultSettings);
+  const [originalForm, setOriginalForm] = useState<KopdesSettings>(defaultSettings);
   const [isSaved, setIsSaved] = useState(false);
   const [isDirty, setIsDirty] = useState(false);
+  const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
+  const [lastUpdate, setLastUpdate] = useState("Loading...");
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     addAuditLog("LOGOUT", "Admin melakukan logout secara manual dari sistem.", "info");
+    await clearAuthCookie();
     router.push("/");
   };
 
+  const [isLoading, setIsLoading] = useState(true);
+
   useEffect(() => {
-    setForm(loadSettings());
+    loadSettingsAsync().then((data) => {
+      setForm(data);
+      setOriginalForm(data);
+      setIsLoading(false);
+    });
+    getLastCommitDate().then(setLastUpdate);
   }, []);
 
   const handleChange = (field: keyof KopdesSettings, value: string | number) => {
@@ -68,19 +43,64 @@ export default function PengaturanPage() {
     setIsSaved(false);
   };
 
-  const handleSave = () => {
-    saveSettings(form);
-    setIsSaved(true);
-    setIsDirty(false);
-    setTimeout(() => setIsSaved(false), 3000);
+  const getChanges = () => {
+    const changes: string[] = [];
+    if (form.cooperativeName !== originalForm.cooperativeName) changes.push(`Nama Koperasi [${originalForm.cooperativeName} ➔ ${form.cooperativeName}]`);
+    if (form.address !== originalForm.address) changes.push(`Alamat [${originalForm.address} ➔ ${form.address}]`);
+    if (form.legalNumber !== originalForm.legalNumber) changes.push(`Badan Hukum [${originalForm.legalNumber} ➔ ${form.legalNumber}]`);
+    if (form.district !== originalForm.district) changes.push(`Kabupaten/Kota [${originalForm.district} ➔ ${form.district}]`);
+    if (form.printLocation !== originalForm.printLocation) changes.push(`Lokasi Cetak [${originalForm.printLocation} ➔ ${form.printLocation}]`);
+    if (form.chairmanName !== originalForm.chairmanName) changes.push(`Nama Ketua [${originalForm.chairmanName} ➔ ${form.chairmanName}]`);
+    if (form.secretaryName !== originalForm.secretaryName) changes.push(`Nama Sekretaris [${originalForm.secretaryName} ➔ ${form.secretaryName}]`);
+    if (form.treasurerName !== originalForm.treasurerName) changes.push(`Nama Bendahara [${originalForm.treasurerName} ➔ ${form.treasurerName}]`);
+    if (form.principalSavingAmount !== originalForm.principalSavingAmount) changes.push(`Simpanan Pokok [${formatCurrency(originalForm.principalSavingAmount)} ➔ ${formatCurrency(form.principalSavingAmount)}]`);
+    if (form.monthlyDuesAmount !== originalForm.monthlyDuesAmount) changes.push(`Iuran Wajib [${formatCurrency(originalForm.monthlyDuesAmount)} ➔ ${formatCurrency(form.monthlyDuesAmount)}]`);
+    if (form.activeFiscalYear !== originalForm.activeFiscalYear) changes.push(`Tahun Buku [${originalForm.activeFiscalYear} ➔ ${form.activeFiscalYear}]`);
+    if (form.pctCadangan !== originalForm.pctCadangan) changes.push(`Cadangan [${originalForm.pctCadangan}% ➔ ${form.pctCadangan}%]`);
+    if (form.pctJasaModal !== originalForm.pctJasaModal) changes.push(`Jasa Modal [${originalForm.pctJasaModal}% ➔ ${form.pctJasaModal}%]`);
+    if (form.pctJasaTransaksi !== originalForm.pctJasaTransaksi) changes.push(`Jasa Transaksi [${originalForm.pctJasaTransaksi}% ➔ ${form.pctJasaTransaksi}%]`);
+    if (form.pctPengurus !== originalForm.pctPengurus) changes.push(`Pengurus [${originalForm.pctPengurus}% ➔ ${form.pctPengurus}%]`);
+    if (form.pctKaryawan !== originalForm.pctKaryawan) changes.push(`Karyawan [${originalForm.pctKaryawan}% ➔ ${form.pctKaryawan}%]`);
+    if (form.pctPendidikan !== originalForm.pctPendidikan) changes.push(`Pendidikan [${originalForm.pctPendidikan}% ➔ ${form.pctPendidikan}%]`);
+    if (form.pctSosial !== originalForm.pctSosial) changes.push(`Dana Sosial [${originalForm.pctSosial}% ➔ ${form.pctSosial}%]`);
+    return changes;
   };
 
-  const handleReset = () => {
-    setForm(defaultSettings);
-    saveSettings(defaultSettings);
-    setIsDirty(false);
-    setIsSaved(true);
-    setTimeout(() => setIsSaved(false), 3000);
+  const handleSave = async () => {
+    setIsLoading(true);
+    try {
+      await saveSettingsAsync(form);
+      const changes = getChanges();
+      const changesMsg = changes.length > 0 ? ` (Rincian: ${changes.join(", ")})` : "";
+      
+      addAuditLog("UPDATE_SETTINGS", `Admin mengubah konfigurasi pengaturan koperasi ke database.${changesMsg}`, "success");
+      
+      setOriginalForm(form);
+      setIsSaved(true);
+      setIsDirty(false);
+      setIsConfirmModalOpen(false);
+      setTimeout(() => setIsSaved(false), 3000);
+    } catch (e) {
+      alert("Gagal menyimpan ke database");
+    }
+    setIsLoading(false);
+  };
+
+  const handleReset = async () => {
+    setIsLoading(true);
+    try {
+      const def = { ...defaultSettings, id: form.id };
+      await saveSettingsAsync(def as any);
+      addAuditLog("RESET_SETTINGS", "Admin mereset seluruh pengaturan koperasi kembali ke bawaan pabrik (default). Semua konfigurasi kembali seperti semula.", "danger");
+      setForm(def as any);
+      setOriginalForm(def as any);
+      setIsDirty(false);
+      setIsSaved(true);
+      setTimeout(() => setIsSaved(false), 3000);
+    } catch (e) {
+      alert("Gagal reset ke database");
+    }
+    setIsLoading(false);
   };
 
   return (
@@ -98,7 +118,7 @@ export default function PengaturanPage() {
           <div>
             <h2 className="text-xl font-semibold text-slate-800">Pengaturan Koperasi</h2>
             <p className="text-xs text-slate-500 mt-1 max-w-xl">
-              Konfigurasi identitas, nominal iuran, dan tahun buku aktif koperasi. Perubahan disimpan di perangkat lokal dan berlaku di seluruh modul sistem.
+              Konfigurasi identitas, nominal iuran, dan tahun buku aktif koperasi. Perubahan langsung tersimpan ke database dan berlaku di seluruh modul sistem.
             </p>
           </div>
         </div>
@@ -110,7 +130,7 @@ export default function PengaturanPage() {
           <svg className="w-4 h-4 text-emerald-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
-          Pengaturan berhasil disimpan ke localStorage!
+          Pengaturan berhasil disimpan ke database!
         </div>
       )}
 
@@ -157,7 +177,96 @@ export default function PengaturanPage() {
         </div>
       </div>
 
-      {/* Section 2: Ketentuan Keuangan */}
+      {/* Section: Identitas Pelaporan & Pengurus */}
+      <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm space-y-5">
+        <div className="border-b border-slate-100 pb-3">
+          <h3 className="text-sm font-bold text-slate-800">Identitas Pelaporan & Pengurus</h3>
+          <p className="text-xs text-slate-400 mt-0.5">Digunakan pada cetak laporan (Excel SHU, Simpanan, dll) untuk tanda tangan dan lokasi.</p>
+        </div>
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          <label className="block space-y-1.5">
+            <span className="text-xs font-semibold text-slate-600 uppercase tracking-wider">Kabupaten/Kota (Kop Surat)</span>
+            <input
+              type="text"
+              value={form.district}
+              onChange={(e) => handleChange("district", e.target.value)}
+              className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-800 outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 transition"
+              placeholder="Contoh: KABUPATEN CIREBON"
+            />
+          </label>
+
+          <label className="block space-y-1.5">
+            <span className="text-xs font-semibold text-slate-600 uppercase tracking-wider">Lokasi Cetak Tanggal</span>
+            <input
+              type="text"
+              value={form.printLocation}
+              onChange={(e) => handleChange("printLocation", e.target.value)}
+              className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-800 outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 transition"
+              placeholder="Contoh: Cirebon"
+            />
+          </label>
+        </div>
+
+        <div className="grid gap-4 sm:grid-cols-3 pt-2 border-t border-slate-100">
+          <label className="block space-y-1.5">
+            <span className="text-xs font-semibold text-slate-600 uppercase tracking-wider">Nama Ketua</span>
+            <input
+              type="text"
+              value={form.chairmanName}
+              onChange={(e) => handleChange("chairmanName", e.target.value)}
+              className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-800 outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 transition"
+              placeholder="Nama Ketua..."
+            />
+          </label>
+
+          <label className="block space-y-1.5">
+            <span className="text-xs font-semibold text-slate-600 uppercase tracking-wider">Nama Sekretaris</span>
+            <input
+              type="text"
+              value={form.secretaryName}
+              onChange={(e) => handleChange("secretaryName", e.target.value)}
+              className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-800 outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 transition"
+              placeholder="Nama Sekretaris..."
+            />
+          </label>
+
+          <label className="block space-y-1.5">
+            <span className="text-xs font-semibold text-slate-600 uppercase tracking-wider">Nama Bendahara</span>
+            <input
+              type="text"
+              value={form.treasurerName}
+              onChange={(e) => handleChange("treasurerName", e.target.value)}
+              className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-800 outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 transition"
+              placeholder="Nama Bendahara..."
+            />
+          </label>
+        </div>
+      </div>
+
+      {/* Section 2: Tahun Buku Aktif */}
+      <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm space-y-5">
+        <div className="border-b border-slate-100 pb-3">
+          <h3 className="text-sm font-bold text-slate-800">Tahun Buku Aktif</h3>
+          <p className="text-xs text-slate-400 mt-0.5">Menentukan tahun buku default saat membuka halaman Laporan Tahunan.</p>
+        </div>
+
+        <label className="block space-y-1.5 max-w-xs">
+          <span className="text-xs font-semibold text-slate-600 uppercase tracking-wider">Tahun Buku</span>
+          <select
+            value={form.activeFiscalYear}
+            onChange={(e) => handleChange("activeFiscalYear", Number(e.target.value))}
+            className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-800 outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 transition cursor-pointer"
+          >
+            {Array.from({ length: 6 }, (_, i) => new Date().getFullYear() - i).map((y) => (
+              <option key={y} value={y}>{y}</option>
+            ))}
+          </select>
+          <p className="text-[10px] text-slate-400">Halaman Laporan Tahunan akan membuka tahun ini secara otomatis.</p>
+        </label>
+      </div>
+
+      {/* Section 3: Ketentuan Keuangan */}
       <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm space-y-5">
         <div className="border-b border-slate-100 pb-3">
           <h3 className="text-sm font-bold text-slate-800">Ketentuan Keuangan</h3>
@@ -199,26 +308,48 @@ export default function PengaturanPage() {
         </div>
       </div>
 
-      {/* Section 3: Tahun Buku Aktif */}
+      {/* Section 4: Persentase Pos Pembagian SHU */}
       <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm space-y-5">
-        <div className="border-b border-slate-100 pb-3">
-          <h3 className="text-sm font-bold text-slate-800">Tahun Buku Aktif</h3>
-          <p className="text-xs text-slate-400 mt-0.5">Menentukan tahun buku default saat membuka halaman Laporan Tahunan.</p>
+        <div className="border-b border-slate-100 pb-3 flex items-center justify-between">
+          <div>
+            <h3 className="text-sm font-bold text-slate-800">Persentase Pos Pembagian SHU</h3>
+            <p className="text-xs text-slate-400 mt-0.5">Persentase ini akan digunakan sebagai default dalam fitur Quick SHU.</p>
+          </div>
+          <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${(form.pctCadangan + form.pctJasaModal + form.pctJasaTransaksi + form.pctPengurus + form.pctKaryawan + form.pctPendidikan + form.pctSosial) === 100 ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>
+            Total: {(form.pctCadangan + form.pctJasaModal + form.pctJasaTransaksi + form.pctPengurus + form.pctKaryawan + form.pctPendidikan + form.pctSosial).toFixed(2)}%
+          </span>
         </div>
 
-        <label className="block space-y-1.5 max-w-xs">
-          <span className="text-xs font-semibold text-slate-600 uppercase tracking-wider">Tahun Buku</span>
-          <select
-            value={form.activeFiscalYear}
-            onChange={(e) => handleChange("activeFiscalYear", Number(e.target.value))}
-            className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-800 outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 transition cursor-pointer"
-          >
-            {Array.from({ length: 6 }, (_, i) => new Date().getFullYear() - i).map((y) => (
-              <option key={y} value={y}>{y}</option>
-            ))}
-          </select>
-          <p className="text-[10px] text-slate-400">Halaman Laporan Tahunan akan membuka tahun ini secara otomatis.</p>
-        </label>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <label className="block space-y-1.5">
+            <span className="text-xs font-semibold text-slate-600 uppercase tracking-wider">Cadangan Koperasi (%)</span>
+            <input type="number" step="0.01" value={form.pctCadangan} onChange={(e) => handleChange("pctCadangan", Number(e.target.value))} className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-800 outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 transition" />
+          </label>
+          <label className="block space-y-1.5">
+            <span className="text-xs font-semibold text-slate-600 uppercase tracking-wider">Jasa Modal (%)</span>
+            <input type="number" step="0.01" value={form.pctJasaModal} onChange={(e) => handleChange("pctJasaModal", Number(e.target.value))} className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-800 outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 transition" />
+          </label>
+          <label className="block space-y-1.5">
+            <span className="text-xs font-semibold text-slate-600 uppercase tracking-wider">Jasa Transaksi (%)</span>
+            <input type="number" step="0.01" value={form.pctJasaTransaksi} onChange={(e) => handleChange("pctJasaTransaksi", Number(e.target.value))} className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-800 outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 transition" />
+          </label>
+          <label className="block space-y-1.5">
+            <span className="text-xs font-semibold text-slate-600 uppercase tracking-wider">Dana Pengurus & Manajemen (%)</span>
+            <input type="number" step="0.01" value={form.pctPengurus} onChange={(e) => handleChange("pctPengurus", Number(e.target.value))} className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-800 outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 transition" />
+          </label>
+          <label className="block space-y-1.5">
+            <span className="text-xs font-semibold text-slate-600 uppercase tracking-wider">Dana Karyawan / Pegawai (%)</span>
+            <input type="number" step="0.01" value={form.pctKaryawan} onChange={(e) => handleChange("pctKaryawan", Number(e.target.value))} className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-800 outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 transition" />
+          </label>
+          <label className="block space-y-1.5">
+            <span className="text-xs font-semibold text-slate-600 uppercase tracking-wider">Dana Pendidikan (%)</span>
+            <input type="number" step="0.01" value={form.pctPendidikan} onChange={(e) => handleChange("pctPendidikan", Number(e.target.value))} className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-800 outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 transition" />
+          </label>
+          <label className="block space-y-1.5">
+            <span className="text-xs font-semibold text-slate-600 uppercase tracking-wider">Dana Sosial & Pembangunan (%)</span>
+            <input type="number" step="0.01" value={form.pctSosial} onChange={(e) => handleChange("pctSosial", Number(e.target.value))} className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-800 outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 transition" />
+          </label>
+        </div>
       </div>
 
       {/* Action Buttons */}
@@ -233,7 +364,7 @@ export default function PengaturanPage() {
           Reset ke Default
         </button>
         <button
-          onClick={handleSave}
+          onClick={() => setIsConfirmModalOpen(true)}
           disabled={!isDirty}
           className="inline-flex items-center gap-1.5 rounded-xl bg-primary hover:opacity-90 disabled:opacity-50 text-primary-foreground px-5 py-2 text-sm font-bold shadow-sm transition cursor-pointer"
         >
@@ -244,14 +375,14 @@ export default function PengaturanPage() {
         </button>
       </div>
 
-      {/* Info box about localStorage */}
-      <div className="rounded-2xl bg-amber-50 border border-amber-200 p-4 flex gap-3 text-xs text-slate-600">
-        <svg className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      {/* Info box about Supabase */}
+      <div className="rounded-2xl bg-blue-50 border border-blue-200 p-4 flex gap-3 text-xs text-slate-600">
+        <svg className="w-4 h-4 text-blue-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
         </svg>
         <div>
-          <span className="font-bold text-amber-700 block">Catatan Teknis:</span>
-          Pengaturan ini disimpan di <code className="bg-amber-100 px-1 rounded font-mono text-[10px]">localStorage</code> perangkat saat ini. Setelah integrasi database, pengaturan ini akan disinkronkan ke server dan berlaku untuk semua pengguna.
+          <span className="font-bold text-blue-700 block">Sistem Terintegrasi:</span>
+          Pengaturan ini disimpan di dalam Database Supabase dan tersinkronisasi secara real-time ke semua modul sistem dan pengurus.
         </div>
       </div>
 
@@ -276,6 +407,69 @@ export default function PengaturanPage() {
           Sesi aktif saat ini: <strong className="text-slate-700">Admin Kopdes Kedungsana</strong> (admin@kopdeskedungsana.id)
         </div>
       </div>
+
+      {/* Watermark Last Updated */}
+      <div className="mt-8 pt-6 border-t border-slate-200/50 text-center flex flex-col items-center justify-center gap-1 opacity-70">
+        <p className="text-[11px] font-medium text-slate-400 uppercase tracking-widest">
+          Versi Sistem v0.1.0-alpha
+        </p>
+        <p className="text-[10px] text-slate-400">
+          Terakhir diperbarui pada {lastUpdate}
+        </p>
+      </div>
+
+      {/* Confirmation Modal */}
+      {isConfirmModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="w-full max-w-lg rounded-3xl bg-white shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="p-6 border-b border-slate-100 flex items-center gap-4">
+              <div className="w-12 h-12 rounded-full bg-amber-100 flex items-center justify-center text-amber-600 flex-shrink-0">
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-slate-800">Konfirmasi Perubahan</h3>
+                <p className="text-sm text-slate-500 mt-1">Anda akan menyimpan perubahan pengaturan berikut secara permanen.</p>
+              </div>
+            </div>
+            
+            <div className="p-6 overflow-y-auto bg-slate-50/50 flex-1">
+              <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Ringkasan Perubahan:</h4>
+              <ul className="space-y-2 mb-4">
+                {getChanges().map((change, idx) => (
+                  <li key={idx} className="text-sm text-slate-700 bg-white p-3 rounded-xl border border-slate-200 shadow-sm flex items-start gap-2">
+                    <svg className="w-4 h-4 text-emerald-500 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                    <span>{change}</span>
+                  </li>
+                ))}
+              </ul>
+              <div className="rounded-xl bg-amber-50 border border-amber-200/60 p-3 flex gap-2.5 text-xs text-amber-800">
+                <svg className="w-4 h-4 text-amber-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <p>Sebagai bentuk transparansi, seluruh rincian perubahan di atas akan dicatat secara permanen di dalam <strong>Log Aktivitas (Audit Trail)</strong> dan tidak dapat dihapus.</p>
+              </div>
+            </div>
+
+            <div className="p-4 border-t border-slate-100 bg-white flex justify-end gap-3">
+              <button
+                onClick={() => setIsConfirmModalOpen(false)}
+                className="px-5 py-2.5 rounded-xl font-semibold text-slate-600 hover:bg-slate-100 transition"
+              >
+                Batal
+              </button>
+              <button
+                onClick={handleSave}
+                disabled={isLoading}
+                className="px-6 py-2.5 rounded-xl font-bold bg-primary text-white hover:bg-primary/90 shadow-md transition flex items-center gap-2"
+              >
+                {isLoading ? "Menyimpan..." : "Ya, Simpan Perubahan"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </section>
   );

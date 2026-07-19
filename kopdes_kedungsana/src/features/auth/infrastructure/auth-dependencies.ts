@@ -1,6 +1,6 @@
 import { LoginUseCase } from "../application/login-use-case";
-import { HardcodedAuthRepository } from "./hardcoded-auth-repository";
+import { SupabaseAuthRepository } from "./supabase-auth-repository";
 
 export const authDependencies = {
-  loginUseCase: new LoginUseCase(new HardcodedAuthRepository()),
+  loginUseCase: new LoginUseCase(new SupabaseAuthRepository()),
 };

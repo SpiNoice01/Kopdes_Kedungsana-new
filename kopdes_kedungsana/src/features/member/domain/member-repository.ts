@@ -10,4 +10,5 @@ export interface MemberRepository {
   addMonthlySaving(saving: MemberMonthlySaving): Promise<void>;
   updatePhoto(id: string, photoUrl: string): Promise<void>;
   updateStatus(id: string, status: "aktif" | "nonaktif"): Promise<void>;
+  updateProfile(id: string, updates: Partial<Member>): Promise<void>;
 }

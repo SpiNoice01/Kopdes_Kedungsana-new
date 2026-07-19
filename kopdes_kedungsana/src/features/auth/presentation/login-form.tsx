@@ -3,6 +3,7 @@
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import { authDependencies } from "../infrastructure/auth-dependencies";
+import { setAuthCookie } from "@/src/actions/auth-actions";
 
 type LoginState = {
   message: string;
@@ -41,6 +42,7 @@ export function LoginForm() {
       message: `Login berhasil. Selamat datang, ${result.user.name}.`,
       isError: false,
     });
+    await setAuthCookie();
     router.push("/admin/overview");
     setIsLoading(false);
   };
@@ -106,11 +108,9 @@ export function LoginForm() {
         </p>
       ) : null}
 
-      <div className="mt-6 rounded-xl border border-primary/20 bg-primary-soft p-3 text-xs text-foreground/80">
-        <p className="font-semibold text-primary">Akun hardcoded (sementara)</p>
-        <p>Email: admin@kopdeskedungsana.id</p>
-        <p>Nomor Telepon: 081234567890</p>
-        <p>Kata Sandi: Kopdes@123</p>
+      <div className="mt-6 rounded-xl border border-blue-200 bg-blue-50 p-3 text-xs text-blue-800">
+        <p className="font-semibold mb-1">Akses Terbatas</p>
+        <p>Sistem ini telah terintegrasi dengan <strong>Supabase Auth</strong>. Silakan hubungi Administrator Utama jika Anda belum memiliki akun atau lupa kata sandi.</p>
       </div>
     </div>
   );

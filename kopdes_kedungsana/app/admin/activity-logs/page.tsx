@@ -11,7 +11,11 @@ export default function ActivityLogsPage() {
 
   // Load logs on mount
   useEffect(() => {
-    setLogs(getAuditLogs());
+    let mounted = true;
+    getAuditLogs().then((data) => {
+      if (mounted) setLogs(data);
+    });
+    return () => { mounted = false; };
   }, []);
 
   const uniqueActions = useMemo(() => {

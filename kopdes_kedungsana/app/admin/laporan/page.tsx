@@ -3,8 +3,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { memberDependencies } from "@/src/features/member/infrastructure/member-dependencies";
 import { addAuditLog } from "@/src/utils/audit-logger";
+import ExcelJS from "exceljs";
 import type { Member } from "@/src/features/member/domain/member";
 import type { MemberMonthlySaving } from "@/src/features/member/domain/member-monthly-saving";
+import { loadSettingsAsync, defaultSettings } from "@/src/actions/settings-actions";
+import type { KopdesSettings } from "@/src/features/settings/domain/settings";
 
 const formatCurrency = (value: number): string =>
   new Intl.NumberFormat("id-ID", {
@@ -27,32 +30,51 @@ export default function LaporanPage() {
   const [selectedYear, setSelectedYear] = useState(currentYear);
   const [summaries, setSummaries] = useState<MemberAnnualSummary[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [settings, setSettings] = useState<KopdesSettings>(defaultSettings);
 
-  // Build the selectable year range (5 years back to current)
+  // Build the selectable year range (down to 2025)
   const yearOptions = useMemo(() => {
-    return Array.from({ length: 6 }, (_, i) => currentYear - i);
+    const minYear = 2025;
+    const years = [];
+    for (let y = currentYear; y >= minYear; y--) {
+      years.push(y);
+    }
+    return years;
   }, [currentYear]);
 
   useEffect(() => {
     const loadReport = async () => {
       setIsLoading(true);
       try {
-        const members = await memberDependencies.getMembersUseCase.execute();
+        const [members, fetchedSettings] = await Promise.all([
+          memberDependencies.getMembersUseCase.execute(),
+          loadSettingsAsync()
+        ]);
+        setSettings(fetchedSettings);
         const activeMembers = members.filter((m) => m.status === "aktif");
 
         const results: MemberAnnualSummary[] = [];
 
         for (const member of activeMembers) {
-          const allSavings = await memberDependencies.getMemberMonthlySavingsUseCase.execute(member.id);
-          // Filter only savings records in the selected year
-          const savingsInYear = allSavings.filter((s) =>
-            s.period.startsWith(String(selectedYear))
-          );
+          const joinYear = new Date(member.joinDate).getFullYear();
+          if (joinYear > selectedYear) continue;
 
-          const wajib = savingsInYear.reduce((sum, s) => sum + s.requiredSaving, 0);
-          const sukarela = savingsInYear.reduce((sum, s) => sum + s.voluntarySaving, 0);
-          // Pokok only counted once per member regardless of year
-          const pokok = 100_000;
+          const allSavings = await memberDependencies.getMemberMonthlySavingsUseCase.execute(member.id);
+          
+          // Akumulasi simpanan hingga akhir tahun buku yang dipilih (saldo akhir)
+          const savingsUpToYear = allSavings.filter((s) => {
+            if (s.period === "POKOK") {
+              return new Date(s.inputDate).getFullYear() <= selectedYear;
+            }
+            const savingYear = parseInt(s.period.split("-")[0]);
+            return savingYear <= selectedYear;
+          });
+
+          const wajib = savingsUpToYear.reduce((sum, s) => sum + s.requiredSaving, 0);
+          const sukarela = savingsUpToYear.reduce((sum, s) => sum + s.voluntarySaving, 0);
+          
+          const pokokRecord = savingsUpToYear.find((s) => s.period === "POKOK");
+          const pokok = pokokRecord ? pokokRecord.requiredSaving : 0;
 
           results.push({
             member,
@@ -60,7 +82,7 @@ export default function LaporanPage() {
             wajib,
             sukarela,
             total: pokok + wajib + sukarela,
-            savingsInYear,
+            savingsInYear: savingsUpToYear,
           });
         }
 
@@ -91,36 +113,137 @@ export default function LaporanPage() {
     window.print();
   };
 
-  const handleExportCsv = () => {
-    const header = ["No", "Nama Anggota", "NIK", "Simpanan Pokok", "Simpanan Wajib", "Simpanan Sukarela", "Total Simpanan"];
-    const rows = summaries.map((r, i) => [
-      i + 1,
-      r.member.name,
-      r.member.nik,
-      r.pokok,
-      r.wajib,
-      r.sukarela,
-      r.total,
-    ]);
-    const footer = ["", "GRAND TOTAL", "", grandTotal.pokok, grandTotal.wajib, grandTotal.sukarela, grandTotal.total];
+  const handleExportExcel = async () => {
+    addAuditLog(
+      "LAPORAN_EXPORT",
+      `Mengekspor Laporan Rekap Tahunan Simpanan Tahun Buku ${selectedYear} ke format Excel (.xlsx)`,
+      "success"
+    );
 
-    const csvContent = [header, ...rows, footer]
-      .map((row) => row.join(","))
-      .join("\n");
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet("Rekap Tahunan");
+    const formattedDate = new Intl.DateTimeFormat('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }).format(new Date());
 
-    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    ws.columns = [
+      { width: 5 },  // No
+      { width: 30 }, // Nama Anggota
+      { width: 25 }, // NIK
+      { width: 20 }, // Simpanan Pokok
+      { width: 20 }, // Simpanan Wajib
+      { width: 20 }, // Simpanan Sukarela
+      { width: 20 }, // Total Simpanan
+    ];
+
+    ws.mergeCells("A1:G1");
+    ws.getCell("A1").value = settings.cooperativeName.toUpperCase();
+    ws.getCell("A1").font = { bold: true, size: 12 };
+    ws.getCell("A1").alignment = { horizontal: "center" };
+
+    ws.mergeCells("A2:G2");
+    ws.getCell("A2").value = "LAPORAN REKAP SIMPANAN TAHUNAN";
+    ws.getCell("A2").font = { bold: true, size: 12 };
+    ws.getCell("A2").alignment = { horizontal: "center" };
+
+    ws.mergeCells("A3:G3");
+    ws.getCell("A3").value = `Tahun Buku ${selectedYear}`;
+    ws.getCell("A3").font = { bold: true, size: 12 };
+    ws.getCell("A3").alignment = { horizontal: "center" };
+
+    const headerRow = ws.getRow(5);
+    headerRow.values = ["NO", "NAMA ANGGOTA", "NIK", "SIMPANAN POKOK", "SIMPANAN WAJIB", "SIMPANAN SUKARELA", "TOTAL SIMPANAN"];
+    headerRow.font = { bold: true };
+    headerRow.alignment = { horizontal: "center", vertical: "middle" };
+    
+    for (let i = 1; i <= 7; i++) {
+      headerRow.getCell(i).border = { top: { style: "thin" }, left: { style: "thin" }, bottom: { style: "thin" }, right: { style: "thin" } };
+    }
+
+    let currentRow = 6;
+    summaries.forEach((row, idx) => {
+      const dataRow = ws.getRow(currentRow);
+      dataRow.values = [
+        idx + 1,
+        row.member.name,
+        row.member.nik,
+        row.pokok,
+        row.wajib,
+        row.sukarela,
+        row.total,
+      ];
+      
+      dataRow.getCell(1).alignment = { horizontal: "center" };
+      dataRow.getCell(3).numFmt = "@"; 
+      
+      for (let i = 1; i <= 7; i++) {
+        const cell = dataRow.getCell(i);
+        cell.border = { top: { style: "thin" }, left: { style: "thin" }, bottom: { style: "thin" }, right: { style: "thin" } };
+        if (i >= 4) cell.numFmt = '_("Rp"* #,##0_);_("Rp"* (#,##0);_("Rp"* "-"_);_(@_)';
+      }
+      currentRow++;
+    });
+
+    const sumRow = ws.getRow(currentRow);
+    ws.mergeCells(`A${currentRow}:C${currentRow}`);
+    sumRow.getCell(1).value = "GRAND TOTAL";
+    sumRow.getCell(1).font = { bold: true };
+    sumRow.getCell(1).alignment = { horizontal: "center", vertical: "middle" };
+
+    sumRow.getCell(4).value = grandTotal.pokok;
+    sumRow.getCell(5).value = grandTotal.wajib;
+    sumRow.getCell(6).value = grandTotal.sukarela;
+    sumRow.getCell(7).value = grandTotal.total;
+
+    sumRow.font = { bold: true };
+
+    for (let i = 1; i <= 7; i++) {
+      const cell = sumRow.getCell(i);
+      cell.border = { top: { style: "thin" }, left: { style: "thin" }, bottom: { style: "thin" }, right: { style: "thin" } };
+      if (i >= 4) cell.numFmt = '_("Rp"* #,##0_);_("Rp"* (#,##0);_("Rp"* "-"_);_(@_)';
+    }
+
+    currentRow += 3;
+    ws.mergeCells(`A${currentRow}:G${currentRow}`);
+    ws.getCell(`A${currentRow}`).value = `${settings.printLocation}, ${formattedDate}`;
+    ws.getCell(`A${currentRow}`).font = { bold: true };
+    ws.getCell(`A${currentRow}`).alignment = { horizontal: "center" };
+
+    currentRow += 1;
+    ws.mergeCells(`A${currentRow}:G${currentRow}`);
+    ws.getCell(`A${currentRow}`).value = `Pengurus ${settings.cooperativeName}`;
+    ws.getCell(`A${currentRow}`).font = { bold: true };
+    ws.getCell(`A${currentRow}`).alignment = { horizontal: "center" };
+    
+    currentRow += 4;
+    ws.getCell(`B${currentRow}`).value = "Ketua";
+    ws.getCell(`B${currentRow}`).alignment = { horizontal: "center" };
+    
+    ws.getCell(`D${currentRow}`).value = "Sekertaris";
+    ws.getCell(`D${currentRow}`).alignment = { horizontal: "center" };
+    
+    ws.getCell(`F${currentRow}`).value = "Bendahara";
+    ws.getCell(`F${currentRow}`).alignment = { horizontal: "center" };
+
+    currentRow += 5;
+    ws.getCell(`B${currentRow}`).value = settings.chairmanName;
+    ws.getCell(`B${currentRow}`).font = { bold: true };
+    ws.getCell(`B${currentRow}`).alignment = { horizontal: "center" };
+    
+    ws.getCell(`D${currentRow}`).value = settings.secretaryName;
+    ws.getCell(`D${currentRow}`).font = { bold: true };
+    ws.getCell(`D${currentRow}`).alignment = { horizontal: "center" };
+    
+    ws.getCell(`F${currentRow}`).value = settings.treasurerName;
+    ws.getCell(`F${currentRow}`).font = { bold: true };
+    ws.getCell(`F${currentRow}`).alignment = { horizontal: "center" };
+
+    const buffer = await wb.xlsx.writeBuffer();
+    const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `laporan_simpanan_kopdes_kedungsana_${selectedYear}.csv`;
+    a.download = `laporan_simpanan_kopdes_kedungsana_${selectedYear}.xlsx`;
     a.click();
     URL.revokeObjectURL(url);
-
-    addAuditLog(
-      "LAPORAN_EXPORT",
-      `Mengekspor Laporan Rekap Tahunan Simpanan Tahun Buku ${selectedYear} ke format CSV`,
-      "success"
-    );
   };
 
   return (
@@ -146,7 +269,13 @@ export default function LaporanPage() {
             <select
               value={selectedYear}
               onChange={(e) => setSelectedYear(Number(e.target.value))}
-              className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-700 shadow-sm focus:border-primary focus:outline-none cursor-pointer"
+              className="appearance-none rounded-xl border border-slate-200 bg-white pl-3 pr-10 py-2 text-sm font-bold text-slate-700 shadow-sm focus:border-primary focus:outline-none cursor-pointer"
+              style={{
+                backgroundImage: `url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3E%3Cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3E%3C/svg%3E")`,
+                backgroundPosition: `right 0.75rem center`,
+                backgroundRepeat: `no-repeat`,
+                backgroundSize: `1.5em 1.5em`
+              }}
             >
               {yearOptions.map((y) => (
                 <option key={y} value={y}>{y}</option>
@@ -181,13 +310,13 @@ export default function LaporanPage() {
             </div>
             <div className="flex items-center gap-2">
               <button
-                onClick={handleExportCsv}
+                onClick={handleExportExcel}
                 className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-700 px-3 py-1.5 text-xs font-semibold hover:bg-emerald-100 transition cursor-pointer"
               >
                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                 </svg>
-                Ekspor CSV
+                Ekspor Excel
               </button>
               <button
                 onClick={handlePrint}
@@ -265,16 +394,16 @@ export default function LaporanPage() {
       <div className="hidden print:block p-8 font-serif text-slate-900 text-sm">
         {/* Official Letterhead */}
         <div className="text-center border-b-4 border-double border-slate-600 pb-5 mb-6">
-          <h1 className="text-xl font-extrabold uppercase tracking-widest">KOPERASI DESA KEDUNGSANA</h1>
-          <p className="text-xs text-slate-500 mt-1">RT 01/RW 03, Kecamatan Plumbon, Kabupaten Cirebon — Jawa Barat</p>
-          <p className="text-xs text-slate-500">Badan Hukum No: AHU-0012903.AH.01.26</p>
+          <h1 className="text-xl font-extrabold uppercase tracking-widest">{settings.cooperativeName.toUpperCase()}</h1>
+          <p className="text-xs text-slate-500 mt-1">{settings.address}</p>
+          <p className="text-xs text-slate-500">Badan Hukum No: {settings.legalNumber}</p>
           <h2 className="text-base font-bold uppercase mt-5 tracking-wider">
             LAPORAN PERTANGGUNGJAWABAN KEUANGAN SIMPANAN ANGGOTA
           </h2>
           <p className="text-sm font-semibold mt-1">Tahun Buku {selectedYear}</p>
           <p className="text-[10px] text-slate-500 mt-0.5">
-            Dicetak pada: {new Date().toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })}
-            {" | "}Diajukan pada Rapat Anggota Tahunan (RAT) Koperasi Desa Kedungsana
+            Dicetak di {settings.printLocation}, pada tanggal {new Date().toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })}
+            {" | "}Diajukan pada Rapat Anggota Tahunan (RAT) {settings.cooperativeName}
           </p>
         </div>
 
@@ -317,7 +446,7 @@ export default function LaporanPage() {
 
         {/* Signature Section */}
         <p className="text-[10px] text-slate-500 italic mb-8">
-          * Laporan ini disusun berdasarkan data simpanan anggota yang tercatat dalam sistem informasi Koperasi Desa Kedungsana. Simpanan Pokok sebesar Rp 100.000 dihitung flat per anggota aktif.
+          * Laporan ini disusun berdasarkan data simpanan anggota yang tercatat dalam sistem informasi {settings.cooperativeName}. Simpanan Pokok sebesar Rp 100.000 dihitung flat per anggota aktif.
         </p>
 
         <div className="flex justify-between text-center text-xs mt-16">
@@ -325,19 +454,19 @@ export default function LaporanPage() {
             <p className="text-slate-600">Dibuat oleh,</p>
             <p className="text-slate-600">Sekretaris Koperasi</p>
             <div className="h-16"></div>
-            <p className="font-bold text-slate-900 border-t border-slate-400 pt-1 inline-block min-w-[100px]">Sekretaris</p>
+            <p className="font-bold text-slate-900 border-t border-slate-400 pt-1 inline-block min-w-[100px]">{settings.secretaryName}</p>
           </div>
           <div className="w-1/3">
             <p className="text-slate-600">Mengetahui,</p>
             <p className="text-slate-600">Bendahara Koperasi</p>
             <div className="h-16"></div>
-            <p className="font-bold text-slate-900 border-t border-slate-400 pt-1 inline-block min-w-[100px]">Bendahara</p>
+            <p className="font-bold text-slate-900 border-t border-slate-400 pt-1 inline-block min-w-[100px]">{settings.treasurerName}</p>
           </div>
           <div className="w-1/3">
             <p className="text-slate-600">Menyetujui,</p>
             <p className="text-slate-600">Ketua Koperasi</p>
             <div className="h-16"></div>
-            <p className="font-bold text-slate-900 border-t border-slate-400 pt-1 inline-block min-w-[100px]">Ketua Koperasi</p>
+            <p className="font-bold text-slate-900 border-t border-slate-400 pt-1 inline-block min-w-[100px]">{settings.chairmanName}</p>
           </div>
         </div>
       </div>

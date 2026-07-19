@@ -9,6 +9,10 @@ import { StatusBadge } from "@/src/shared/widgets/status-badge";
 import type { Member } from "../domain/member";
 import type { MemberMonthlySaving } from "../domain/member-monthly-saving";
 import { memberDependencies } from "../infrastructure/member-dependencies";
+import { loadSettingsAsync } from "@/src/actions/settings-actions";
+import type { KopdesSettings } from "@/src/features/settings/domain/settings";
+import { formatCurrency, formatDate } from "@/src/utils/formatters";
+import { calculateArrears } from "../domain/member-services";
 
 type MemberDetailPageProps = {
   memberId: string;
@@ -27,13 +31,6 @@ type FeedbackState = {
 
 const principalSavingAmount = 100_000;
 
-const formatCurrency = (value: number): string =>
-  new Intl.NumberFormat("id-ID", {
-    style: "currency",
-    currency: "IDR",
-    maximumFractionDigits: 0,
-  }).format(value);
-
 const currentPeriod = (): string => {
   const currentDate = new Date();
   const year = currentDate.getFullYear();
@@ -46,8 +43,14 @@ const parsePositiveNumber = (value: string): number => {
   if (!value.trim()) {
     return 0;
   }
+  const numericString = value.replace(/\D/g, "");
+  return Math.max(0, Number(numericString));
+};
 
-  return Math.max(0, Number(value));
+const formatInputCurrency = (value: string) => {
+  const numericString = value.replace(/\D/g, "");
+  if (!numericString) return "";
+  return new Intl.NumberFormat("id-ID").format(parseInt(numericString, 10));
 };
 
 // Indonesian Terbilang Word Generation Helpers (highly valued in Indonesian academic thesis)
@@ -98,6 +101,7 @@ export function MemberDetailPage({ memberId }: MemberDetailPageProps) {
   const [monthlySavings, setMonthlySavings] = useState<MemberMonthlySaving[]>(
     [],
   );
+  const [settings, setSettings] = useState<KopdesSettings | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [formState, setFormState] = useState<FormState>({
@@ -123,10 +127,23 @@ export function MemberDetailPage({ memberId }: MemberDetailPageProps) {
   // State for status change confirmation dialog
   const [showStatusConfirm, setShowStatusConfirm] = useState(false);
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
+  const [deactivationReason, setDeactivationReason] = useState("");
+  const [hasPrintedLiquidation, setHasPrintedLiquidation] = useState(false);
   const [statusFeedback, setStatusFeedback] = useState<FeedbackState>({
     message: "",
     isError: false,
   });
+
+  // State for Edit Profile
+  const [isEditingProfile, setIsEditingProfile] = useState(false);
+  const [editProfileForm, setEditProfileForm] = useState<Partial<Member>>({});
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
+  const [profileFeedback, setProfileFeedback] = useState<FeedbackState>({ message: "", isError: false });
+  
+  // Checking Pokok Status
+  const hasPaidPokok = useMemo(() => {
+    return monthlySavings.some((s) => s.period === "POKOK");
+  }, [monthlySavings]);
 
   const totalThisInput = useMemo(() => {
     const requiredSaving = parsePositiveNumber(formState.requiredSaving);
@@ -140,28 +157,11 @@ export function MemberDetailPage({ memberId }: MemberDetailPageProps) {
   }, [monthlySavings]);
 
   const arrearsInfo = useMemo(() => {
-    if (!member || !member.joinDate) {
+    if (!member) {
       return { monthsElapsed: 0, target: 0, paid: 0, arrears: 0 };
     }
-    const monthlyTarget = 10000; // Rp 10.000 per bulan
-    const joinDate = new Date(member.joinDate);
-    const currentDate = new Date();
-    
-    const yearsDiff = currentDate.getFullYear() - joinDate.getFullYear();
-    const monthsDiff = currentDate.getMonth() - joinDate.getMonth();
-    const monthsElapsed = Math.max(1, (yearsDiff * 12) + monthsDiff + 1);
-    
-    const target = monthsElapsed * monthlyTarget;
-    const paid = monthlySavings.reduce((sum, s) => sum + s.requiredSaving, 0);
-    const arrears = Math.max(0, target - paid);
-    
-    return {
-      monthsElapsed,
-      target,
-      paid,
-      arrears
-    };
-  }, [member, monthlySavings]);
+    return calculateArrears(member, monthlySavings, settings);
+  }, [member, monthlySavings, settings]);
 
   useEffect(() => {
     return () => {
@@ -173,16 +173,21 @@ export function MemberDetailPage({ memberId }: MemberDetailPageProps) {
 
   useEffect(() => {
     const loadMemberDetail = async () => {
-      const memberResult =
-        await memberDependencies.getMemberByIdUseCase.execute(memberId);
-      const savingsResult =
-        await memberDependencies.getMemberMonthlySavingsUseCase.execute(
-          memberId,
-        );
+      try {
+        const [memberResult, savingsResult, settingsResult] = await Promise.all([
+          memberDependencies.getMemberByIdUseCase.execute(memberId),
+          memberDependencies.getMemberMonthlySavingsUseCase.execute(memberId),
+          loadSettingsAsync()
+        ]);
 
-      setMember(memberResult);
-      setMonthlySavings(savingsResult);
-      setIsLoading(false);
+        setMember(memberResult);
+        setMonthlySavings(savingsResult);
+        setSettings(settingsResult);
+      } catch (e) {
+        console.error("Failed to fetch member details or settings", e);
+      } finally {
+        setIsLoading(false);
+      }
     };
 
     void loadMemberDetail();
@@ -302,9 +307,14 @@ export function MemberDetailPage({ memberId }: MemberDetailPageProps) {
 
     if (result.success) {
       setMember((prev) => prev ? { ...prev, status: nextStatus } : null);
+      
+      const logMessage = nextStatus === "nonaktif"
+        ? `Anggota [${member.name}] dengan ID ${memberId} telah dinonaktifkan. Alasan: ${deactivationReason || "Tidak ada alasan spesifik"}`
+        : `Anggota [${member.name}] dengan ID ${memberId} telah diaktifkan kembali.`;
+
       addAuditLog(
-        "MEMBER_EDIT",
-        result.message,
+        nextStatus === "nonaktif" ? "MEMBER_DEACTIVATE" : "MEMBER_REACTIVATE",
+        logMessage,
         nextStatus === "nonaktif" ? "warning" : "success",
       );
       setStatusFeedback({ message: result.message, isError: false });
@@ -314,6 +324,51 @@ export function MemberDetailPage({ memberId }: MemberDetailPageProps) {
 
     setShowStatusConfirm(false);
     setIsUpdatingStatus(false);
+  };
+
+  const handleSaveProfile = async () => {
+    setIsSavingProfile(true);
+    setProfileFeedback({ message: "", isError: false });
+    
+    try {
+      const result = await memberDependencies.updateMemberProfileUseCase.execute(memberId, editProfileForm);
+      if (result.success) {
+        setMember((prev) => prev ? { ...prev, ...editProfileForm } : null);
+        const updatedName = editProfileForm.name || member?.name || "Tidak Diketahui";
+        addAuditLog("MEMBER_EDIT", `Berhasil memperbarui detail profil untuk anggota [${updatedName}] dengan ID ${memberId}`, "success");
+        setProfileFeedback({ message: result.message, isError: false });
+        setTimeout(() => setIsEditingProfile(false), 1500);
+      } else {
+        setProfileFeedback({ message: result.message, isError: true });
+      }
+    } catch (e: any) {
+      setProfileFeedback({ message: e.message || "Gagal menyimpan profil", isError: true });
+    } finally {
+      setIsSavingProfile(false);
+    }
+  };
+
+  const handleSavePokok = async () => {
+    if (hasPaidPokok) return;
+    try {
+      const result = await memberDependencies.addMemberMonthlySavingUseCase.execute({
+        memberId,
+        period: "POKOK",
+        requiredSaving: principalSavingAmount,
+        voluntarySaving: 0,
+      });
+
+      if (result.success) {
+        const latestSavings = await memberDependencies.getMemberMonthlySavingsUseCase.execute(memberId);
+        setMonthlySavings(latestSavings);
+        addAuditLog("SAVING_ADD", `Pembayaran Simpanan Pokok sebesar Rp 100.000 divalidasi untuk anggota [${member?.name || "Tidak Diketahui"}] dengan ID ${memberId}`, "success");
+        setFeedbackState({ message: "Simpanan Pokok berhasil divalidasi!", isError: false });
+      } else {
+        setFeedbackState({ message: result.message, isError: true });
+      }
+    } catch (e: any) {
+      setFeedbackState({ message: e.message || "Gagal memvalidasi pokok", isError: true });
+    }
   };
 
   if (isLoading) {
@@ -358,7 +413,6 @@ export function MemberDetailPage({ memberId }: MemberDetailPageProps) {
           title="Detail Input Anggota & Simpanan Pokok"
           description="Kelola data anggota dan validasi simpanan pokok dalam satu tempat."
           collapsible
-          defaultCollapsed
         >
           <div className="grid gap-6 md:grid-cols-[176px_1fr] items-start">
             <div className="flex flex-col items-center gap-3">
@@ -394,43 +448,123 @@ export function MemberDetailPage({ memberId }: MemberDetailPageProps) {
               </label>
             </div>
 
-            <div className="grid gap-3 text-sm text-slate-700 sm:grid-cols-2">
-              <div>
-                <p className="text-slate-500">Nama</p>
-                <p className="font-medium">{member.name}</p>
+            <div className="flex-1 space-y-4">
+              <div className="flex justify-between items-center border-b border-slate-100 pb-2">
+                <h3 className="font-semibold text-slate-800">Informasi Pribadi</h3>
+                {!isEditingProfile ? (
+                  <button 
+                    onClick={() => {
+                      setEditProfileForm(member);
+                      setIsEditingProfile(true);
+                    }}
+                    className="text-xs font-bold text-primary bg-primary-soft px-3 py-1.5 rounded-lg hover:bg-primary/20 transition cursor-pointer"
+                  >
+                    Edit Profil
+                  </button>
+                ) : (
+                  <div className="flex gap-2">
+                    <button 
+                      onClick={() => setIsEditingProfile(false)}
+                      className="text-xs font-bold text-slate-500 bg-slate-100 px-3 py-1.5 rounded-lg hover:bg-slate-200 transition cursor-pointer"
+                    >
+                      Batal
+                    </button>
+                    <button 
+                      onClick={handleSaveProfile}
+                      disabled={isSavingProfile}
+                      className="text-xs font-bold text-white bg-primary px-3 py-1.5 rounded-lg hover:bg-primary/90 transition disabled:opacity-50 cursor-pointer"
+                    >
+                      {isSavingProfile ? "Menyimpan..." : "Simpan"}
+                    </button>
+                  </div>
+                )}
               </div>
-              <div>
-                <p className="text-slate-500">NIK</p>
-                <p className="font-medium">{member.nik}</p>
-              </div>
-              <div>
-                <p className="text-slate-500">No. HP</p>
-                <p className="font-medium">{member.phone}</p>
-              </div>
-              <div>
-                <p className="text-slate-500">Tanggal Bergabung</p>
-                <p className="font-medium">{member.joinDate}</p>
-              </div>
-              <div>
-                <p className="text-slate-500">Golongan Darah</p>
-                <p className="font-medium">{member.bloodType || "-"}</p>
-              </div>
-              <div>
-                <p className="text-slate-500">Agama</p>
-                <p className="font-medium">{member.religion || "-"}</p>
-              </div>
-              <div>
-                <p className="text-slate-500">Status Perkawinan</p>
-                <p className="font-medium">{member.maritalStatus || "-"}</p>
-              </div>
-              <div>
-                <p className="text-slate-500">Pekerjaan</p>
-                <p className="font-medium">{member.occupation || "-"}</p>
-              </div>
-              <div className="sm:col-span-2">
-                <p className="text-slate-500">Alamat</p>
-                <p className="font-medium">{member.address}</p>
-              </div>
+              
+              {profileFeedback.message && (
+                <div className={`p-2.5 rounded-lg text-xs font-medium border ${profileFeedback.isError ? "bg-red-50 text-red-600 border-red-200" : "bg-emerald-50 text-emerald-600 border-emerald-200"}`}>
+                  {profileFeedback.message}
+                </div>
+              )}
+
+              {isEditingProfile ? (
+                <div className="grid gap-4 text-sm text-slate-700 sm:grid-cols-2">
+                  <div>
+                    <p className="text-slate-500 mb-1 text-xs">Nama</p>
+                    <input className="w-full border border-slate-300 rounded-xl px-3 py-1.5 outline-none focus:border-primary focus:ring-1 focus:ring-primary" value={editProfileForm.name || ""} onChange={e => setEditProfileForm({...editProfileForm, name: e.target.value})} />
+                  </div>
+                  <div>
+                    <p className="text-slate-500 mb-1 text-xs">NIK</p>
+                    <input className="w-full border border-slate-300 rounded-xl px-3 py-1.5 outline-none focus:border-primary focus:ring-1 focus:ring-primary" value={editProfileForm.nik || ""} onChange={e => setEditProfileForm({...editProfileForm, nik: e.target.value})} />
+                  </div>
+                  <div>
+                    <p className="text-slate-500 mb-1 text-xs">No. HP</p>
+                    <input className="w-full border border-slate-300 rounded-xl px-3 py-1.5 outline-none focus:border-primary focus:ring-1 focus:ring-primary" value={editProfileForm.phone || ""} onChange={e => setEditProfileForm({...editProfileForm, phone: e.target.value})} />
+                  </div>
+                  <div>
+                    <p className="text-slate-500 mb-1 text-xs">Tanggal Lahir</p>
+                    <input type="date" className="w-full border border-slate-300 rounded-xl px-3 py-1.5 outline-none focus:border-primary focus:ring-1 focus:ring-primary" value={editProfileForm.birthDate || ""} onChange={e => setEditProfileForm({...editProfileForm, birthDate: e.target.value})} />
+                  </div>
+                  <div>
+                    <p className="text-slate-500 mb-1 text-xs">Golongan Darah</p>
+                    <input className="w-full border border-slate-300 rounded-xl px-3 py-1.5 outline-none focus:border-primary focus:ring-1 focus:ring-primary" value={editProfileForm.bloodType || ""} onChange={e => setEditProfileForm({...editProfileForm, bloodType: e.target.value})} />
+                  </div>
+                  <div>
+                    <p className="text-slate-500 mb-1 text-xs">Agama</p>
+                    <input className="w-full border border-slate-300 rounded-xl px-3 py-1.5 outline-none focus:border-primary focus:ring-1 focus:ring-primary" value={editProfileForm.religion || ""} onChange={e => setEditProfileForm({...editProfileForm, religion: e.target.value})} />
+                  </div>
+                  <div>
+                    <p className="text-slate-500 mb-1 text-xs">Status Perkawinan</p>
+                    <input className="w-full border border-slate-300 rounded-xl px-3 py-1.5 outline-none focus:border-primary focus:ring-1 focus:ring-primary" value={editProfileForm.maritalStatus || ""} onChange={e => setEditProfileForm({...editProfileForm, maritalStatus: e.target.value})} />
+                  </div>
+                  <div>
+                    <p className="text-slate-500 mb-1 text-xs">Pekerjaan</p>
+                    <input className="w-full border border-slate-300 rounded-xl px-3 py-1.5 outline-none focus:border-primary focus:ring-1 focus:ring-primary" value={editProfileForm.occupation || ""} onChange={e => setEditProfileForm({...editProfileForm, occupation: e.target.value})} />
+                  </div>
+                  <div className="sm:col-span-2">
+                    <p className="text-slate-500 mb-1 text-xs">Alamat</p>
+                    <textarea className="w-full border border-slate-300 rounded-xl px-3 py-1.5 outline-none focus:border-primary focus:ring-1 focus:ring-primary" rows={2} value={editProfileForm.address || ""} onChange={e => setEditProfileForm({...editProfileForm, address: e.target.value})} />
+                  </div>
+                </div>
+              ) : (
+                <div className="grid gap-3 text-sm text-slate-700 sm:grid-cols-2">
+                  <div>
+                    <p className="text-slate-500 text-xs">Nama</p>
+                    <p className="font-medium">{member.name}</p>
+                  </div>
+                  <div>
+                    <p className="text-slate-500 text-xs">NIK</p>
+                    <p className="font-medium">{member.nik}</p>
+                  </div>
+                  <div>
+                    <p className="text-slate-500 text-xs">No. HP</p>
+                    <p className="font-medium">{member.phone}</p>
+                  </div>
+                  <div>
+                    <p className="text-slate-500 text-xs">Tanggal Bergabung</p>
+                    <p className="font-medium">{member.joinDate}</p>
+                  </div>
+                  <div>
+                    <p className="text-slate-500 text-xs">Golongan Darah</p>
+                    <p className="font-medium">{member.bloodType || "-"}</p>
+                  </div>
+                  <div>
+                    <p className="text-slate-500 text-xs">Agama</p>
+                    <p className="font-medium">{member.religion || "-"}</p>
+                  </div>
+                  <div>
+                    <p className="text-slate-500 text-xs">Status Perkawinan</p>
+                    <p className="font-medium">{member.maritalStatus || "-"}</p>
+                  </div>
+                  <div>
+                    <p className="text-slate-500 text-xs">Pekerjaan</p>
+                    <p className="font-medium">{member.occupation || "-"}</p>
+                  </div>
+                  <div className="sm:col-span-2">
+                    <p className="text-slate-500 text-xs">Alamat</p>
+                    <p className="font-medium">{member.address}</p>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
@@ -441,18 +575,37 @@ export function MemberDetailPage({ memberId }: MemberDetailPageProps) {
             <div className="space-y-3">
               <div className="flex flex-wrap items-center gap-3">
                 <StatusBadge
-                  label={principalProofUrl ? "SUDAH VALIDASI" : "BELUM VALIDASI"}
-                  tone={principalProofUrl ? "success" : "muted"}
+                  label={hasPaidPokok ? "LUNAS (TERVALIDASI)" : "BELUM LUNAS"}
+                  tone={hasPaidPokok ? "success" : "danger"}
                 />
                 <p className="text-sm text-slate-600">
                   Nominal simpanan pokok ditetapkan:{" "}
-                  {formatCurrency(principalSavingAmount)}
+                  <span className="font-bold">{formatCurrency(principalSavingAmount)}</span>
                 </p>
               </div>
 
-              <label className="block space-y-2 text-sm">
+              {!hasPaidPokok && (
+                <div className="bg-slate-50 border border-slate-200 p-4 rounded-2xl flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
+                  <div>
+                    <h4 className="text-sm font-bold text-slate-800">Tindakan Validasi</h4>
+                    <p className="text-xs text-slate-600 mt-1">Klik tombol di samping untuk mencatat setoran Simpanan Pokok sebesar Rp 100.000 ke dalam buku kas koperasi.</p>
+                  </div>
+                  <button
+                    onClick={handleSavePokok}
+                    className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-sm transition hover:bg-primary/90 cursor-pointer"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    Bayar & Validasi
+                  </button>
+                </div>
+              )}
+
+              {/* Opsional: File upload untuk bukti fisik (Hanya UI) */}
+              <label className="block space-y-2 text-sm mt-4">
                 <span className="font-medium text-slate-700">
-                  Bukti Validasi Simpanan Pokok (Gambar)
+                  Bukti Fisik Simpanan Pokok (Opsional)
                 </span>
                 <input
                   type="file"
@@ -461,7 +614,7 @@ export function MemberDetailPage({ memberId }: MemberDetailPageProps) {
                   className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none file:mr-3 file:rounded-lg file:border-0 file:bg-primary file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-primary-foreground"
                 />
                 <p className="text-xs text-slate-500">
-                  Format: JPG/PNG/WEBP, maksimal 2MB.
+                  Format: JPG/PNG/WEBP, maksimal 2MB. (Hanya untuk arsip visual)
                 </p>
               </label>
 
@@ -488,52 +641,68 @@ export function MemberDetailPage({ memberId }: MemberDetailPageProps) {
           title="Input Simpanan Bulanan"
           description="Isi transaksi simpanan bulanan per anggota."
           collapsible
-          defaultCollapsed
         >
-          <div className="mb-5">
-            {arrearsInfo.arrears > 0 ? (
-              <div className="bg-red-50 border border-red-200 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                <div className="flex items-start gap-3">
-                  <div className="p-2 bg-red-100 text-red-600 rounded-xl mt-0.5">
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                    </svg>
+          <details className="mb-5 group">
+            <summary className="flex items-center gap-2 cursor-pointer list-none text-sm font-semibold text-slate-700 bg-slate-50 px-4 py-2.5 rounded-xl border border-slate-200 select-none hover:bg-slate-100 transition">
+              <svg className="w-4 h-4 text-slate-500 transition-transform group-open:rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
+              </svg>
+              Info Status Tunggakan Iuran
+              {arrearsInfo.arrears > 0 ? (
+                <span className="ml-auto inline-flex items-center px-2 py-0.5 rounded-md bg-red-100 text-red-700 text-[10px] uppercase font-bold">
+                  Ada Tunggakan
+                </span>
+              ) : (
+                <span className="ml-auto inline-flex items-center px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-700 text-[10px] uppercase font-bold">
+                  Lunas
+                </span>
+              )}
+            </summary>
+            <div className="mt-3">
+              {arrearsInfo.arrears > 0 ? (
+                <div className="bg-red-50 border border-red-200 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                  <div className="flex items-start gap-3">
+                    <div className="p-2 bg-red-100 text-red-600 rounded-xl mt-0.5">
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                      </svg>
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-bold text-red-800">Terdapat Tunggakan Simpanan Wajib</h4>
+                      <p className="text-xs text-red-600 mt-0.5 leading-relaxed">
+                        Anggota terdaftar sejak <strong>{member.joinDate}</strong> ({arrearsInfo.monthsElapsed} bulan). <br/>
+                        Target akumulasi simpanan wajib: <strong>{formatCurrency(arrearsInfo.target)}</strong> | Sudah dibayar: <strong>{formatCurrency(arrearsInfo.paid)}</strong>
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <h4 className="text-sm font-bold text-red-800">Terdapat Tunggakan Simpanan Wajib</h4>
-                    <p className="text-xs text-red-600 mt-0.5 leading-relaxed">
-                      Anggota terdaftar sejak <strong>{member.joinDate}</strong> ({arrearsInfo.monthsElapsed} bulan). <br/>
-                      Target akumulasi simpanan wajib: <strong>{formatCurrency(arrearsInfo.target)}</strong> | Sudah dibayar: <strong>{formatCurrency(arrearsInfo.paid)}</strong>
-                    </p>
+                  <div className="text-left sm:text-right bg-red-100/50 rounded-xl px-4 py-2 border border-red-100 flex-shrink-0">
+                    <span className="text-[10px] font-bold text-red-500 block uppercase">Total Tunggakan</span>
+                    <span className="text-lg font-extrabold text-red-700">{formatCurrency(arrearsInfo.arrears)}</span>
                   </div>
                 </div>
-                <div className="text-left sm:text-right bg-red-100/50 rounded-xl px-4 py-2 border border-red-100 flex-shrink-0">
-                  <span className="text-[10px] font-bold text-red-500 block uppercase">Total Tunggakan</span>
-                  <span className="text-lg font-extrabold text-red-700">{formatCurrency(arrearsInfo.arrears)}</span>
-                </div>
-              </div>
-            ) : (
-              <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                <div className="flex items-start gap-3">
-                  <div className="p-2 bg-emerald-100 text-emerald-600 rounded-xl mt-0.5">
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
+              ) : (
+                <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                  <div className="flex items-start gap-3">
+                    <div className="p-2 bg-emerald-100 text-emerald-600 rounded-xl mt-0.5">
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-bold text-emerald-800">Simpanan Wajib Lunas</h4>
+                      <p className="text-xs text-emerald-600 mt-0.5 leading-relaxed">
+                        Status iuran simpanan wajib anggota ini aman dan lunas. Seluruh kewajiban pembayaran bulanan hingga bulan ini telah diselesaikan.
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <h4 className="text-sm font-bold text-emerald-800">Simpanan Wajib Lunas</h4>
-                    <p className="text-xs text-emerald-600 mt-0.5 leading-relaxed">
-                      Status iuran simpanan wajib anggota ini aman dan lunas. Seluruh kewajiban pembayaran bulanan hingga bulan ini telah diselesaikan.
-                    </p>
+                  <div className="text-left sm:text-right bg-emerald-100/50 rounded-xl px-4 py-2 border border-emerald-100 flex-shrink-0">
+                    <span className="text-[10px] font-bold text-emerald-500 block uppercase">Total Tunggakan</span>
+                    <span className="text-lg font-extrabold text-emerald-700">Rp 0</span>
                   </div>
                 </div>
-                <div className="text-left sm:text-right bg-emerald-100/50 rounded-xl px-4 py-2 border border-emerald-100 flex-shrink-0">
-                  <span className="text-[10px] font-bold text-emerald-500 block uppercase">Total Tunggakan</span>
-                  <span className="text-lg font-extrabold text-emerald-700">Rp 0</span>
-                </div>
-              </div>
-            )}
-          </div>
+              )}
+            </div>
+          </details>
 
           <form onSubmit={handleSubmit} className="grid gap-3 md:grid-cols-2">
             <label className="space-y-2 text-sm">
@@ -553,38 +722,42 @@ export function MemberDetailPage({ memberId }: MemberDetailPageProps) {
 
             <label className="space-y-2 text-sm">
               <span className="font-medium text-slate-700">Simpanan Wajib</span>
-              <input
-                type="number"
-                min={0}
-                value={formState.requiredSaving}
-                onChange={(event) =>
-                  setFormState((previous) => ({
-                    ...previous,
-                    requiredSaving: event.target.value,
-                  }))
-                }
-                placeholder="Contoh: 50000"
-                className="w-full rounded-xl border border-slate-300 px-3 py-2 outline-none focus:border-primary"
-              />
+              <div className="relative">
+                <span className="absolute left-3 top-2.5 text-slate-500 font-semibold">Rp</span>
+                <input
+                  type="text"
+                  value={formState.requiredSaving}
+                  onChange={(event) =>
+                    setFormState((previous) => ({
+                      ...previous,
+                      requiredSaving: formatInputCurrency(event.target.value),
+                    }))
+                  }
+                  placeholder="50.000"
+                  className="w-full rounded-xl border border-slate-300 pl-9 pr-3 py-2 outline-none focus:border-primary"
+                />
+              </div>
             </label>
 
             <label className="space-y-2 text-sm">
               <span className="font-medium text-slate-700">
                 Simpanan Sukarela
               </span>
-              <input
-                type="number"
-                min={0}
-                value={formState.voluntarySaving}
-                onChange={(event) =>
-                  setFormState((previous) => ({
-                    ...previous,
-                    voluntarySaving: event.target.value,
-                  }))
-                }
-                placeholder="Contoh: 10000"
-                className="w-full rounded-xl border border-slate-300 px-3 py-2 outline-none focus:border-primary"
-              />
+              <div className="relative">
+                <span className="absolute left-3 top-2.5 text-slate-500 font-semibold">Rp</span>
+                <input
+                  type="text"
+                  value={formState.voluntarySaving}
+                  onChange={(event) =>
+                    setFormState((previous) => ({
+                      ...previous,
+                      voluntarySaving: formatInputCurrency(event.target.value),
+                    }))
+                  }
+                  placeholder="10.000"
+                  className="w-full rounded-xl border border-slate-300 pl-9 pr-3 py-2 outline-none focus:border-primary"
+                />
+              </div>
             </label>
 
             <div className="space-y-2 rounded-xl border border-primary/20 bg-primary-soft p-3 text-sm">
@@ -617,6 +790,8 @@ export function MemberDetailPage({ memberId }: MemberDetailPageProps) {
         <SectionCard
           title="Riwayat Simpanan Bulanan"
           description="Sumber data untuk kalkulasi di halaman Quick SHU."
+          collapsible
+          defaultCollapsed
         >
           <div className="space-y-3">
             <div className="flex items-center justify-between">
@@ -662,7 +837,7 @@ export function MemberDetailPage({ memberId }: MemberDetailPageProps) {
                         <td className="px-3 py-2 font-semibold text-primary">
                           {formatCurrency(saving.totalSaving)}
                         </td>
-                        <td className="px-3 py-2">{saving.inputDate}</td>
+                        <td className="px-3 py-2">{formatDate(saving.inputDate)}</td>
                         <td className="px-3 py-2 text-right">
                           <button
                             onClick={() => setActivePrintJob({ type: "receipt", data: saving })}
@@ -684,83 +859,6 @@ export function MemberDetailPage({ memberId }: MemberDetailPageProps) {
                 Belum ada riwayat simpanan bulanan untuk anggota ini.
               </p>
             )}
-          </div>
-        </SectionCard>
-
-        {/* Dynamic Exit Liquidation Simulation Calculator Section (Great for Thesis and Real Audits) */}
-        <SectionCard
-          title="Simulasi Penutupan Keanggotaan (Likuidasi Anggota Keluar)"
-          description="Kalkulator audit pengembalian simpanan anggota jika keluar dari kepengurusan koperasi."
-          collapsible
-          defaultCollapsed
-        >
-          <div className="space-y-4">
-            <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex gap-3 text-xs sm:text-sm text-slate-700 leading-relaxed">
-              <svg className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              <div>
-                <span className="font-bold text-amber-800">Regulasi UU Koperasi:</span> Berdasarkan AD/ART Koperasi Desa Kedungsana, anggota yang mengundurkan diri berhak atas pengembalian penuh atas akumulasi simpanan pokok dan wajib miliknya setelah disesuaikan dengan status tunggakan iuran bulanan.
-              </div>
-            </div>
-
-            <div className="border border-slate-200 rounded-2xl overflow-hidden bg-slate-50/50">
-              <div className="p-4 bg-slate-100 border-b border-slate-200 flex justify-between items-center">
-                <h4 className="text-sm font-bold text-slate-800">Kalkulator Pengembalian Hak Dana</h4>
-                <span className="text-[10px] uppercase font-mono font-bold bg-slate-200 text-slate-600 px-2 py-0.5 rounded">Simulasi</span>
-              </div>
-              
-              <div className="p-4 space-y-3 text-sm">
-                <div className="flex justify-between border-b border-slate-100 pb-2">
-                  <span className="text-slate-600">1. Simpanan Pokok (Mutlak Dikembalikan)</span>
-                  <span className="font-semibold text-slate-800">{formatCurrency(principalSavingAmount)}</span>
-                </div>
-                <div className="flex justify-between border-b border-slate-100 pb-2">
-                  <span className="text-slate-600">2. Akumulasi Simpanan Wajib Terkumpul</span>
-                  <span className="font-semibold text-slate-800">{formatCurrency(totalWajib)}</span>
-                </div>
-                <div className="flex justify-between border-b border-slate-100 pb-2">
-                  <span className="text-slate-600">3. Akumulasi Simpanan Sukarela Terkumpul</span>
-                  <span className="font-semibold text-slate-800">{formatCurrency(totalSukarela)}</span>
-                </div>
-                <div className="flex justify-between font-bold text-slate-800 border-b border-slate-200 pb-2 text-base">
-                  <span>Subtotal Hak Simpanan</span>
-                  <span>{formatCurrency(totalRefundable)}</span>
-                </div>
-
-                <div className="flex justify-between text-red-600 border-b border-slate-100 pb-2 text-xs">
-                  <span>4. Potongan / Tunggakan Iuran Wajib</span>
-                  <span className="font-semibold">-{formatCurrency(arrearsInfo.arrears)}</span>
-                </div>
-
-                <div className="flex justify-between font-extrabold text-primary pt-2 text-lg">
-                  <span>TOTAL PENGEMBALIAN BERSIH</span>
-                  <span>{formatCurrency(netRefundAmount)}</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="flex justify-end">
-              <button
-                onClick={() => setActivePrintJob({
-                  type: "liquidation",
-                  data: {
-                    totalWajib,
-                    totalSukarela,
-                    totalPokok: principalSavingAmount,
-                    totalRecap,
-                    arrears: arrearsInfo.arrears,
-                    netRefund: netRefundAmount
-                  }
-                })}
-                className="inline-flex items-center gap-1.5 rounded-xl bg-slate-800 hover:bg-slate-900 text-white px-4 py-2 text-xs font-semibold shadow-sm transition cursor-pointer"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
-                </svg>
-                <span>Cetak Berita Acara Keluar</span>
-              </button>
-            </div>
           </div>
         </SectionCard>
 
@@ -808,7 +906,11 @@ export function MemberDetailPage({ memberId }: MemberDetailPageProps) {
               </div>
             </div>
             <button
-              onClick={() => setShowStatusConfirm(true)}
+              onClick={() => {
+                setHasPrintedLiquidation(false);
+                setDeactivationReason("");
+                setShowStatusConfirm(true);
+              }}
               className={`flex-shrink-0 inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs font-bold shadow-sm transition cursor-pointer ${
                 member.status === "aktif"
                   ? "bg-red-600 hover:bg-red-700 text-white"
@@ -858,27 +960,110 @@ export function MemberDetailPage({ memberId }: MemberDetailPageProps) {
                 {member.status === "aktif" ? "Konfirmasi Penonaktifan Anggota" : "Konfirmasi Pengaktifan Kembali"}
               </h3>
             </div>
-            <div className="p-6 space-y-4">
-              <p className="text-sm text-slate-600 leading-relaxed">
-                Apakah Anda yakin ingin{" "}
-                <strong className={member.status === "aktif" ? "text-red-600" : "text-emerald-600"}>
-                  {member.status === "aktif" ? "menonaktifkan" : "mengaktifkan kembali"}
-                </strong>{" "}
-                keanggotaan atas nama:
-              </p>
-              <div className="bg-slate-50 rounded-2xl px-4 py-3 flex items-center gap-3">
-                <div className="w-9 h-9 rounded-full bg-primary-soft flex items-center justify-center text-primary font-bold text-sm flex-shrink-0">
-                  {member.name.charAt(0).toUpperCase()}
-                </div>
-                <div>
-                  <p className="text-sm font-bold text-slate-800">{member.name}</p>
-                  <p className="text-xs text-slate-500">NIK: {member.nik}</p>
+            <div className={`p-6 ${member.status === 'aktif' ? 'space-y-6 max-h-[75vh] overflow-y-auto' : 'space-y-4'}`}>
+              <div className="space-y-4">
+                <p className="text-sm text-slate-600 leading-relaxed">
+                  Apakah Anda yakin ingin{" "}
+                  <strong className={member.status === "aktif" ? "text-red-600" : "text-emerald-600"}>
+                    {member.status === "aktif" ? "menonaktifkan" : "mengaktifkan kembali"}
+                  </strong>{" "}
+                  keanggotaan atas nama:
+                </p>
+                <div className="bg-slate-50 rounded-2xl px-4 py-3 flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-full bg-primary-soft flex items-center justify-center text-primary font-bold text-sm flex-shrink-0">
+                    {member.name.charAt(0).toUpperCase()}
+                  </div>
+                  <div>
+                    <p className="text-sm font-bold text-slate-800">{member.name}</p>
+                    <p className="text-xs text-slate-500">NIK: {member.nik}</p>
+                  </div>
                 </div>
               </div>
+
               {member.status === "aktif" && (
-                <p className="text-xs text-slate-500 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
-                  💡 <strong>Catatan:</strong> Setelah dinonaktifkan, anggota tidak akan diikutsertakan dalam kalkulasi total anggota aktif di halaman Overview dan Quick SHU. Data simpanan tetap tersimpan.
-                </p>
+                <div className="space-y-4">
+                  <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex gap-3 text-xs text-slate-700 leading-relaxed">
+                    <svg className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <div>
+                      <span className="font-bold text-amber-800">Regulasi Koperasi:</span> Mengeluarkan anggota mewajibkan pengembalian dana simpanan yang sudah masuk setelah dipotong tunggakan (jika ada).
+                    </div>
+                  </div>
+
+                  <div className="border border-slate-200 rounded-2xl overflow-hidden bg-slate-50/50">
+                    <div className="p-3 bg-slate-100 border-b border-slate-200 flex justify-between items-center">
+                      <h4 className="text-xs font-bold text-slate-800">Kalkulator Pengembalian Hak Dana</h4>
+                    </div>
+                    
+                    <div className="p-4 space-y-2.5 text-[13px]">
+                      <div className="flex justify-between border-b border-slate-100 pb-2">
+                        <span className="text-slate-600">Simpanan Pokok</span>
+                        <span className="font-semibold text-slate-800">{formatCurrency(principalSavingAmount)}</span>
+                      </div>
+                      <div className="flex justify-between border-b border-slate-100 pb-2">
+                        <span className="text-slate-600">Total Simpanan Wajib</span>
+                        <span className="font-semibold text-slate-800">{formatCurrency(totalWajib)}</span>
+                      </div>
+                      <div className="flex justify-between border-b border-slate-100 pb-2">
+                        <span className="text-slate-600">Total Simpanan Sukarela</span>
+                        <span className="font-semibold text-slate-800">{formatCurrency(totalSukarela)}</span>
+                      </div>
+                      
+                      <div className="flex justify-between text-red-600 border-b border-slate-100 pb-2 pt-1 text-xs">
+                        <span>Potongan / Tunggakan Iuran</span>
+                        <span className="font-semibold">-{formatCurrency(arrearsInfo.arrears)}</span>
+                      </div>
+
+                      <div className="flex justify-between font-extrabold text-primary pt-2 text-base">
+                        <span>PENGEMBALIAN BERSIH</span>
+                        <span>{formatCurrency(netRefundAmount)}</span>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold text-slate-700">Alasan Penonaktifan <span className="text-red-500">*</span></label>
+                    <textarea 
+                      value={deactivationReason}
+                      onChange={e => setDeactivationReason(e.target.value)}
+                      placeholder="Contoh: Pindah domisili, mengundurkan diri, dsb."
+                      className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm outline-none focus:border-red-600 focus:ring-1 focus:ring-red-600"
+                      rows={2}
+                    />
+                  </div>
+
+                  <button
+                    onClick={() => {
+                      setHasPrintedLiquidation(true);
+                      setActivePrintJob({
+                        type: "liquidation",
+                        data: {
+                          totalWajib,
+                          totalSukarela,
+                          totalPokok: principalSavingAmount,
+                          totalRecap,
+                          arrears: arrearsInfo.arrears,
+                          netRefund: netRefundAmount
+                        }
+                      });
+                    }}
+                    className={`w-full inline-flex items-center justify-center gap-1.5 rounded-xl px-4 py-2 text-xs font-semibold shadow-sm transition cursor-pointer ${
+                      hasPrintedLiquidation 
+                        ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' 
+                        : 'bg-slate-800 hover:bg-slate-900 text-white'
+                    }`}
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      {hasPrintedLiquidation ? (
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                      ) : (
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                      )}
+                    </svg>
+                    <span>{hasPrintedLiquidation ? "Berita Acara Telah Dicetak" : "Cetak Berita Acara Likuidasi"}</span>
+                  </button>
+                </div>
               )}
             </div>
             <div className="bg-slate-50 px-6 py-4 flex justify-end gap-2 border-t border-slate-100">
@@ -891,8 +1076,11 @@ export function MemberDetailPage({ memberId }: MemberDetailPageProps) {
               </button>
               <button
                 onClick={handleStatusToggle}
-                disabled={isUpdatingStatus}
-                className={`px-4 py-2 rounded-xl text-sm font-bold text-white transition cursor-pointer disabled:opacity-50 ${
+                disabled={
+                  isUpdatingStatus || 
+                  (member.status === "aktif" && (!hasPrintedLiquidation || deactivationReason.trim() === ""))
+                }
+                className={`px-4 py-2 rounded-xl text-sm font-bold text-white transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${
                   member.status === "aktif"
                     ? "bg-red-600 hover:bg-red-700"
                     : "bg-emerald-600 hover:bg-emerald-700"

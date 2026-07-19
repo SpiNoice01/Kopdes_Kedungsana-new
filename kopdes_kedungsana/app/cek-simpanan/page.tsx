@@ -3,7 +3,8 @@
 import Link from "next/link";
 import Image from "next/image";
 import { useEffect, useState, useMemo } from "react";
-import { loadSettings, type KopdesSettings } from "../admin/pengaturan/page";
+import { loadSettingsAsync } from "@/src/actions/settings-actions";
+import type { KopdesSettings } from "@/src/features/settings/domain/settings";
 import { memberDependencies } from "@/src/features/member/infrastructure/member-dependencies";
 import type { Member } from "@/src/features/member/domain/member";
 import type { MemberMonthlySaving } from "@/src/features/member/domain/member-monthly-saving";
@@ -17,12 +18,7 @@ import {
   SavingsHistoryTable,
 } from "../components/public-portal/member-dashboard";
 
-const formatCurrency = (value: number): string =>
-  new Intl.NumberFormat("id-ID", {
-    style: "currency",
-    currency: "IDR",
-    maximumFractionDigits: 0,
-  }).format(value);
+import { formatCurrency } from "@/src/utils/formatters";
 
 export default function CekSimpananPage() {
   const [settings, setSettings] = useState<KopdesSettings | null>(null);
@@ -35,7 +31,7 @@ export default function CekSimpananPage() {
   const [searchError, setSearchError] = useState("");
 
   useEffect(() => {
-    setSettings(loadSettings());
+    loadSettingsAsync().then((res) => setSettings(res));
   }, []);
 
   const handleSearch = async (e: React.FormEvent) => {
@@ -85,9 +81,14 @@ export default function CekSimpananPage() {
     if (!searchResult || !settings) return null;
     const { member, savings } = searchResult;
 
-    const principalAmount = settings.principalSavingAmount;
-    const totalRequired = savings.reduce((sum, s) => sum + s.requiredSaving, 0);
-    const totalVoluntary = savings.reduce((sum, s) => sum + s.voluntarySaving, 0);
+    const pokokRecord = savings.find((s) => s.period === "POKOK");
+    const principalAmount = pokokRecord ? pokokRecord.requiredSaving : 0;
+    const totalRequired = savings
+      .filter((s) => s.period !== "POKOK")
+      .reduce((sum, s) => sum + s.requiredSaving, 0);
+    const totalVoluntary = savings
+      .filter((s) => s.period !== "POKOK")
+      .reduce((sum, s) => sum + s.voluntarySaving, 0);
     const totalAccumulated = principalAmount + totalRequired + totalVoluntary;
 
     // Arrears Calculation
@@ -135,7 +136,7 @@ export default function CekSimpananPage() {
             </div>
             <div>
               <h1 className="font-extrabold text-sm leading-tight text-slate-800 sm:text-base tracking-tight">
-                Kop<span className="text-primary">des</span> Kedungsana
+                Kopdes Kedungsana
               </h1>
               <p className="text-[10px] text-slate-500 font-semibold sm:text-xs">Layanan Portal Mandiri</p>
             </div>
