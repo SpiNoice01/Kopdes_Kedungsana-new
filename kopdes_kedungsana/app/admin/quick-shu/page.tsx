@@ -1,7 +1,9 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import ExcelJS from "exceljs";
 import { addAuditLog } from "../../../src/utils/audit-logger";
+import { buildSimpananSheet, buildShuSheet, downloadExcelBuffer } from "@/src/features/admin/utils/excel-exporter";
 
 type HintProps = {
   text: string;
@@ -200,149 +202,20 @@ export default function QuickShuPage() {
   const printLocation = settings.printLocation;
   const formattedDate = new Intl.DateTimeFormat('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }).format(new Date());
 
-  const handleExportSHU = () => {
-    const htmlContent = `
-      <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
-      <head>
-        <meta charset="utf-8">
-        <style>
-          .title { font-size: 14pt; font-weight: bold; text-align: center; }
-          .subtitle { font-size: 12pt; font-weight: bold; text-align: center; }
-          table { border-collapse: collapse; width: 100%; }
-          th { border: 1px solid black; background-color: #f2f2f2; font-weight: bold; padding: 5px; text-align: center; }
-          td { border: 1px solid black; padding: 4px; }
-          .num { text-align: right; }
-          .center { text-align: center; }
-          .footer-section { margin-top: 30px; }
-          .signature-table { border: none !important; width: 100%; margin-top: 40px; }
-          .signature-table td { border: none !important; text-align: center; height: 80px; vertical-align: bottom; }
-        </style>
-      </head>
-      <body>
-        <div class="title">DAFTAR PEMBAGIAN SHU</div>
-        <div class="subtitle">${coopName}</div>
-        <div class="subtitle">${location}</div>
-        <div class="subtitle">PER ${formattedDate.toUpperCase()}</div>
-        <br/>
-        <table>
-          <thead>
-            <tr>
-              <th>NO</th>
-              <th>NAMA ANGGOTA</th>
-              <th>JML SIMPANAN</th>
-              <th>SETORAN JASA</th>
-              <th>SHU SIMPANAN</th>
-              <th>SHU JASA</th>
-              <th>JUMLAH</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${sortedRows.map((row, index) => `
-              <tr>
-                <td class="center">${index + 1}</td>
-                <td>${row.memberName}</td>
-                <td class="num">Rp ${row.totalSaving.toLocaleString("id-ID")}</td>
-                <td class="num">Rp ${row.serviceContribution.toLocaleString("id-ID")}</td>
-                <td class="num">Rp ${row.savingShu.toLocaleString("id-ID")}</td>
-                <td class="num">Rp ${row.serviceShu.toLocaleString("id-ID")}</td>
-                <td class="num" style="font-weight: bold;">Rp ${row.totalShu.toLocaleString("id-ID")}</td>
-              </tr>
-            `).join('')}
-            <tr style="font-weight: bold; background-color: #e2e8f0;">
-              <td colspan="2" class="center">JUMLAH</td>
-              <td class="num">Rp ${totalSimpananBasis.toLocaleString("id-ID")}</td>
-              <td class="num">Rp ${totalJasaBasis.toLocaleString("id-ID")}</td>
-              <td class="num">Rp ${valJasaModal.toLocaleString("id-ID")}</td>
-              <td class="num">Rp ${valJasaUsaha.toLocaleString("id-ID")}</td>
-              <td class="num">Rp ${(valJasaModal + valJasaUsaha).toLocaleString("id-ID")}</td>
-            </tr>
-          </tbody>
-        </table>
-        <div class="footer-section">
-          <p>${printLocation}, ${formattedDate}</p>
-          <p>Pengurus ${coopName}</p>
-          <table class="signature-table">
-            <tr><td>Ketua</td><td>Sekretaris</td><td>Bendahara</td></tr>
-            <tr><td style="font-weight:bold">${settings.chairmanName}</td><td style="font-weight:bold">${settings.secretaryName}</td><td style="font-weight:bold">${settings.treasurerName}</td></tr>
-          </table>
-        </div>
-      </body>
-      </html>
-    `;
-    addAuditLog("EXPORT_EXCEL", `Mengekspor Laporan Pembagian SHU Koperasi format RAT ${year} ke berkas Excel (.xls).`, "info");
-    downloadExcel(htmlContent, `LAPORAN_SHU_${year}.xls`);
+  const handleExportSHU = async () => {
+    addAuditLog("EXPORT_EXCEL", `Mengekspor Laporan Pembagian SHU Koperasi format RAT ${year} ke berkas Excel (.xlsx).`, "info");
+    const wb = new ExcelJS.Workbook();
+    buildShuSheet(wb, settings, sortedRows);
+    const buffer = await wb.xlsx.writeBuffer();
+    downloadExcelBuffer(buffer as ExcelJS.Buffer, `LAPORAN_SHU_${year}.xlsx`);
   };
 
-  const handleExportSimpanan = () => {
-    const htmlContent = `
-      <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
-      <head>
-        <meta charset="utf-8">
-        <style>
-          .title { font-size: 14pt; font-weight: bold; text-align: center; }
-          .subtitle { font-size: 12pt; font-weight: bold; text-align: center; }
-          table { border-collapse: collapse; width: 100%; }
-          th { border: 1px solid black; background-color: #f2f2f2; padding: 5px; }
-          td { border: 1px solid black; padding: 4px; }
-          .num { text-align: right; }
-          .center { text-align: center; }
-        </style>
-      </head>
-      <body>
-        <div class="title">DAFTAR SIMPANAN ANGGOTA</div>
-        <div class="subtitle">${coopName}</div>
-        <div class="subtitle">PER ${formattedDate.toUpperCase()}</div>
-        <br/>
-        <table>
-          <thead>
-            <tr>
-              <th rowspan="2">NO</th>
-              <th rowspan="2">NAMA ANGGOTA</th>
-              <th colspan="3">SIMPANAN</th>
-              <th rowspan="2">JUMLAH</th>
-            </tr>
-            <tr>
-              <th>POKOK</th>
-              <th>WAJIB</th>
-              <th>SUKARELA</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${sortedRows.map((row, index) => `
-              <tr>
-                <td class="center">${index + 1}</td>
-                <td>${row.memberName}</td>
-                <td class="num">Rp ${row.savingPokok.toLocaleString("id-ID")}</td>
-                <td class="num">Rp ${row.savingWajib.toLocaleString("id-ID")}</td>
-                <td class="num">Rp ${row.savingSukarela.toLocaleString("id-ID")}</td>
-                <td class="num" style="font-weight: bold;">Rp ${row.totalSaving.toLocaleString("id-ID")}</td>
-              </tr>
-            `).join('')}
-            <tr style="font-weight: bold; background-color: #e2e8f0;">
-              <td colspan="2" class="center">JUMLAH</td>
-              <td class="num">Rp ${sortedRows.reduce((a, b) => a + b.savingPokok, 0).toLocaleString("id-ID")}</td>
-              <td class="num">Rp ${sortedRows.reduce((a, b) => a + b.savingWajib, 0).toLocaleString("id-ID")}</td>
-              <td class="num">Rp ${sortedRows.reduce((a, b) => a + b.savingSukarela, 0).toLocaleString("id-ID")}</td>
-              <td class="num">Rp ${totalSimpananBasis.toLocaleString("id-ID")}</td>
-            </tr>
-          </tbody>
-        </table>
-      </body>
-      </html>
-    `;
-    addAuditLog("EXPORT_EXCEL", `Mengekspor Daftar Simpanan Anggota format RAT ${year} ke berkas Excel (.xls).`, "info");
-    downloadExcel(htmlContent, `DAFTAR_SIMPANAN_${year}.xls`);
-  };
-
-  const downloadExcel = (content: string, filename: string) => {
-    const blob = new Blob([content], { type: "application/vnd.ms-excel" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.setAttribute("download", filename);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+  const handleExportSimpanan = async () => {
+    addAuditLog("EXPORT_EXCEL", `Mengekspor Daftar Simpanan Anggota format RAT ${year} ke berkas Excel (.xlsx).`, "info");
+    const wb = new ExcelJS.Workbook();
+    buildSimpananSheet(wb, settings, sortedRows);
+    const buffer = await wb.xlsx.writeBuffer();
+    downloadExcelBuffer(buffer as ExcelJS.Buffer, `DAFTAR_SIMPANAN_${year}.xlsx`);
   };
 
   const SortIndicator = ({ active, direction }: { active: boolean; direction: "asc" | "desc" }) => (

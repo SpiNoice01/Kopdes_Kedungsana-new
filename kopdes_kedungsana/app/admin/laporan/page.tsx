@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { memberDependencies } from "@/src/features/member/infrastructure/member-dependencies";
 import { addAuditLog } from "@/src/utils/audit-logger";
+import ExcelJS from "exceljs";
 import type { Member } from "@/src/features/member/domain/member";
 import type { MemberMonthlySaving } from "@/src/features/member/domain/member-monthly-saving";
 import { loadSettingsAsync, defaultSettings } from "@/src/actions/settings-actions";
@@ -100,43 +101,137 @@ export default function LaporanPage() {
     window.print();
   };
 
-  const handleExportCsv = () => {
-    const header = ["No", "Nama Anggota", "NIK", "Simpanan Pokok", "Simpanan Wajib", "Simpanan Sukarela", "Total Simpanan"];
+  const handleExportExcel = async () => {
+    addAuditLog(
+      "LAPORAN_EXPORT",
+      `Mengekspor Laporan Rekap Tahunan Simpanan Tahun Buku ${selectedYear} ke format Excel (.xlsx)`,
+      "success"
+    );
+
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet("Rekap Tahunan");
+    const formattedDate = new Intl.DateTimeFormat('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }).format(new Date());
+
+    ws.columns = [
+      { width: 5 },  // No
+      { width: 30 }, // Nama Anggota
+      { width: 25 }, // NIK
+      { width: 20 }, // Simpanan Pokok
+      { width: 20 }, // Simpanan Wajib
+      { width: 20 }, // Simpanan Sukarela
+      { width: 20 }, // Total Simpanan
+    ];
+
+    ws.mergeCells("A1:G1");
+    ws.getCell("A1").value = settings.cooperativeName.toUpperCase();
+    ws.getCell("A1").font = { bold: true, size: 12 };
+    ws.getCell("A1").alignment = { horizontal: "center" };
+
+    ws.mergeCells("A2:G2");
+    ws.getCell("A2").value = "LAPORAN REKAP SIMPANAN TAHUNAN";
+    ws.getCell("A2").font = { bold: true, size: 12 };
+    ws.getCell("A2").alignment = { horizontal: "center" };
+
+    ws.mergeCells("A3:G3");
+    ws.getCell("A3").value = `Tahun Buku ${selectedYear}`;
+    ws.getCell("A3").font = { bold: true, size: 12 };
+    ws.getCell("A3").alignment = { horizontal: "center" };
+
+    const headerRow = ws.getRow(5);
+    headerRow.values = ["NO", "NAMA ANGGOTA", "NIK", "SIMPANAN POKOK", "SIMPANAN WAJIB", "SIMPANAN SUKARELA", "TOTAL SIMPANAN"];
+    headerRow.font = { bold: true };
+    headerRow.alignment = { horizontal: "center", vertical: "middle" };
     
-    const escapeCsv = (val: any) => `"${String(val).replace(/"/g, '""')}"`;
-    // Memaksa Excel membaca string panjang murni sebagai teks (mencegah scientific notation E+15)
-    const forceTextCsv = (val: any) => `="${String(val)}"`;
+    for (let i = 1; i <= 7; i++) {
+      headerRow.getCell(i).border = { top: { style: "thin" }, left: { style: "thin" }, bottom: { style: "thin" }, right: { style: "thin" } };
+    }
 
-    const rows = summaries.map((r, i) => [
-      i + 1,
-      escapeCsv(r.member.name),
-      forceTextCsv(r.member.nik),
-      r.pokok,
-      r.wajib,
-      r.sukarela,
-      r.total,
-    ]);
-    const footer = ["", escapeCsv("GRAND TOTAL"), "", grandTotal.pokok, grandTotal.wajib, grandTotal.sukarela, grandTotal.total];
+    let currentRow = 6;
+    summaries.forEach((row, idx) => {
+      const dataRow = ws.getRow(currentRow);
+      dataRow.values = [
+        idx + 1,
+        row.member.name,
+        row.member.nik,
+        row.pokok,
+        row.wajib,
+        row.sukarela,
+        row.total,
+      ];
+      
+      dataRow.getCell(1).alignment = { horizontal: "center" };
+      dataRow.getCell(3).numFmt = "@"; 
+      
+      for (let i = 1; i <= 7; i++) {
+        const cell = dataRow.getCell(i);
+        cell.border = { top: { style: "thin" }, left: { style: "thin" }, bottom: { style: "thin" }, right: { style: "thin" } };
+        if (i >= 4) cell.numFmt = '_("Rp"* #,##0_);_("Rp"* (#,##0);_("Rp"* "-"_);_(@_)';
+      }
+      currentRow++;
+    });
 
-    // Menggunakan koma (,) standar CSV dan menambahkan magic header `sep=,` 
-    // agar Excel (apapun region-nya) dipaksa membaca koma sebagai pemisah kolom.
-    const csvContent = "sep=,\n" + [header, ...rows, footer]
-      .map((row) => row.join(","))
-      .join("\n");
+    const sumRow = ws.getRow(currentRow);
+    ws.mergeCells(`A${currentRow}:C${currentRow}`);
+    sumRow.getCell(1).value = "GRAND TOTAL";
+    sumRow.getCell(1).font = { bold: true };
+    sumRow.getCell(1).alignment = { horizontal: "center", vertical: "middle" };
 
-    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    sumRow.getCell(4).value = grandTotal.pokok;
+    sumRow.getCell(5).value = grandTotal.wajib;
+    sumRow.getCell(6).value = grandTotal.sukarela;
+    sumRow.getCell(7).value = grandTotal.total;
+
+    sumRow.font = { bold: true };
+
+    for (let i = 1; i <= 7; i++) {
+      const cell = sumRow.getCell(i);
+      cell.border = { top: { style: "thin" }, left: { style: "thin" }, bottom: { style: "thin" }, right: { style: "thin" } };
+      if (i >= 4) cell.numFmt = '_("Rp"* #,##0_);_("Rp"* (#,##0);_("Rp"* "-"_);_(@_)';
+    }
+
+    currentRow += 3;
+    ws.mergeCells(`A${currentRow}:G${currentRow}`);
+    ws.getCell(`A${currentRow}`).value = `${settings.printLocation}, ${formattedDate}`;
+    ws.getCell(`A${currentRow}`).font = { bold: true };
+    ws.getCell(`A${currentRow}`).alignment = { horizontal: "center" };
+
+    currentRow += 1;
+    ws.mergeCells(`A${currentRow}:G${currentRow}`);
+    ws.getCell(`A${currentRow}`).value = `Pengurus ${settings.cooperativeName}`;
+    ws.getCell(`A${currentRow}`).font = { bold: true };
+    ws.getCell(`A${currentRow}`).alignment = { horizontal: "center" };
+    
+    currentRow += 4;
+    ws.getCell(`B${currentRow}`).value = "Ketua";
+    ws.getCell(`B${currentRow}`).alignment = { horizontal: "center" };
+    
+    ws.getCell(`D${currentRow}`).value = "Sekertaris";
+    ws.getCell(`D${currentRow}`).alignment = { horizontal: "center" };
+    
+    ws.getCell(`F${currentRow}`).value = "Bendahara";
+    ws.getCell(`F${currentRow}`).alignment = { horizontal: "center" };
+
+    currentRow += 5;
+    ws.getCell(`B${currentRow}`).value = settings.chairmanName;
+    ws.getCell(`B${currentRow}`).font = { bold: true };
+    ws.getCell(`B${currentRow}`).alignment = { horizontal: "center" };
+    
+    ws.getCell(`D${currentRow}`).value = settings.secretaryName;
+    ws.getCell(`D${currentRow}`).font = { bold: true };
+    ws.getCell(`D${currentRow}`).alignment = { horizontal: "center" };
+    
+    ws.getCell(`F${currentRow}`).value = settings.treasurerName;
+    ws.getCell(`F${currentRow}`).font = { bold: true };
+    ws.getCell(`F${currentRow}`).alignment = { horizontal: "center" };
+
+    const buffer = await wb.xlsx.writeBuffer();
+    const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `laporan_simpanan_kopdes_kedungsana_${selectedYear}.csv`;
+    a.download = `laporan_simpanan_kopdes_kedungsana_${selectedYear}.xlsx`;
     a.click();
     URL.revokeObjectURL(url);
-
-    addAuditLog(
-      "LAPORAN_EXPORT",
-      `Mengekspor Laporan Rekap Tahunan Simpanan Tahun Buku ${selectedYear} ke format CSV`,
-      "success"
-    );
   };
 
   return (
@@ -203,13 +298,13 @@ export default function LaporanPage() {
             </div>
             <div className="flex items-center gap-2">
               <button
-                onClick={handleExportCsv}
+                onClick={handleExportExcel}
                 className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-700 px-3 py-1.5 text-xs font-semibold hover:bg-emerald-100 transition cursor-pointer"
               >
                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                 </svg>
-                Ekspor CSV
+                Ekspor Excel
               </button>
               <button
                 onClick={handlePrint}
