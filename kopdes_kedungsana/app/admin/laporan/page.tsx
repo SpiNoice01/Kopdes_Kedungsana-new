@@ -5,6 +5,8 @@ import { memberDependencies } from "@/src/features/member/infrastructure/member-
 import { addAuditLog } from "@/src/utils/audit-logger";
 import type { Member } from "@/src/features/member/domain/member";
 import type { MemberMonthlySaving } from "@/src/features/member/domain/member-monthly-saving";
+import { loadSettingsAsync, defaultSettings } from "@/src/actions/settings-actions";
+import type { KopdesSettings } from "@/src/features/settings/domain/settings";
 
 const formatCurrency = (value: number): string =>
   new Intl.NumberFormat("id-ID", {
@@ -27,6 +29,7 @@ export default function LaporanPage() {
   const [selectedYear, setSelectedYear] = useState(currentYear);
   const [summaries, setSummaries] = useState<MemberAnnualSummary[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [settings, setSettings] = useState<KopdesSettings>(defaultSettings);
 
   // Build the selectable year range (5 years back to current)
   const yearOptions = useMemo(() => {
@@ -37,7 +40,11 @@ export default function LaporanPage() {
     const loadReport = async () => {
       setIsLoading(true);
       try {
-        const members = await memberDependencies.getMembersUseCase.execute();
+        const [members, fetchedSettings] = await Promise.all([
+          memberDependencies.getMembersUseCase.execute(),
+          loadSettingsAsync()
+        ]);
+        setSettings(fetchedSettings);
         const activeMembers = members.filter((m) => m.status === "aktif");
 
         const results: MemberAnnualSummary[] = [];
@@ -155,7 +162,13 @@ export default function LaporanPage() {
             <select
               value={selectedYear}
               onChange={(e) => setSelectedYear(Number(e.target.value))}
-              className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-700 shadow-sm focus:border-primary focus:outline-none cursor-pointer"
+              className="appearance-none rounded-xl border border-slate-200 bg-white pl-3 pr-10 py-2 text-sm font-bold text-slate-700 shadow-sm focus:border-primary focus:outline-none cursor-pointer"
+              style={{
+                backgroundImage: `url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3E%3Cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3E%3C/svg%3E")`,
+                backgroundPosition: `right 0.75rem center`,
+                backgroundRepeat: `no-repeat`,
+                backgroundSize: `1.5em 1.5em`
+              }}
             >
               {yearOptions.map((y) => (
                 <option key={y} value={y}>{y}</option>
@@ -274,16 +287,16 @@ export default function LaporanPage() {
       <div className="hidden print:block p-8 font-serif text-slate-900 text-sm">
         {/* Official Letterhead */}
         <div className="text-center border-b-4 border-double border-slate-600 pb-5 mb-6">
-          <h1 className="text-xl font-extrabold uppercase tracking-widest">KOPERASI DESA KEDUNGSANA</h1>
-          <p className="text-xs text-slate-500 mt-1">RT 01/RW 03, Kecamatan Plumbon, Kabupaten Cirebon — Jawa Barat</p>
-          <p className="text-xs text-slate-500">Badan Hukum No: AHU-0012903.AH.01.26</p>
+          <h1 className="text-xl font-extrabold uppercase tracking-widest">{settings.cooperativeName.toUpperCase()}</h1>
+          <p className="text-xs text-slate-500 mt-1">{settings.address}</p>
+          <p className="text-xs text-slate-500">Badan Hukum No: {settings.legalNumber}</p>
           <h2 className="text-base font-bold uppercase mt-5 tracking-wider">
             LAPORAN PERTANGGUNGJAWABAN KEUANGAN SIMPANAN ANGGOTA
           </h2>
           <p className="text-sm font-semibold mt-1">Tahun Buku {selectedYear}</p>
           <p className="text-[10px] text-slate-500 mt-0.5">
-            Dicetak pada: {new Date().toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })}
-            {" | "}Diajukan pada Rapat Anggota Tahunan (RAT) Koperasi Desa Kedungsana
+            Dicetak di {settings.printLocation}, pada tanggal {new Date().toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })}
+            {" | "}Diajukan pada Rapat Anggota Tahunan (RAT) {settings.cooperativeName}
           </p>
         </div>
 
@@ -326,7 +339,7 @@ export default function LaporanPage() {
 
         {/* Signature Section */}
         <p className="text-[10px] text-slate-500 italic mb-8">
-          * Laporan ini disusun berdasarkan data simpanan anggota yang tercatat dalam sistem informasi Koperasi Desa Kedungsana. Simpanan Pokok sebesar Rp 100.000 dihitung flat per anggota aktif.
+          * Laporan ini disusun berdasarkan data simpanan anggota yang tercatat dalam sistem informasi {settings.cooperativeName}. Simpanan Pokok sebesar Rp 100.000 dihitung flat per anggota aktif.
         </p>
 
         <div className="flex justify-between text-center text-xs mt-16">
@@ -334,19 +347,19 @@ export default function LaporanPage() {
             <p className="text-slate-600">Dibuat oleh,</p>
             <p className="text-slate-600">Sekretaris Koperasi</p>
             <div className="h-16"></div>
-            <p className="font-bold text-slate-900 border-t border-slate-400 pt-1 inline-block min-w-[100px]">Sekretaris</p>
+            <p className="font-bold text-slate-900 border-t border-slate-400 pt-1 inline-block min-w-[100px]">{settings.secretaryName}</p>
           </div>
           <div className="w-1/3">
             <p className="text-slate-600">Mengetahui,</p>
             <p className="text-slate-600">Bendahara Koperasi</p>
             <div className="h-16"></div>
-            <p className="font-bold text-slate-900 border-t border-slate-400 pt-1 inline-block min-w-[100px]">Bendahara</p>
+            <p className="font-bold text-slate-900 border-t border-slate-400 pt-1 inline-block min-w-[100px]">{settings.treasurerName}</p>
           </div>
           <div className="w-1/3">
             <p className="text-slate-600">Menyetujui,</p>
             <p className="text-slate-600">Ketua Koperasi</p>
             <div className="h-16"></div>
-            <p className="font-bold text-slate-900 border-t border-slate-400 pt-1 inline-block min-w-[100px]">Ketua Koperasi</p>
+            <p className="font-bold text-slate-900 border-t border-slate-400 pt-1 inline-block min-w-[100px]">{settings.chairmanName}</p>
           </div>
         </div>
       </div>

@@ -3,6 +3,11 @@ export interface KopdesSettings {
   cooperativeName: string;
   address: string;
   legalNumber: string;
+  district: string;
+  printLocation: string;
+  chairmanName: string;
+  secretaryName: string;
+  treasurerName: string;
   principalSavingAmount: number;
   monthlyDuesAmount: number;
   activeFiscalYear: number;

@@ -194,9 +194,11 @@ export default function QuickShuPage() {
     }
   };
 
-  const year = "2024";
-  const coopName = "KOPERASI DESA MERAH PUTIH KEDUNGSANA";
-  const location = "KECAMATAN PLUMBON, KABUPATEN CIREBON";
+  const year = settings.activeFiscalYear.toString();
+  const coopName = settings.cooperativeName.toUpperCase();
+  const location = settings.district.toUpperCase();
+  const printLocation = settings.printLocation;
+  const formattedDate = new Intl.DateTimeFormat('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }).format(new Date());
 
   const handleExportSHU = () => {
     const htmlContent = `
@@ -220,7 +222,7 @@ export default function QuickShuPage() {
         <div class="title">DAFTAR PEMBAGIAN SHU</div>
         <div class="subtitle">${coopName}</div>
         <div class="subtitle">${location}</div>
-        <div class="subtitle">PER 31 DESEMBER ${year}</div>
+        <div class="subtitle">PER ${formattedDate.toUpperCase()}</div>
         <br/>
         <table>
           <thead>
@@ -257,17 +259,17 @@ export default function QuickShuPage() {
           </tbody>
         </table>
         <div class="footer-section">
-          <p>Kuningan, 31 Desember ${year}</p>
+          <p>${printLocation}, ${formattedDate}</p>
           <p>Pengurus ${coopName}</p>
           <table class="signature-table">
             <tr><td>Ketua</td><td>Sekretaris</td><td>Bendahara</td></tr>
-            <tr><td>(........................)</td><td>(........................)</td><td>(........................)</td></tr>
+            <tr><td style="font-weight:bold">${settings.chairmanName}</td><td style="font-weight:bold">${settings.secretaryName}</td><td style="font-weight:bold">${settings.treasurerName}</td></tr>
           </table>
         </div>
       </body>
       </html>
     `;
-    addAuditLog("EXPORT_EXCEL", "Mengekspor Laporan Pembagian SHU Koperasi format RAT 2024 ke berkas Excel (.xls).", "info");
+    addAuditLog("EXPORT_EXCEL", `Mengekspor Laporan Pembagian SHU Koperasi format RAT ${year} ke berkas Excel (.xls).`, "info");
     downloadExcel(htmlContent, `LAPORAN_SHU_${year}.xls`);
   };
 
@@ -289,7 +291,7 @@ export default function QuickShuPage() {
       <body>
         <div class="title">DAFTAR SIMPANAN ANGGOTA</div>
         <div class="subtitle">${coopName}</div>
-        <div class="subtitle">PER 31 DESEMBER ${year}</div>
+        <div class="subtitle">PER ${formattedDate.toUpperCase()}</div>
         <br/>
         <table>
           <thead>
@@ -328,7 +330,7 @@ export default function QuickShuPage() {
       </body>
       </html>
     `;
-    addAuditLog("EXPORT_EXCEL", "Mengekspor Daftar Simpanan Anggota format RAT 2024 ke berkas Excel (.xls).", "info");
+    addAuditLog("EXPORT_EXCEL", `Mengekspor Daftar Simpanan Anggota format RAT ${year} ke berkas Excel (.xls).`, "info");
     downloadExcel(htmlContent, `DAFTAR_SIMPANAN_${year}.xls`);
   };
 
@@ -408,17 +410,14 @@ export default function QuickShuPage() {
                   <span className="text-xs font-bold text-slate-600">Total SHU Kotor Koperasi (Gross):</span>
                   <Hint text="Jumlah seluruh keuntungan bersih koperasi (sisa hasil usaha) dalam satu tahun buku sebelum dialokasikan ke masing-masing pos." />
                 </div>
-                <div className="relative">
-                  <span className="absolute left-3.5 top-2 text-xs font-bold text-slate-400">Rp</span>
-                  <input
-                    type="text"
-                    value={totalShuKotor.toLocaleString("id-ID")}
-                    onChange={(e) => {
-                      const val = parseInt(e.target.value.replace(/\D/g, "")) || 0;
-                      setTotalShuKotor(val);
-                    }}
-                    className="w-44 bg-slate-50 border border-slate-200 pl-9 pr-4 py-1.5 rounded-xl text-xs font-bold text-slate-800 focus:bg-white focus:border-green-600 focus:ring-1 focus:ring-green-600 outline-none transition"
-                  />
+                <div className="relative bg-slate-100 border border-slate-200 rounded-xl px-4 py-2 flex items-center gap-1.5 cursor-not-allowed">
+                  <span className="text-xs font-bold text-slate-400">Rp</span>
+                  <span className="text-xs font-bold text-slate-700 select-all">
+                    {totalShuKotor.toLocaleString("id-ID")}
+                  </span>
+                  <span className="ml-1 text-[10px] bg-slate-200 text-slate-500 px-1.5 py-0.5 rounded font-semibold uppercase tracking-wider">
+                    Read Only
+                  </span>
                 </div>
               </div>
             </div>
@@ -731,7 +730,7 @@ export default function QuickShuPage() {
               <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
               </svg>
-              Export Format RAT 2024
+              Export Format RAT {year}
             </button>
           </div>
 

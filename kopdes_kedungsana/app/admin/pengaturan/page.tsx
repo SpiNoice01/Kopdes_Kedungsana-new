@@ -48,6 +48,11 @@ export default function PengaturanPage() {
     if (form.cooperativeName !== originalForm.cooperativeName) changes.push(`Nama Koperasi [${originalForm.cooperativeName} ➔ ${form.cooperativeName}]`);
     if (form.address !== originalForm.address) changes.push(`Alamat [${originalForm.address} ➔ ${form.address}]`);
     if (form.legalNumber !== originalForm.legalNumber) changes.push(`Badan Hukum [${originalForm.legalNumber} ➔ ${form.legalNumber}]`);
+    if (form.district !== originalForm.district) changes.push(`Kabupaten/Kota [${originalForm.district} ➔ ${form.district}]`);
+    if (form.printLocation !== originalForm.printLocation) changes.push(`Lokasi Cetak [${originalForm.printLocation} ➔ ${form.printLocation}]`);
+    if (form.chairmanName !== originalForm.chairmanName) changes.push(`Nama Ketua [${originalForm.chairmanName} ➔ ${form.chairmanName}]`);
+    if (form.secretaryName !== originalForm.secretaryName) changes.push(`Nama Sekretaris [${originalForm.secretaryName} ➔ ${form.secretaryName}]`);
+    if (form.treasurerName !== originalForm.treasurerName) changes.push(`Nama Bendahara [${originalForm.treasurerName} ➔ ${form.treasurerName}]`);
     if (form.principalSavingAmount !== originalForm.principalSavingAmount) changes.push(`Simpanan Pokok [${formatCurrency(originalForm.principalSavingAmount)} ➔ ${formatCurrency(form.principalSavingAmount)}]`);
     if (form.monthlyDuesAmount !== originalForm.monthlyDuesAmount) changes.push(`Iuran Wajib [${formatCurrency(originalForm.monthlyDuesAmount)} ➔ ${formatCurrency(form.monthlyDuesAmount)}]`);
     if (form.activeFiscalYear !== originalForm.activeFiscalYear) changes.push(`Tahun Buku [${originalForm.activeFiscalYear} ➔ ${form.activeFiscalYear}]`);
@@ -167,6 +172,73 @@ export default function PengaturanPage() {
               onChange={(e) => handleChange("legalNumber", e.target.value)}
               className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-800 outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 transition"
               placeholder="Nomor SK Badan Hukum..."
+            />
+          </label>
+        </div>
+      </div>
+
+      {/* Section: Identitas Pelaporan & Pengurus */}
+      <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm space-y-5">
+        <div className="border-b border-slate-100 pb-3">
+          <h3 className="text-sm font-bold text-slate-800">Identitas Pelaporan & Pengurus</h3>
+          <p className="text-xs text-slate-400 mt-0.5">Digunakan pada cetak laporan (Excel SHU, Simpanan, dll) untuk tanda tangan dan lokasi.</p>
+        </div>
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          <label className="block space-y-1.5">
+            <span className="text-xs font-semibold text-slate-600 uppercase tracking-wider">Kabupaten/Kota (Kop Surat)</span>
+            <input
+              type="text"
+              value={form.district}
+              onChange={(e) => handleChange("district", e.target.value)}
+              className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-800 outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 transition"
+              placeholder="Contoh: KABUPATEN CIREBON"
+            />
+          </label>
+
+          <label className="block space-y-1.5">
+            <span className="text-xs font-semibold text-slate-600 uppercase tracking-wider">Lokasi Cetak Tanggal</span>
+            <input
+              type="text"
+              value={form.printLocation}
+              onChange={(e) => handleChange("printLocation", e.target.value)}
+              className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-800 outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 transition"
+              placeholder="Contoh: Cirebon"
+            />
+          </label>
+        </div>
+
+        <div className="grid gap-4 sm:grid-cols-3 pt-2 border-t border-slate-100">
+          <label className="block space-y-1.5">
+            <span className="text-xs font-semibold text-slate-600 uppercase tracking-wider">Nama Ketua</span>
+            <input
+              type="text"
+              value={form.chairmanName}
+              onChange={(e) => handleChange("chairmanName", e.target.value)}
+              className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-800 outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 transition"
+              placeholder="Nama Ketua..."
+            />
+          </label>
+
+          <label className="block space-y-1.5">
+            <span className="text-xs font-semibold text-slate-600 uppercase tracking-wider">Nama Sekretaris</span>
+            <input
+              type="text"
+              value={form.secretaryName}
+              onChange={(e) => handleChange("secretaryName", e.target.value)}
+              className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-800 outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 transition"
+              placeholder="Nama Sekretaris..."
+            />
+          </label>
+
+          <label className="block space-y-1.5">
+            <span className="text-xs font-semibold text-slate-600 uppercase tracking-wider">Nama Bendahara</span>
+            <input
+              type="text"
+              value={form.treasurerName}
+              onChange={(e) => handleChange("treasurerName", e.target.value)}
+              className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-800 outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 transition"
+              placeholder="Nama Bendahara..."
             />
           </label>
         </div>

@@ -1,5 +1,6 @@
 "use client";
 
+import ExcelJS from "exceljs";
 import { useMemo, useState } from "react";
 import { addAuditLog } from "../../../utils/audit-logger";
 
@@ -15,6 +16,8 @@ type MemberRow = {
 
 import { useEffect } from "react";
 import { memberDependencies } from "../../member/infrastructure/member-dependencies";
+import { loadSettingsAsync, defaultSettings } from "@/src/actions/settings-actions";
+import type { KopdesSettings } from "@/src/features/settings/domain/settings";
 
 const formatRelativeDate = (dateStr: string): string => {
   if (!dateStr) return "-";
@@ -63,6 +66,7 @@ export default function SpreadsheetModal({ isOpen, onClose }: { isOpen: boolean;
   const [searchQuery, setSearchQuery] = useState("");
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [settings, setSettings] = useState<KopdesSettings>(defaultSettings);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -70,7 +74,11 @@ export default function SpreadsheetModal({ isOpen, onClose }: { isOpen: boolean;
     const fetchData = async () => {
       try {
         setIsLoading(true);
-        const members = await memberDependencies.getMembersUseCase.execute();
+        const [members, fetchedSettings] = await Promise.all([
+          memberDependencies.getMembersUseCase.execute(),
+          loadSettingsAsync()
+        ]);
+        setSettings(fetchedSettings);
         
         const records: MemberRow[] = [];
         
@@ -310,8 +318,7 @@ export default function SpreadsheetModal({ isOpen, onClose }: { isOpen: boolean;
     }
   };
 
-  const downloadExcel = (content: string, filename: string) => {
-    const blob = new Blob([content], { type: "application/vnd.ms-excel" });
+  const downloadBlob = (blob: Blob, filename: string) => {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
@@ -321,249 +328,314 @@ export default function SpreadsheetModal({ isOpen, onClose }: { isOpen: boolean;
     document.body.removeChild(link);
   };
 
-  const getShuHtml = () => {
-    const year = "2024";
-    const coopName = "KOPERASI DESA MERAH PUTIH KEDUNGSANA";
-    return `
-      <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
-      <head>
-        <meta charset="utf-8">
-        <style>
-          .title { font-size: 14pt; font-weight: bold; text-align: center; }
-          .subtitle { font-size: 12pt; font-weight: bold; text-align: center; }
-          table { border-collapse: collapse; width: 100%; }
-          th { border: 1px solid black; background-color: #f2f2f2; font-weight: bold; padding: 5px; text-align: center; }
-          td { border: 1px solid black; padding: 4px; }
-          .num { text-align: right; }
-          .center { text-align: center; }
-        </style>
-      </head>
-      <body>
-        <div class="title">DAFTAR PEMBAGIAN SHU (SPREADSHEET LIVE)</div>
-        <div class="subtitle">${coopName}</div>
-        <br/>
-        <table>
-          <thead>
-            <tr>
-              <th>NO</th>
-              <th>NAMA ANGGOTA</th>
-              <th>TGL BERGABUNG</th>
-              <th>JML SIMPANAN</th>
-              <th>SETORAN JASA</th>
-              <th>SHU SIMPANAN</th>
-              <th>SHU JASA</th>
-              <th>JUMLAH SHU</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${computedRows.map((row, index) => `
-              <tr>
-                <td class="center">${index + 1}</td>
-                <td>${row.memberName}</td>
-                <td class="center">${row.joinDate}</td>
-                <td class="num">Rp ${row.totalSaving.toLocaleString("id-ID")}</td>
-                <td class="num">Rp ${row.serviceContribution.toLocaleString("id-ID")}</td>
-                <td class="num">Rp ${row.savingShu.toLocaleString("id-ID")}</td>
-                <td class="num">Rp ${row.serviceShu.toLocaleString("id-ID")}</td>
-                <td class="num" style="font-weight: bold;">Rp ${row.totalShu.toLocaleString("id-ID")}</td>
-              </tr>
-            `).join("")}
-            <tr style="font-weight: bold; background-color: #e2e8f0;">
-              <td colspan="3" class="center">JUMLAH</td>
-              <td class="num">Rp ${computedRows.reduce((a, b) => a + b.totalSaving, 0).toLocaleString("id-ID")}</td>
-              <td class="num">Rp ${computedRows.reduce((a, b) => a + b.serviceContribution, 0).toLocaleString("id-ID")}</td>
-              <td class="num">Rp ${computedRows.reduce((a, b) => a + b.savingShu, 0).toLocaleString("id-ID")}</td>
-              <td class="num">Rp ${computedRows.reduce((a, b) => a + b.serviceShu, 0).toLocaleString("id-ID")}</td>
-              <td class="num">Rp ${computedRows.reduce((a, b) => a + b.totalShu, 0).toLocaleString("id-ID")}</td>
-            </tr>
-          </tbody>
-        </table>
-      </body>
-      </html>
-    `;
+  const buildSimpananSheet = (wb: ExcelJS.Workbook) => {
+    const formattedDate = new Intl.DateTimeFormat('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }).format(new Date());
+    const ws = wb.addWorksheet("Simpanan");
+    ws.columns = [
+      { width: 5 },  // NO
+      { width: 30 }, // NAMA ANGGOTA
+      { width: 20 }, // SIMPANAN POKOK
+      { width: 20 }, // SIMPANAN WAJIB
+      { width: 20 }, // SIMPANAN SUKARELA
+      { width: 20 }, // JUMLAH
+      { width: 25 }, // CATATAN
+    ];
+
+    ws.mergeCells("A1:G1");
+    ws.getCell("A1").value = "DAFTAR SIMPANAN ANGGOTA";
+    ws.getCell("A1").font = { bold: true, size: 12 };
+    ws.getCell("A1").alignment = { horizontal: "center" };
+
+    ws.mergeCells("A2:G2");
+    ws.getCell("A2").value = settings.cooperativeName.toUpperCase();
+    ws.getCell("A2").font = { bold: true, size: 12 };
+    ws.getCell("A2").alignment = { horizontal: "center" };
+
+    ws.mergeCells("A3:G3");
+    ws.getCell("A3").value = settings.district.toUpperCase();
+    ws.getCell("A3").font = { bold: true, size: 12 };
+    ws.getCell("A3").alignment = { horizontal: "center" };
+
+    ws.mergeCells("A4:G4");
+    ws.getCell("A4").value = `PER ${formattedDate.toUpperCase()}`;
+    ws.getCell("A4").font = { bold: true, size: 12 };
+    ws.getCell("A4").alignment = { horizontal: "center" };
+
+    // Header Rows 6 and 7
+    ws.mergeCells("A6:A7");
+    const noCell = ws.getCell("A6");
+    noCell.value = "NO";
+
+    ws.mergeCells("B6:B7");
+    const namaCell = ws.getCell("B6");
+    namaCell.value = "NAMA ANGGOTA";
+
+    ws.mergeCells("C6:E6");
+    const simpananCell = ws.getCell("C6");
+    simpananCell.value = "SIMPANAN";
+
+    ws.getCell("C7").value = "POKOK";
+    ws.getCell("D7").value = "WAJIB";
+    ws.getCell("E7").value = "SUKARELA";
+
+    ws.mergeCells("F6:F7");
+    const jumlahCell = ws.getCell("F6");
+    jumlahCell.value = "JUMLAH";
+
+    ws.mergeCells("G6:G7");
+    const catatanCell = ws.getCell("G6");
+    catatanCell.value = "CATATAN";
+
+    const headerRows = [ws.getRow(6), ws.getRow(7)];
+    headerRows.forEach(row => {
+      row.font = { bold: true };
+      for (let i = 1; i <= 7; i++) {
+        const cell = row.getCell(i);
+        cell.alignment = { horizontal: "center", vertical: "middle" };
+        cell.border = { top: { style: "thin" }, left: { style: "thin" }, bottom: { style: "thin" }, right: { style: "thin" } };
+      }
+    });
+
+    let currentRow = 8;
+    computedRows.forEach((row, idx) => {
+      const dataRow = ws.getRow(currentRow);
+      dataRow.values = [
+        idx + 1,
+        row.memberName,
+        row.savingPokok,
+        row.savingWajib,
+        row.savingSukarela,
+        row.totalSaving,
+        "" // CATATAN
+      ];
+      
+      dataRow.getCell(1).alignment = { horizontal: "center" };
+      
+      for (let i = 1; i <= 7; i++) {
+        const cell = dataRow.getCell(i);
+        cell.border = { top: { style: "thin" }, left: { style: "thin" }, bottom: { style: "thin" }, right: { style: "thin" } };
+        if (i >= 3 && i <= 6) cell.numFmt = '_("Rp"* #,##0_);_("Rp"* (#,##0);_("Rp"* "-"_);_(@_)';
+      }
+      currentRow++;
+    });
+
+    const sumRow = ws.getRow(currentRow);
+    ws.mergeCells(`A${currentRow}:B${currentRow}`);
+    sumRow.getCell(1).value = "JUMLAH";
+    sumRow.getCell(1).font = { bold: true };
+    sumRow.getCell(1).alignment = { horizontal: "center", vertical: "middle" };
+
+    sumRow.getCell(3).value = computedRows.reduce((a, b) => a + b.savingPokok, 0);
+    sumRow.getCell(4).value = computedRows.reduce((a, b) => a + b.savingWajib, 0);
+    sumRow.getCell(5).value = computedRows.reduce((a, b) => a + b.savingSukarela, 0);
+    sumRow.getCell(6).value = computedRows.reduce((a, b) => a + b.totalSaving, 0);
+    sumRow.font = { bold: true };
+
+    for (let i = 1; i <= 7; i++) {
+      const cell = sumRow.getCell(i);
+      cell.border = { top: { style: "thin" }, left: { style: "thin" }, bottom: { style: "thin" }, right: { style: "thin" } };
+      if (i >= 3 && i <= 6) cell.numFmt = '_("Rp"* #,##0_);_("Rp"* (#,##0);_("Rp"* "-"_);_(@_)';
+    }
+
+    currentRow += 3;
+    ws.mergeCells(`A${currentRow}:G${currentRow}`);
+    ws.getCell(`A${currentRow}`).value = `${settings.printLocation}, ${formattedDate}`;
+    ws.getCell(`A${currentRow}`).font = { bold: true };
+    ws.getCell(`A${currentRow}`).alignment = { horizontal: "center" };
+
+    currentRow += 1;
+    ws.mergeCells(`A${currentRow}:G${currentRow}`);
+    ws.getCell(`A${currentRow}`).value = `Pengurus ${settings.cooperativeName}`;
+    ws.getCell(`A${currentRow}`).font = { bold: true };
+    ws.getCell(`A${currentRow}`).alignment = { horizontal: "center" };
+    
+    currentRow += 1;
+    ws.mergeCells(`A${currentRow}:G${currentRow}`);
+    ws.getCell(`A${currentRow}`).value = settings.address;
+    ws.getCell(`A${currentRow}`).font = { bold: true };
+    ws.getCell(`A${currentRow}`).alignment = { horizontal: "center" };
+
+    currentRow += 4;
+    ws.getCell(`B${currentRow}`).value = "Ketua";
+    ws.getCell(`B${currentRow}`).alignment = { horizontal: "center" };
+    
+    ws.getCell(`D${currentRow}`).value = "Sekertaris";
+    ws.getCell(`D${currentRow}`).alignment = { horizontal: "center" };
+    
+    ws.getCell(`F${currentRow}`).value = "Bendahara";
+    ws.getCell(`F${currentRow}`).alignment = { horizontal: "center" };
+
+    currentRow += 5;
+    ws.getCell(`B${currentRow}`).value = settings.chairmanName;
+    ws.getCell(`B${currentRow}`).font = { bold: true };
+    ws.getCell(`B${currentRow}`).alignment = { horizontal: "center" };
+    
+    ws.getCell(`D${currentRow}`).value = settings.secretaryName;
+    ws.getCell(`D${currentRow}`).font = { bold: true };
+    ws.getCell(`D${currentRow}`).alignment = { horizontal: "center" };
+    
+    ws.getCell(`F${currentRow}`).value = settings.treasurerName;
+    ws.getCell(`F${currentRow}`).font = { bold: true };
+    ws.getCell(`F${currentRow}`).alignment = { horizontal: "center" };
   };
 
-  const getSimpananHtml = () => {
-    const year = "2024";
-    return `
-      <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
-      <head>
-        <meta charset="utf-8">
-        <style>
-          .title { font-size: 14pt; font-weight: bold; text-align: center; }
-          table { border-collapse: collapse; width: 100%; }
-          th { border: 1px solid black; background-color: #f2f2f2; padding: 5px; }
-          td { border: 1px solid black; padding: 4px; }
-          .num { text-align: right; }
-          .center { text-align: center; }
-        </style>
-      </head>
-      <body>
-        <div class="title">DAFTAR SIMPANAN ANGGOTA (SPREADSHEET LIVE)</div>
-        <br/>
-        <table>
-          <thead>
-            <tr>
-              <th rowspan="2">NO</th>
-              <th rowspan="2">NAMA ANGGOTA</th>
-              <th rowspan="2">TGL BERGABUNG</th>
-              <th colspan="3">SIMPANAN</th>
-              <th rowspan="2">JUMLAH</th>
-            </tr>
-            <tr>
-              <th>POKOK</th>
-              <th>WAJIB</th>
-              <th>SUKARELA</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${computedRows.map((row, index) => `
-              <tr>
-                <td class="center">${index + 1}</td>
-                <td>${row.memberName}</td>
-                <td class="center">${row.joinDate}</td>
-                <td class="num">Rp ${row.savingPokok.toLocaleString("id-ID")}</td>
-                <td class="num">Rp ${row.savingWajib.toLocaleString("id-ID")}</td>
-                <td class="num">Rp ${row.savingSukarela.toLocaleString("id-ID")}</td>
-                <td class="num" style="font-weight: bold;">Rp ${row.totalSaving.toLocaleString("id-ID")}</td>
-              </tr>
-            `).join("")}
-            <tr style="font-weight: bold; background-color: #e2e8f0;">
-              <td colspan="3" class="center">JUMLAH</td>
-              <td class="num">Rp ${computedRows.reduce((a, b) => a + b.savingPokok, 0).toLocaleString("id-ID")}</td>
-              <td class="num">Rp ${computedRows.reduce((a, b) => a + b.savingWajib, 0).toLocaleString("id-ID")}</td>
-              <td class="num">Rp ${computedRows.reduce((a, b) => a + b.savingSukarela, 0).toLocaleString("id-ID")}</td>
-              <td class="num">Rp ${computedRows.reduce((a, b) => a + b.totalSaving, 0).toLocaleString("id-ID")}</td>
-            </tr>
-          </tbody>
-        </table>
-      </body>
-      </html>
-    `;
+  const buildShuSheet = (wb: ExcelJS.Workbook) => {
+    const formattedDate = new Intl.DateTimeFormat('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }).format(new Date());
+    const ws = wb.addWorksheet("Daftar SHU");
+
+    ws.columns = [
+      { width: 5 },  // NO
+      { width: 30 }, // NAMA ANGGOTA
+      { width: 20 }, // JML SIMPANAN
+      { width: 20 }, // SETORAN JASA
+      { width: 20 }, // SHU SIMPANAN
+      { width: 20 }, // SHU JASA
+      { width: 20 }, // JUMLAH
+    ];
+
+    ws.mergeCells("A1:G1");
+    ws.getCell("A1").value = "DAFTAR PEMBAGIAN SHU";
+    ws.getCell("A1").font = { bold: true, size: 12 };
+    ws.getCell("A1").alignment = { horizontal: "center" };
+
+    ws.mergeCells("A2:G2");
+    ws.getCell("A2").value = settings.cooperativeName.toUpperCase();
+    ws.getCell("A2").font = { bold: true, size: 12 };
+    ws.getCell("A2").alignment = { horizontal: "center" };
+
+    ws.mergeCells("A3:G3");
+    ws.getCell("A3").value = settings.district.toUpperCase();
+    ws.getCell("A3").font = { bold: true, size: 12 };
+    ws.getCell("A3").alignment = { horizontal: "center" };
+
+    ws.mergeCells("A4:G4");
+    ws.getCell("A4").value = `PER ${formattedDate.toUpperCase()}`;
+    ws.getCell("A4").font = { bold: true, size: 12 };
+    ws.getCell("A4").alignment = { horizontal: "center" };
+
+    const headerRow = ws.getRow(6);
+    headerRow.values = ["NO", "NAMA ANGGOTA", "JML SIMPANAN", "SETORAN JASA", "SHU SIMPANAN", "SHU JASA", "JUMLAH"];
+    headerRow.font = { bold: true };
+    headerRow.alignment = { horizontal: "center", vertical: "middle" };
+
+    for (let i = 1; i <= 7; i++) {
+      headerRow.getCell(i).border = { top: { style: "thin" }, left: { style: "thin" }, bottom: { style: "thin" }, right: { style: "thin" } };
+    }
+
+    let currentRow = 7;
+    computedRows.forEach((row, idx) => {
+      const dataRow = ws.getRow(currentRow);
+      dataRow.values = [
+        idx + 1,
+        row.memberName,
+        row.totalSaving,
+        row.serviceContribution,
+        row.savingShu,
+        row.serviceShu,
+        row.totalShu
+      ];
+      
+      dataRow.getCell(1).alignment = { horizontal: "center" };
+      
+      for (let i = 1; i <= 7; i++) {
+        const cell = dataRow.getCell(i);
+        cell.border = { top: { style: "thin" }, left: { style: "thin" }, bottom: { style: "thin" }, right: { style: "thin" } };
+        if (i >= 3) {
+          cell.numFmt = '_("Rp"* #,##0_);_("Rp"* (#,##0);_("Rp"* "-"_);_(@_)';
+        }
+      }
+      currentRow++;
+    });
+
+    const sumRow = ws.getRow(currentRow);
+    ws.mergeCells(`A${currentRow}:B${currentRow}`);
+    sumRow.getCell(1).value = "JUMLAH";
+    sumRow.getCell(1).font = { bold: true };
+    sumRow.getCell(1).alignment = { horizontal: "center", vertical: "middle" };
+
+    sumRow.getCell(3).value = computedRows.reduce((a, b) => a + b.totalSaving, 0);
+    sumRow.getCell(4).value = computedRows.reduce((a, b) => a + b.serviceContribution, 0);
+    sumRow.getCell(5).value = computedRows.reduce((a, b) => a + b.savingShu, 0);
+    sumRow.getCell(6).value = computedRows.reduce((a, b) => a + b.serviceShu, 0);
+    sumRow.getCell(7).value = computedRows.reduce((a, b) => a + b.totalShu, 0);
+
+    sumRow.font = { bold: true };
+    
+    for (let i = 1; i <= 7; i++) {
+      const cell = sumRow.getCell(i);
+      cell.border = { top: { style: "thin" }, left: { style: "thin" }, bottom: { style: "thin" }, right: { style: "thin" } };
+      if (i >= 3) {
+        cell.numFmt = '_("Rp"* #,##0_);_("Rp"* (#,##0);_("Rp"* "-"_);_(@_)';
+      }
+    }
+
+    currentRow += 3;
+    ws.mergeCells(`A${currentRow}:G${currentRow}`);
+    ws.getCell(`A${currentRow}`).value = `${settings.printLocation}, ${formattedDate}`;
+    ws.getCell(`A${currentRow}`).font = { bold: true };
+    ws.getCell(`A${currentRow}`).alignment = { horizontal: "center" };
+
+    currentRow += 1;
+    ws.mergeCells(`A${currentRow}:G${currentRow}`);
+    ws.getCell(`A${currentRow}`).value = `Pengurus ${settings.cooperativeName}`;
+    ws.getCell(`A${currentRow}`).font = { bold: true };
+    ws.getCell(`A${currentRow}`).alignment = { horizontal: "center" };
+    
+    currentRow += 1;
+    ws.mergeCells(`A${currentRow}:G${currentRow}`);
+    ws.getCell(`A${currentRow}`).value = settings.address;
+    ws.getCell(`A${currentRow}`).font = { bold: true };
+    ws.getCell(`A${currentRow}`).alignment = { horizontal: "center" };
+
+    currentRow += 4;
+    ws.getCell(`B${currentRow}`).value = "Ketua";
+    ws.getCell(`B${currentRow}`).alignment = { horizontal: "center" };
+    
+    ws.getCell(`D${currentRow}`).value = "Sekertaris";
+    ws.getCell(`D${currentRow}`).alignment = { horizontal: "center" };
+    
+    ws.getCell(`F${currentRow}`).value = "Bendahara";
+    ws.getCell(`F${currentRow}`).alignment = { horizontal: "center" };
+
+    currentRow += 5;
+    ws.getCell(`B${currentRow}`).value = settings.chairmanName;
+    ws.getCell(`B${currentRow}`).font = { bold: true };
+    ws.getCell(`B${currentRow}`).alignment = { horizontal: "center" };
+    
+    ws.getCell(`D${currentRow}`).value = settings.secretaryName;
+    ws.getCell(`D${currentRow}`).font = { bold: true };
+    ws.getCell(`D${currentRow}`).alignment = { horizontal: "center" };
+    
+    ws.getCell(`F${currentRow}`).value = settings.treasurerName;
+    ws.getCell(`F${currentRow}`).font = { bold: true };
+    ws.getCell(`F${currentRow}`).alignment = { horizontal: "center" };
   };
 
-  const handleExportSimpananOnly = () => {
-    addAuditLog("EXPORT_EXCEL", "Mengekspor data Spreadsheet Simpanan Live ke berkas Excel (.xls).", "info");
-    downloadExcel(getSimpananHtml(), "SPREADSHEET_SIMPANAN_2024.xls");
+  const handleExportSimpananOnly = async () => {
+    addAuditLog("EXPORT_EXCEL", "Mengekspor data Spreadsheet Simpanan Live ke berkas Excel (.xlsx).", "info");
+    const wb = new ExcelJS.Workbook();
+    buildSimpananSheet(wb);
+    const buffer = await wb.xlsx.writeBuffer();
+    downloadBlob(new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }), `SPREADSHEET_SIMPANAN_${settings.activeFiscalYear}.xlsx`);
     setIsExportModalOpen(false);
   };
 
-  const handleExportShuOnly = () => {
-    addAuditLog("EXPORT_EXCEL", "Mengekspor data Spreadsheet SHU Live ke berkas Excel (.xls).", "info");
-    downloadExcel(getShuHtml(), "SPREADSHEET_SHU_2024.xls");
+  const handleExportShuOnly = async () => {
+    addAuditLog("EXPORT_EXCEL", "Mengekspor data Spreadsheet SHU Live ke berkas Excel (.xlsx).", "info");
+    const wb = new ExcelJS.Workbook();
+    buildShuSheet(wb);
+    const buffer = await wb.xlsx.writeBuffer();
+    downloadBlob(new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }), `SPREADSHEET_SHU_${settings.activeFiscalYear}.xlsx`);
     setIsExportModalOpen(false);
   };
 
-  const getCombinedHtml = () => {
-    const year = "2024";
-    const coopName = "KOPERASI DESA MERAH PUTIH KEDUNGSANA";
-    return `
-      <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
-      <head>
-        <meta charset="utf-8">
-        <style>
-          .title { font-size: 14pt; font-weight: bold; text-align: center; }
-          .subtitle { font-size: 12pt; font-weight: bold; text-align: center; }
-          table { border-collapse: collapse; width: 100%; margin-bottom: 40px; }
-          th { border: 1px solid black; background-color: #f2f2f2; font-weight: bold; padding: 5px; text-align: center; }
-          td { border: 1px solid black; padding: 4px; }
-          .num { text-align: right; }
-          .center { text-align: center; }
-          .page-break { page-break-before: always; }
-        </style>
-      </head>
-      <body>
-        <div class="title">DAFTAR SIMPANAN ANGGOTA (SPREADSHEET LIVE)</div>
-        <div class="subtitle">${coopName}</div>
-        <br/>
-        <table>
-          <thead>
-            <tr>
-              <th rowspan="2">NO</th>
-              <th rowspan="2">NAMA ANGGOTA</th>
-              <th rowspan="2">TGL BERGABUNG</th>
-              <th colspan="3">SIMPANAN</th>
-              <th rowspan="2">JUMLAH</th>
-            </tr>
-            <tr>
-              <th>POKOK</th>
-              <th>WAJIB</th>
-              <th>SUKARELA</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${computedRows.map((row, index) => `
-              <tr>
-                <td class="center">${index + 1}</td>
-                <td>${row.memberName}</td>
-                <td class="center">${row.joinDate}</td>
-                <td class="num">Rp ${row.savingPokok.toLocaleString("id-ID")}</td>
-                <td class="num">Rp ${row.savingWajib.toLocaleString("id-ID")}</td>
-                <td class="num">Rp ${row.savingSukarela.toLocaleString("id-ID")}</td>
-                <td class="num" style="font-weight: bold;">Rp ${row.totalSaving.toLocaleString("id-ID")}</td>
-              </tr>
-            `).join("")}
-            <tr style="font-weight: bold; background-color: #e2e8f0;">
-              <td colspan="3" class="center">JUMLAH</td>
-              <td class="num">Rp ${computedRows.reduce((a, b) => a + b.savingPokok, 0).toLocaleString("id-ID")}</td>
-              <td class="num">Rp ${computedRows.reduce((a, b) => a + b.savingWajib, 0).toLocaleString("id-ID")}</td>
-              <td class="num">Rp ${computedRows.reduce((a, b) => a + b.savingSukarela, 0).toLocaleString("id-ID")}</td>
-              <td class="num">Rp ${computedRows.reduce((a, b) => a + b.totalSaving, 0).toLocaleString("id-ID")}</td>
-            </tr>
-          </tbody>
-        </table>
-
-        <br/><br/>
-        <div class="page-break"></div>
-        <br/>
-
-        <div class="title">DAFTAR PEMBAGIAN SHU (SPREADSHEET LIVE)</div>
-        <div class="subtitle">${coopName}</div>
-        <br/>
-        <table>
-          <thead>
-            <tr>
-              <th>NO</th>
-              <th>NAMA ANGGOTA</th>
-              <th>TGL BERGABUNG</th>
-              <th>JML SIMPANAN</th>
-              <th>SETORAN JASA</th>
-              <th>SHU SIMPANAN</th>
-              <th>SHU JASA</th>
-              <th>JUMLAH SHU</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${computedRows.map((row, index) => `
-              <tr>
-                <td class="center">${index + 1}</td>
-                <td>${row.memberName}</td>
-                <td class="center">${row.joinDate}</td>
-                <td class="num">Rp ${row.totalSaving.toLocaleString("id-ID")}</td>
-                <td class="num">Rp ${row.serviceContribution.toLocaleString("id-ID")}</td>
-                <td class="num">Rp ${row.savingShu.toLocaleString("id-ID")}</td>
-                <td class="num">Rp ${row.serviceShu.toLocaleString("id-ID")}</td>
-                <td class="num" style="font-weight: bold;">Rp ${row.totalShu.toLocaleString("id-ID")}</td>
-              </tr>
-            `).join("")}
-            <tr style="font-weight: bold; background-color: #e2e8f0;">
-              <td colspan="3" class="center">JUMLAH</td>
-              <td class="num">Rp ${computedRows.reduce((a, b) => a + b.totalSaving, 0).toLocaleString("id-ID")}</td>
-              <td class="num">Rp ${computedRows.reduce((a, b) => a + b.serviceContribution, 0).toLocaleString("id-ID")}</td>
-              <td class="num">Rp ${computedRows.reduce((a, b) => a + b.savingShu, 0).toLocaleString("id-ID")}</td>
-              <td class="num">Rp ${computedRows.reduce((a, b) => a + b.serviceShu, 0).toLocaleString("id-ID")}</td>
-              <td class="num">Rp ${computedRows.reduce((a, b) => a + b.totalShu, 0).toLocaleString("id-ID")}</td>
-            </tr>
-          </tbody>
-        </table>
-      </body>
-      </html>
-    `;
-  };
-
-  const handleExportAll = () => {
-    addAuditLog("EXPORT_EXCEL", "Mengekspor seluruh lembar kerja Spreadsheet Live (Simpanan & SHU) ke dalam satu berkas Excel (.xls).", "info");
-    downloadExcel(getCombinedHtml(), "SPREADSHEET_BUNDEL_RAT_2024.xls");
+  const handleExportAll = async () => {
+    addAuditLog("EXPORT_EXCEL", "Mengekspor seluruh lembar kerja Spreadsheet Live (Simpanan & SHU) ke dalam satu berkas Excel (.xlsx).", "info");
+    const wb = new ExcelJS.Workbook();
+    buildSimpananSheet(wb);
+    buildShuSheet(wb);
+    const buffer = await wb.xlsx.writeBuffer();
+    downloadBlob(new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }), `SPREADSHEET_BUNDEL_RAT_${settings.activeFiscalYear}.xlsx`);
     setIsExportModalOpen(false);
   };
 
