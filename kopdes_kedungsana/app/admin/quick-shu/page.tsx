@@ -132,6 +132,13 @@ export default function QuickShuPage() {
     return rawMembers.reduce((sum, r) => sum + r.savingPokok + r.savingWajib + r.savingSukarela, 0);
   }, [rawMembers]);
 
+  // Simpanan Sukarela is a liability the co-op owes back to the member, not
+  // equity — only Pokok+Wajib count as "modal sendiri" and form the basis for
+  // the SHU Simpanan (Jasa Modal) split.
+  const totalModalBasis = useMemo(() => {
+    return rawMembers.reduce((sum, r) => sum + r.savingPokok + r.savingWajib, 0);
+  }, [rawMembers]);
+
   const totalJasaBasis = useMemo(() => {
     return rawMembers.reduce((sum, r) => sum + r.serviceContribution, 0);
   }, [rawMembers]);
@@ -169,15 +176,16 @@ export default function QuickShuPage() {
   const computedRows = useMemo(() => {
     return rawMembers.map((row) => {
       const totalSaving = row.savingPokok + row.savingWajib + row.savingSukarela;
-      
-      const savingShu = totalSimpananBasis > 0 
-        ? Math.round((totalSaving / totalSimpananBasis) * valJasaModal) 
+      const modalSaving = row.savingPokok + row.savingWajib;
+
+      const savingShu = totalModalBasis > 0
+        ? Math.round((modalSaving / totalModalBasis) * valJasaModal)
         : 0;
-        
-      const serviceShu = totalJasaBasis > 0 
-        ? Math.round((row.serviceContribution / totalJasaBasis) * valJasaUsaha) 
+
+      const serviceShu = totalJasaBasis > 0
+        ? Math.round((row.serviceContribution / totalJasaBasis) * valJasaUsaha)
         : 0;
-        
+
       const totalShu = savingShu + serviceShu;
 
       return {
@@ -188,7 +196,7 @@ export default function QuickShuPage() {
         totalShu,
       };
     });
-  }, [valJasaModal, valJasaUsaha, totalSimpananBasis, totalJasaBasis]);
+  }, [valJasaModal, valJasaUsaha, totalModalBasis, totalJasaBasis]);
 
   const sortedRows = useMemo(() => {
     return [...computedRows].sort((a, b) => {
@@ -500,11 +508,11 @@ export default function QuickShuPage() {
         <div className="mt-4 grid gap-4 md:grid-cols-3">
           <article className="rounded-2xl border border-primary/20 bg-white p-5">
             <div className="flex items-center gap-2">
-              <p className="text-sm text-slate-500">Total Basis Simpanan</p>
-              <Hint text="Akumulasi basis simpanan seluruh anggota pada periode yang dipilih." />
+              <p className="text-sm text-slate-500">Total Basis Simpanan (Modal)</p>
+              <Hint text="Akumulasi Simpanan Pokok + Wajib seluruh anggota (modal sendiri) yang menjadi basis perhitungan SHU Simpanan. Simpanan Sukarela tidak dihitung karena bersifat utang koperasi kepada anggota, bukan modal." />
             </div>
             <p className="mt-2 text-xl font-semibold text-primary">
-              Rp {totalSimpananBasis.toLocaleString("id-ID")}
+              Rp {totalModalBasis.toLocaleString("id-ID")}
             </p>
             <p className="mt-1 text-xs text-slate-500">Gap pembulatan: Rp 0</p>
           </article>
