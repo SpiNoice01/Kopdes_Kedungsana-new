@@ -70,11 +70,14 @@ export default function LaporanPage() {
             return savingYear <= selectedYear;
           });
 
-          const wajib = savingsUpToYear.reduce((sum, s) => sum + s.requiredSaving, 0);
+          const wajib = savingsUpToYear
+            .filter((s) => s.period !== "POKOK")
+            .reduce((sum, s) => sum + s.requiredSaving, 0);
           const sukarela = savingsUpToYear.reduce((sum, s) => sum + s.voluntarySaving, 0);
-          
-          const pokokRecord = savingsUpToYear.find((s) => s.period === "POKOK");
-          const pokok = pokokRecord ? pokokRecord.requiredSaving : 0;
+
+          const pokok = savingsUpToYear
+            .filter((s) => s.period === "POKOK")
+            .reduce((sum, s) => sum + s.requiredSaving, 0);
 
           results.push({
             member,

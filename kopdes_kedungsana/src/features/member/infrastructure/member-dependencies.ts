@@ -1,7 +1,9 @@
 import { AddMemberByKtpUseCase } from "../application/add-member-by-nik-use-case";
 import { AddMemberMonthlySavingUseCase } from "../application/add-member-monthly-saving-use-case";
+import { AddMemberServiceContributionUseCase } from "../application/add-member-service-contribution-use-case";
 import { GetMemberByIdUseCase } from "../application/get-member-by-id-use-case";
 import { GetMemberMonthlySavingsUseCase } from "../application/get-member-monthly-savings-use-case";
+import { GetMemberServiceContributionsUseCase } from "../application/get-member-service-contributions-use-case";
 import { GetMembersUseCase } from "../application/get-members-use-case";
 import { UpdateMemberPhotoUseCase } from "../application/update-member-photo-use-case";
 import { UpdateMemberStatusUseCase } from "../application/update-member-status-use-case";
@@ -19,6 +21,12 @@ export const memberDependencies = {
   getMemberMonthlySavingsUseCase,
   addMemberByKtpUseCase: new AddMemberByKtpUseCase(memberRepository),
   addMemberMonthlySavingUseCase: new AddMemberMonthlySavingUseCase(
+    memberRepository,
+  ),
+  getMemberServiceContributionsUseCase: new GetMemberServiceContributionsUseCase(
+    memberRepository,
+  ),
+  addMemberServiceContributionUseCase: new AddMemberServiceContributionUseCase(
     memberRepository,
   ),
   updateMemberPhotoUseCase: new UpdateMemberPhotoUseCase(memberRepository),
