@@ -153,7 +153,7 @@ export default function OverviewPage() {
             Selamat Datang di Panel Koperasi Kedungsana
           </h2>
           <p className="mt-1.5 text-xs sm:text-sm text-slate-500 max-w-xl">
-            Sistem pengawasan digital in-memory untuk memantau administrasi, simpanan berkala, status tunggakan iuran, dan transparansi log audit pra-RAT secara langsung.
+            Sistem pengawasan digital terpusat untuk memantau administrasi, simpanan berkala, status tunggakan iuran, dan transparansi log audit pra-RAT secara langsung.
           </p>
         </div>
         <div className="bg-primary/10 text-primary px-4 py-2.5 rounded-2xl flex items-center gap-2 flex-shrink-0 self-start md:self-auto">
