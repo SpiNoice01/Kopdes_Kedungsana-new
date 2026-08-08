@@ -162,6 +162,13 @@ export default function SpreadsheetModal({ isOpen, onClose }: { isOpen: boolean;
     return rows.reduce((sum, r) => sum + r.savingPokok + r.savingWajib + r.savingSukarela, 0);
   }, [rows]);
 
+  // Simpanan Sukarela is a liability the co-op owes back to the member, not
+  // equity — only Pokok+Wajib count as "modal sendiri" and form the basis for
+  // the SHU Simpanan (Jasa Modal) split.
+  const totalModalBasis = useMemo(() => {
+    return rows.reduce((sum, r) => sum + r.savingPokok + r.savingWajib, 0);
+  }, [rows]);
+
   const totalJasaBasis = useMemo(() => {
     return rows.reduce((sum, r) => sum + r.serviceContribution, 0);
   }, [rows]);
@@ -174,9 +181,10 @@ export default function SpreadsheetModal({ isOpen, onClose }: { isOpen: boolean;
   const computedRows: ComputedMemberRow[] = useMemo(() => {
     return rows.map((row) => {
       const totalSaving = row.savingPokok + row.savingWajib + row.savingSukarela;
+      const modalSaving = row.savingPokok + row.savingWajib;
 
-      const savingShu = totalSimpananBasis > 0
-        ? Math.round((totalSaving / totalSimpananBasis) * shuPools.danaShuSimpanan)
+      const savingShu = totalModalBasis > 0
+        ? Math.round((modalSaving / totalModalBasis) * shuPools.danaShuSimpanan)
         : 0;
 
       const serviceShu = totalJasaBasis > 0
@@ -193,7 +201,7 @@ export default function SpreadsheetModal({ isOpen, onClose }: { isOpen: boolean;
         totalShu,
       };
     });
-  }, [rows, totalSimpananBasis, totalJasaBasis, shuPools]);
+  }, [rows, totalModalBasis, totalJasaBasis, shuPools]);
 
   const filteredRows = useMemo(() => {
     if (!searchQuery.trim()) return computedRows;
