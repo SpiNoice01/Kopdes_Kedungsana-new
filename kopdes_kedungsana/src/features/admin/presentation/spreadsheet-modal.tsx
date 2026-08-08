@@ -2,6 +2,7 @@
 
 import { buildSimpananSheet, buildShuSheet, downloadExcelBuffer } from "@/src/features/admin/utils/excel-exporter";
 import type { ExcelExportRow } from "@/src/features/admin/utils/excel-exporter";
+import { calculateShuPools } from "@/src/features/admin/utils/shu-calculator";
 import ExcelJS from "exceljs";
 import { useMemo, useState } from "react";
 import { addAuditLog } from "../../../utils/audit-logger";
@@ -95,12 +96,15 @@ export default function SpreadsheetModal({ isOpen, onClose }: { isOpen: boolean;
           const joinYear = new Date(member.joinDate).getFullYear();
           if (joinYear > fetchedSettings.activeFiscalYear) continue;
 
-          const savings = await memberDependencies.getMemberMonthlySavingsUseCase.execute(member.id);
-          
+          const [savings, serviceContributions] = await Promise.all([
+            memberDependencies.getMemberMonthlySavingsUseCase.execute(member.id),
+            memberDependencies.getMemberServiceContributionsUseCase.execute(member.id),
+          ]);
+
           let savingPokok = 0;
           let savingWajib = 0;
           let savingSukarela = 0;
-          
+
           for (const s of savings) {
             let sYear;
             if (s.period === "POKOK") {
@@ -118,7 +122,15 @@ export default function SpreadsheetModal({ isOpen, onClose }: { isOpen: boolean;
               }
             }
           }
-          
+
+          let serviceContribution = 0;
+          for (const c of serviceContributions) {
+            const cYear = parseInt(c.period.split("-")[0]);
+            if (cYear <= fetchedSettings.activeFiscalYear) {
+              serviceContribution += c.amount;
+            }
+          }
+
           records.push({
             memberId: member.id,
             memberName: member.name.toUpperCase(),
@@ -126,7 +138,7 @@ export default function SpreadsheetModal({ isOpen, onClose }: { isOpen: boolean;
             savingPokok,
             savingWajib,
             savingSukarela,
-            serviceContribution: 0,
+            serviceContribution,
           });
         }
         
@@ -146,9 +158,6 @@ export default function SpreadsheetModal({ isOpen, onClose }: { isOpen: boolean;
   const [editingCell, setEditingCell] = useState<{ rowIdx: number; colName: string } | null>(null);
   const [editValue, setEditValue] = useState("");
 
-  const DANA_SHU_SIMPANAN = 3942359;
-  const DANA_SHU_JASA = 790641;
-
   const totalSimpananBasis = useMemo(() => {
     return rows.reduce((sum, r) => sum + r.savingPokok + r.savingWajib + r.savingSukarela, 0);
   }, [rows]);
@@ -157,18 +166,23 @@ export default function SpreadsheetModal({ isOpen, onClose }: { isOpen: boolean;
     return rows.reduce((sum, r) => sum + r.serviceContribution, 0);
   }, [rows]);
 
+  const shuPools = useMemo(
+    () => calculateShuPools(totalSimpananBasis, settings),
+    [totalSimpananBasis, settings]
+  );
+
   const computedRows: ComputedMemberRow[] = useMemo(() => {
     return rows.map((row) => {
       const totalSaving = row.savingPokok + row.savingWajib + row.savingSukarela;
-      
-      const savingShu = totalSimpananBasis > 0 
-        ? Math.round((totalSaving / totalSimpananBasis) * DANA_SHU_SIMPANAN) 
+
+      const savingShu = totalSimpananBasis > 0
+        ? Math.round((totalSaving / totalSimpananBasis) * shuPools.danaShuSimpanan)
         : 0;
-        
-      const serviceShu = totalJasaBasis > 0 
-        ? Math.round((row.serviceContribution / totalJasaBasis) * DANA_SHU_JASA) 
+
+      const serviceShu = totalJasaBasis > 0
+        ? Math.round((row.serviceContribution / totalJasaBasis) * shuPools.danaShuJasa)
         : 0;
-        
+
       const totalShu = savingShu + serviceShu;
 
       return {
@@ -179,7 +193,7 @@ export default function SpreadsheetModal({ isOpen, onClose }: { isOpen: boolean;
         totalShu,
       };
     });
-  }, [rows, totalSimpananBasis, totalJasaBasis]);
+  }, [rows, totalSimpananBasis, totalJasaBasis, shuPools]);
 
   const filteredRows = useMemo(() => {
     if (!searchQuery.trim()) return computedRows;

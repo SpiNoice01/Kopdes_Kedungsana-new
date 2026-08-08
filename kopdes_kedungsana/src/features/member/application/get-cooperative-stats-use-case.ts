@@ -29,8 +29,9 @@ export class GetCooperativeStatsUseCase {
 
     for (const member of activeList) {
       const savings = await this.getMemberMonthlySavingsUseCase.execute(member.id);
-      const pokokRecord = savings.find((s) => s.period === "POKOK");
-      const pokok = pokokRecord ? pokokRecord.requiredSaving : 0;
+      const pokok = savings
+        .filter((s) => s.period === "POKOK")
+        .reduce((sum, s) => sum + s.requiredSaving, 0);
       
       const wajib = savings
         .filter((s) => s.period !== "POKOK")

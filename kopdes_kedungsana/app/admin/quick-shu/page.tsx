@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import ExcelJS from "exceljs";
 import { addAuditLog } from "../../../src/utils/audit-logger";
 import { buildSimpananSheet, buildShuSheet, downloadExcelBuffer } from "@/src/features/admin/utils/excel-exporter";
+import { calculateShuPools } from "@/src/features/admin/utils/shu-calculator";
 
 type HintProps = {
   text: string;
@@ -71,12 +72,15 @@ export default function QuickShuPage() {
           const joinYear = new Date(member.joinDate).getFullYear();
           if (joinYear > loadedSettings.activeFiscalYear) continue;
 
-          const savings = await memberDependencies.getMemberMonthlySavingsUseCase.execute(member.id);
-          
+          const [savings, serviceContributions] = await Promise.all([
+            memberDependencies.getMemberMonthlySavingsUseCase.execute(member.id),
+            memberDependencies.getMemberServiceContributionsUseCase.execute(member.id),
+          ]);
+
           let savingPokok = 0;
           let savingWajib = 0;
           let savingSukarela = 0;
-          
+
           for (const s of savings) {
             let sYear;
             if (s.period === "POKOK") {
@@ -94,23 +98,26 @@ export default function QuickShuPage() {
               }
             }
           }
-          
+
+          let serviceContribution = 0;
+          for (const c of serviceContributions) {
+            const cYear = parseInt(c.period.split("-")[0]);
+            if (cYear <= loadedSettings.activeFiscalYear) {
+              serviceContribution += c.amount;
+            }
+          }
+
           records.push({
             memberId: member.id,
             memberName: member.name,
             savingPokok,
             savingWajib,
             savingSukarela,
-            serviceContribution: 0, // Belum ada modul pinjaman di DB
+            serviceContribution,
           });
         }
-        
+
         setRawMembers(records);
-        
-        // Auto-calculate a realistic default SHU Kotor based on 10% of total savings 
-        // (since this is just a simulator and there is no real accounting table yet)
-        const totalSimpanan = records.reduce((sum, r) => sum + r.savingPokok + r.savingWajib + r.savingSukarela, 0);
-        setTotalShuKotor(Math.round(totalSimpanan * 0.10));
       } catch (e) {
         console.error("Failed to load Quick SHU data", e);
       } finally {
@@ -120,10 +127,22 @@ export default function QuickShuPage() {
     void fetchData();
   }, []);
 
-  // DYNAMIC AD/ART SIMULATOR STATE
-  const [totalShuKotor, setTotalShuKotor] = useState(0); // Will be dynamically set after fetch
-  
-  // Settings are populated async but default to defaultSettings on first render
+  // Dynamic computation basis of members
+  const totalSimpananBasis = useMemo(() => {
+    return rawMembers.reduce((sum, r) => sum + r.savingPokok + r.savingWajib + r.savingSukarela, 0);
+  }, [rawMembers]);
+
+  const totalJasaBasis = useMemo(() => {
+    return rawMembers.reduce((sum, r) => sum + r.serviceContribution, 0);
+  }, [rawMembers]);
+
+  // SHU Kotor and the Simpanan/Jasa split come from the same shared helper
+  // Spreadsheet Live uses, so both screens always agree on these figures.
+  const shuPools = useMemo(
+    () => calculateShuPools(totalSimpananBasis, settings),
+    [totalSimpananBasis, settings]
+  );
+  const totalShuKotor = shuPools.totalShuKotor;
 
   const pctCadangan = settings.pctCadangan;
   const pctJasaModal = settings.pctJasaModal;
@@ -139,21 +158,12 @@ export default function QuickShuPage() {
 
   // Real-time Rupiah calculations
   const valCadangan = useMemo(() => Math.round((totalShuKotor * pctCadangan) / 100), [totalShuKotor, pctCadangan]);
-  const valJasaModal = useMemo(() => Math.round((totalShuKotor * pctJasaModal) / 100), [totalShuKotor, pctJasaModal]);
-  const valJasaUsaha = useMemo(() => Math.round((totalShuKotor * pctJasaUsaha) / 100), [totalShuKotor, pctJasaUsaha]);
+  const valJasaModal = shuPools.danaShuSimpanan;
+  const valJasaUsaha = shuPools.danaShuJasa;
   const valPengurus = useMemo(() => Math.round((totalShuKotor * pctPengurus) / 100), [totalShuKotor, pctPengurus]);
   const valKaryawan = useMemo(() => Math.round((totalShuKotor * pctKaryawan) / 100), [totalShuKotor, pctKaryawan]);
   const valPendidikan = useMemo(() => Math.round((totalShuKotor * pctPendidikan) / 100), [totalShuKotor, pctPendidikan]);
   const valSosial = useMemo(() => Math.round((totalShuKotor * pctSosial) / 100), [totalShuKotor, pctSosial]);
-
-  // Dynamic computation basis of members
-  const totalSimpananBasis = useMemo(() => {
-    return rawMembers.reduce((sum, r) => sum + r.savingPokok + r.savingWajib + r.savingSukarela, 0);
-  }, [rawMembers]);
-
-  const totalJasaBasis = useMemo(() => {
-    return rawMembers.reduce((sum, r) => sum + r.serviceContribution, 0);
-  }, [rawMembers]);
 
   // Compute calculated metrics for each row in real-time
   const computedRows = useMemo(() => {

@@ -1,6 +1,7 @@
 import { MemberRepository } from "../domain/member-repository";
 import { Member } from "../domain/member";
 import { MemberMonthlySaving } from "../domain/member-monthly-saving";
+import { MemberServiceContribution } from "../domain/member-service-contribution";
 import { supabase } from "@/src/utils/supabase-client";
 
 export class SupabaseMemberRepository implements MemberRepository {
@@ -103,6 +104,40 @@ export class SupabaseMemberRepository implements MemberRepository {
     }
   }
 
+  async getServiceContributionsByMemberId(
+    memberId: string,
+  ): Promise<MemberServiceContribution[]> {
+    const { data, error } = await supabase
+      .from("member_service_contributions")
+      .select("*")
+      .eq("member_id", memberId)
+      .order("period", { ascending: true });
+
+    if (error) {
+      console.error("Supabase Error [getServiceContributions]:", error);
+      return [];
+    }
+
+    return data.map(this.mapToServiceContributionDomain);
+  }
+
+  async addServiceContribution(contribution: MemberServiceContribution): Promise<void> {
+    const { error } = await supabase.from("member_service_contributions").insert([
+      {
+        id: contribution.id,
+        member_id: contribution.memberId,
+        period: contribution.period,
+        amount: contribution.amount,
+        input_date: contribution.inputDate,
+      },
+    ]);
+
+    if (error) {
+      console.error("Supabase Error [addServiceContribution]:", JSON.stringify(error, null, 2));
+      throw new Error("Gagal menyimpan setoran jasa ke database Supabase");
+    }
+  }
+
   async updatePhoto(id: string, photoUrl: string): Promise<void> {
     const { error } = await supabase
       .from("members")
@@ -185,6 +220,16 @@ export class SupabaseMemberRepository implements MemberRepository {
       requiredSaving: Number(raw.required_saving),
       voluntarySaving: Number(raw.voluntary_saving),
       totalSaving: Number(raw.total_saving),
+      inputDate: raw.input_date,
+    };
+  }
+
+  private mapToServiceContributionDomain(raw: any): MemberServiceContribution {
+    return {
+      id: raw.id,
+      memberId: raw.member_id,
+      period: raw.period,
+      amount: Number(raw.amount),
       inputDate: raw.input_date,
     };
   }
