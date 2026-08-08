@@ -20,6 +20,7 @@ export const defaultSettings: KopdesSettings = {
   pctKaryawan: 5,
   pctPendidikan: 5,
   pctSosial: 5,
+  enableInvestasi: false,
 };
 
 export async function loadSettingsAsync(): Promise<KopdesSettings> {

@@ -8,6 +8,7 @@ import type { KopdesSettings } from "@/src/features/settings/domain/settings";
 import { memberDependencies } from "@/src/features/member/infrastructure/member-dependencies";
 import type { Member } from "@/src/features/member/domain/member";
 import type { MemberMonthlySaving } from "@/src/features/member/domain/member-monthly-saving";
+import type { MemberInvestment } from "@/src/features/member/domain/member-investment";
 
 // Extracted Subcomponents
 import { MemberSavingsBarChart } from "../components/public-portal/charts";
@@ -27,6 +28,7 @@ export default function CekSimpananPage() {
   const [searchResult, setSearchResult] = useState<{
     member: Member;
     savings: MemberMonthlySaving[];
+    investments: MemberInvestment[];
   } | null>(null);
   const [searchError, setSearchError] = useState("");
 
@@ -64,11 +66,15 @@ export default function CekSimpananPage() {
         return;
       }
 
-      const memberSavings = await memberDependencies.getMemberMonthlySavingsUseCase.execute(matchedMember.id);
-      
+      const [memberSavings, memberInvestments] = await Promise.all([
+        memberDependencies.getMemberMonthlySavingsUseCase.execute(matchedMember.id),
+        memberDependencies.getMemberInvestmentsUseCase.execute(matchedMember.id),
+      ]);
+
       setSearchResult({
         member: matchedMember,
         savings: memberSavings,
+        investments: memberInvestments,
       });
     } catch (err) {
       setSearchError("Terjadi kesalahan sistem saat mencari data Anda.");
@@ -79,7 +85,7 @@ export default function CekSimpananPage() {
 
   const calculatedStats = useMemo(() => {
     if (!searchResult || !settings) return null;
-    const { member, savings } = searchResult;
+    const { member, savings, investments } = searchResult;
 
     const pokokRecord = savings.find((s) => s.period === "POKOK");
     const principalAmount = pokokRecord ? pokokRecord.requiredSaving : 0;
@@ -89,7 +95,8 @@ export default function CekSimpananPage() {
     const totalVoluntary = savings
       .filter((s) => s.period !== "POKOK")
       .reduce((sum, s) => sum + s.voluntarySaving, 0);
-    const totalAccumulated = principalAmount + totalRequired + totalVoluntary;
+    const totalInvestment = investments.reduce((sum, inv) => sum + inv.amount, 0);
+    const totalAccumulated = principalAmount + totalRequired + totalVoluntary + totalInvestment;
 
     // Arrears Calculation
     const monthlyTarget = settings.monthlyDuesAmount;
@@ -108,6 +115,7 @@ export default function CekSimpananPage() {
       principalAmount,
       totalRequired,
       totalVoluntary,
+      totalInvestment,
       totalAccumulated,
       monthsElapsed,
       target,
@@ -234,6 +242,7 @@ export default function CekSimpananPage() {
               principalAmount={calculatedStats.principalAmount}
               totalRequired={calculatedStats.totalRequired}
               totalVoluntary={calculatedStats.totalVoluntary}
+              investmentAmount={calculatedStats.totalInvestment}
               totalAccumulated={calculatedStats.totalAccumulated}
               formatCurrency={formatCurrency}
             />

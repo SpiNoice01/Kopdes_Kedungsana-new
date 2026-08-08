@@ -49,7 +49,8 @@ export const addAuditLog = async (
   username = "Admin Kopdes Kedungsana"
 ): Promise<void> => {
   try {
-    await recordAuditLog(action, details, severity, username);
+    const { data } = await supabase.auth.getSession();
+    await recordAuditLog(action, details, severity, username, data.session?.access_token);
   } catch (error) {
     console.error("Exception adding audit log", error);
   }
