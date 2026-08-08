@@ -38,6 +38,7 @@ export class SettingsRepository {
       pctKaryawan: Number(data.pct_karyawan),
       pctPendidikan: Number(data.pct_pendidikan),
       pctSosial: Number(data.pct_sosial),
+      enableInvestasi: Boolean(data.enable_investasi),
     };
   }
 
@@ -63,6 +64,7 @@ export class SettingsRepository {
         pct_karyawan: settings.pctKaryawan,
         pct_pendidikan: settings.pctPendidikan,
         pct_sosial: settings.pctSosial,
+        enable_investasi: settings.enableInvestasi,
         updated_at: new Date().toISOString(),
       })
       .eq("id", settings.id);

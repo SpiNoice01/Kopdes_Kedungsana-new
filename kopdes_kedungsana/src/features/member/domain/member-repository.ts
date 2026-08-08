@@ -1,6 +1,7 @@
 import type { Member } from "./member";
 import type { MemberMonthlySaving } from "./member-monthly-saving";
 import type { MemberServiceContribution } from "./member-service-contribution";
+import type { MemberInvestment } from "./member-investment";
 
 export interface MemberRepository {
   getAll(): Promise<Member[]>;
@@ -11,6 +12,8 @@ export interface MemberRepository {
   addMonthlySaving(saving: MemberMonthlySaving): Promise<void>;
   getServiceContributionsByMemberId(memberId: string): Promise<MemberServiceContribution[]>;
   addServiceContribution(contribution: MemberServiceContribution): Promise<void>;
+  getInvestmentsByMemberId(memberId: string): Promise<MemberInvestment[]>;
+  addInvestment(investment: MemberInvestment): Promise<void>;
   updatePhoto(id: string, photoUrl: string): Promise<void>;
   updateStatus(id: string, status: "aktif" | "nonaktif"): Promise<void>;
   updateProfile(id: string, updates: Partial<Member>): Promise<void>;

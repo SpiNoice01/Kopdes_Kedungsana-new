@@ -15,6 +15,7 @@ type MemberRow = {
   savingWajib: number;
   savingSukarela: number;
   serviceContribution: number;
+  investmentAmount: number;
 };
 
 interface ComputedMemberRow extends ExcelExportRow {
@@ -96,9 +97,10 @@ export default function SpreadsheetModal({ isOpen, onClose }: { isOpen: boolean;
           const joinYear = new Date(member.joinDate).getFullYear();
           if (joinYear > fetchedSettings.activeFiscalYear) continue;
 
-          const [savings, serviceContributions] = await Promise.all([
+          const [savings, serviceContributions, investments] = await Promise.all([
             memberDependencies.getMemberMonthlySavingsUseCase.execute(member.id),
             memberDependencies.getMemberServiceContributionsUseCase.execute(member.id),
+            memberDependencies.getMemberInvestmentsUseCase.execute(member.id),
           ]);
 
           let savingPokok = 0;
@@ -131,6 +133,17 @@ export default function SpreadsheetModal({ isOpen, onClose }: { isOpen: boolean;
             }
           }
 
+          // Always sum existing investment records regardless of the
+          // enableInvestasi toggle — the toggle only gates new entries via
+          // the input form, it must never retroactively hide money members
+          // already invested for a given fiscal year.
+          let investmentAmount = 0;
+          for (const inv of investments) {
+            if (inv.period === fetchedSettings.activeFiscalYear.toString()) {
+              investmentAmount += inv.amount;
+            }
+          }
+
           records.push({
             memberId: member.id,
             memberName: member.name.toUpperCase(),
@@ -139,6 +152,7 @@ export default function SpreadsheetModal({ isOpen, onClose }: { isOpen: boolean;
             savingWajib,
             savingSukarela,
             serviceContribution,
+            investmentAmount,
           });
         }
         
@@ -163,25 +177,28 @@ export default function SpreadsheetModal({ isOpen, onClose }: { isOpen: boolean;
   }, [rows]);
 
   // Simpanan Sukarela is a liability the co-op owes back to the member, not
-  // equity — only Pokok+Wajib count as "modal sendiri" and form the basis for
-  // the SHU Simpanan (Jasa Modal) split.
+  // equity — only Pokok+Wajib (+ Investasi, when present) count as "modal
+  // sendiri" and form the basis for the SHU Simpanan (Jasa Modal) split.
   const totalModalBasis = useMemo(() => {
-    return rows.reduce((sum, r) => sum + r.savingPokok + r.savingWajib, 0);
+    return rows.reduce((sum, r) => sum + r.savingPokok + r.savingWajib + r.investmentAmount, 0);
   }, [rows]);
 
   const totalJasaBasis = useMemo(() => {
     return rows.reduce((sum, r) => sum + r.serviceContribution, 0);
   }, [rows]);
 
+  // The pool is sized from totalModalBasis (Pokok+Wajib+Investasi), not the
+  // full savings total — Sukarela isn't equity, and Investasi money must
+  // actually grow the distributable pool, not just reshuffle shares of it.
   const shuPools = useMemo(
-    () => calculateShuPools(totalSimpananBasis, settings),
-    [totalSimpananBasis, settings]
+    () => calculateShuPools(totalModalBasis, settings),
+    [totalModalBasis, settings]
   );
 
   const computedRows: ComputedMemberRow[] = useMemo(() => {
     return rows.map((row) => {
       const totalSaving = row.savingPokok + row.savingWajib + row.savingSukarela;
-      const modalSaving = row.savingPokok + row.savingWajib;
+      const modalSaving = row.savingPokok + row.savingWajib + row.investmentAmount;
 
       const savingShu = totalModalBasis > 0
         ? Math.round((modalSaving / totalModalBasis) * shuPools.danaShuSimpanan)

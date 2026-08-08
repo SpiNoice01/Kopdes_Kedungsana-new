@@ -181,8 +181,8 @@ export function AdminShell({ children }: AdminShellProps) {
                       <span className="font-semibold">Rumus SHU:</span>
                       <br />
                       <span className="font-mono">
-                        SHU Simpanan = (Modal Anggota [Pokok+Wajib] / Total
-                        Modal) × SHU Simpanan
+                        SHU Simpanan = (Modal Anggota [Pokok+Wajib+Investasi] /
+                        Total Modal) × SHU Simpanan
                         <br />
                         SHU Jasa = (Jasa Anggota / Total Jasa) × SHU Jasa
                       </span>

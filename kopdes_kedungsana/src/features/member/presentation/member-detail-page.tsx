@@ -8,6 +8,7 @@ import { SectionCard } from "@/src/shared/widgets/section-card";
 import { StatusBadge } from "@/src/shared/widgets/status-badge";
 import type { Member } from "../domain/member";
 import type { MemberMonthlySaving } from "../domain/member-monthly-saving";
+import type { MemberInvestment } from "../domain/member-investment";
 import { memberDependencies } from "../infrastructure/member-dependencies";
 import { loadSettingsAsync } from "@/src/actions/settings-actions";
 import type { KopdesSettings } from "@/src/features/settings/domain/settings";
@@ -22,6 +23,11 @@ type FormState = {
   period: string;
   requiredSaving: string;
   voluntarySaving: string;
+};
+
+type InvestmentFormState = {
+  period: string;
+  amount: string;
 };
 
 type FeedbackState = {
@@ -101,6 +107,7 @@ export function MemberDetailPage({ memberId }: MemberDetailPageProps) {
   const [monthlySavings, setMonthlySavings] = useState<MemberMonthlySaving[]>(
     [],
   );
+  const [investments, setInvestments] = useState<MemberInvestment[]>([]);
   const [settings, setSettings] = useState<KopdesSettings | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -110,6 +117,15 @@ export function MemberDetailPage({ memberId }: MemberDetailPageProps) {
     voluntarySaving: "",
   });
   const [feedbackState, setFeedbackState] = useState<FeedbackState>({
+    message: "",
+    isError: false,
+  });
+  const [investmentForm, setInvestmentForm] = useState<InvestmentFormState>({
+    period: new Date().getFullYear().toString(),
+    amount: "",
+  });
+  const [isSavingInvestment, setIsSavingInvestment] = useState(false);
+  const [investmentFeedback, setInvestmentFeedback] = useState<FeedbackState>({
     message: "",
     isError: false,
   });
@@ -174,15 +190,17 @@ export function MemberDetailPage({ memberId }: MemberDetailPageProps) {
   useEffect(() => {
     const loadMemberDetail = async () => {
       try {
-        const [memberResult, savingsResult, settingsResult] = await Promise.all([
+        const [memberResult, savingsResult, settingsResult, investmentsResult] = await Promise.all([
           memberDependencies.getMemberByIdUseCase.execute(memberId),
           memberDependencies.getMemberMonthlySavingsUseCase.execute(memberId),
-          loadSettingsAsync()
+          loadSettingsAsync(),
+          memberDependencies.getMemberInvestmentsUseCase.execute(memberId),
         ]);
 
         setMember(memberResult);
         setMonthlySavings(savingsResult);
         setSettings(settingsResult);
+        setInvestments(investmentsResult);
       } catch (e) {
         console.error("Failed to fetch member details or settings", e);
       } finally {
@@ -229,6 +247,42 @@ export function MemberDetailPage({ memberId }: MemberDetailPageProps) {
       isError: false,
     });
     setIsSaving(false);
+  };
+
+  const handleSubmitInvestment = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setIsSavingInvestment(true);
+    setInvestmentFeedback({ message: "", isError: false });
+
+    const amount = parsePositiveNumber(investmentForm.amount);
+
+    const result = await memberDependencies.addMemberInvestmentUseCase.execute({
+      memberId,
+      period: investmentForm.period,
+      amount,
+    });
+
+    if (!result.success) {
+      setInvestmentFeedback({ message: result.message, isError: true });
+      setIsSavingInvestment(false);
+      return;
+    }
+
+    const latestInvestments =
+      await memberDependencies.getMemberInvestmentsUseCase.execute(memberId);
+
+    setInvestments(latestInvestments);
+    addAuditLog(
+      "INVESTMENT_ADD",
+      `Investasi tahun buku ${result.investment.period} sebesar ${formatCurrency(result.investment.amount)} dicatat untuk anggota [${member?.name || "Tidak Diketahui"}] dengan ID ${memberId}.`,
+      "success",
+    );
+    setInvestmentForm((previous) => ({ ...previous, amount: "" }));
+    setInvestmentFeedback({
+      message: `Investasi tahun buku ${result.investment.period} berhasil disimpan.`,
+      isError: false,
+    });
+    setIsSavingInvestment(false);
   };
 
   const handlePrincipalProofChange = (event: ChangeEvent<HTMLInputElement>) => {
@@ -400,9 +454,18 @@ export function MemberDetailPage({ memberId }: MemberDetailPageProps) {
   }
 
   // Calculated values for liquidation simulations
-  const totalWajib = monthlySavings.reduce((sum, s) => sum + s.requiredSaving, 0);
-  const totalSukarela = monthlySavings.reduce((sum, s) => sum + s.voluntarySaving, 0);
-  const totalRefundable = principalSavingAmount + totalWajib + totalSukarela;
+  // Exclude the "POKOK" row here — its requiredSaving is the flat principal
+  // amount already counted separately via principalSavingAmount below.
+  // Folding it into totalWajib too would double-count Simpanan Pokok in the
+  // refund calculation and the printed liquidation document.
+  const totalWajib = monthlySavings
+    .filter((s) => s.period !== "POKOK")
+    .reduce((sum, s) => sum + s.requiredSaving, 0);
+  const totalSukarela = monthlySavings
+    .filter((s) => s.period !== "POKOK")
+    .reduce((sum, s) => sum + s.voluntarySaving, 0);
+  const totalInvestasi = investments.reduce((sum, inv) => sum + inv.amount, 0);
+  const totalRefundable = principalSavingAmount + totalWajib + totalSukarela + totalInvestasi;
   const netRefundAmount = Math.max(0, totalRefundable - arrearsInfo.arrears);
 
   return (
@@ -862,6 +925,109 @@ export function MemberDetailPage({ memberId }: MemberDetailPageProps) {
           </div>
         </SectionCard>
 
+        {/* Investasi Anggota — visible if the feature toggle is on, OR if this
+            member already has investment records (so existing data/history
+            never disappears just because the toggle got switched off). */}
+        {(settings?.enableInvestasi || investments.length > 0) && (
+          <SectionCard
+            title="Investasi Anggota"
+            description="Pencatatan investasi anggota (di luar simpanan pokok/wajib/sukarela) yang turut menjadi basis perhitungan SHU Simpanan."
+            collapsible
+            defaultCollapsed
+          >
+            <div className="space-y-4">
+              {!settings?.enableInvestasi && investments.length > 0 && (
+                <div className="bg-amber-50 border border-amber-200 rounded-2xl p-3 text-xs text-amber-800">
+                  Fitur Investasi sedang dinonaktifkan oleh admin. Data investasi yang sudah ada tetap tersimpan dan tetap diperhitungkan dalam SHU, namun tidak dapat menambah investasi baru saat ini.
+                </div>
+              )}
+
+              {settings?.enableInvestasi && (
+                <form onSubmit={handleSubmitInvestment} className="grid gap-3 md:grid-cols-3">
+                  <label className="space-y-2 text-sm">
+                    <span className="font-medium text-slate-700">Tahun Buku</span>
+                    <select
+                      value={investmentForm.period}
+                      onChange={(event) =>
+                        setInvestmentForm((previous) => ({ ...previous, period: event.target.value }))
+                      }
+                      className="w-full rounded-xl border border-slate-300 px-3 py-2 outline-none focus:border-primary"
+                    >
+                      {Array.from({ length: 6 }, (_, i) => new Date().getFullYear() - i).map((y) => (
+                        <option key={y} value={y.toString()}>{y}</option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <label className="space-y-2 text-sm">
+                    <span className="font-medium text-slate-700">Nominal Investasi</span>
+                    <div className="relative">
+                      <span className="absolute left-3 top-2.5 text-slate-500 font-semibold">Rp</span>
+                      <input
+                        type="text"
+                        value={investmentForm.amount}
+                        onChange={(event) =>
+                          setInvestmentForm((previous) => ({
+                            ...previous,
+                            amount: formatInputCurrency(event.target.value),
+                          }))
+                        }
+                        placeholder="500.000"
+                        className="w-full rounded-xl border border-slate-300 pl-9 pr-3 py-2 outline-none focus:border-primary"
+                      />
+                    </div>
+                  </label>
+
+                  <div className="flex items-end">
+                    <button
+                      type="submit"
+                      disabled={isSavingInvestment}
+                      className="inline-flex rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60"
+                    >
+                      {isSavingInvestment ? "Menyimpan..." : "Simpan Investasi"}
+                    </button>
+                  </div>
+
+                  {investmentFeedback.message ? (
+                    <p
+                      className={`md:col-span-3 text-sm ${investmentFeedback.isError ? "text-red-600" : "text-primary"}`}
+                    >
+                      {investmentFeedback.message}
+                    </p>
+                  ) : null}
+                </form>
+              )}
+
+              {investments.length ? (
+                <div className="overflow-x-auto rounded-xl border border-slate-200">
+                  <table className="min-w-full divide-y divide-slate-200 text-sm">
+                    <thead className="bg-slate-50 text-left text-slate-600">
+                      <tr>
+                        <th className="px-3 py-2 font-medium">Tahun Buku</th>
+                        <th className="px-3 py-2 font-medium">Nominal</th>
+                        <th className="px-3 py-2 font-medium">Tanggal Input</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 bg-white text-slate-700">
+                      {investments.map((inv) => (
+                        <tr key={inv.id}>
+                          <td className="px-3 py-2">{inv.period}</td>
+                          <td className="px-3 py-2 font-semibold text-primary">{formatCurrency(inv.amount)}</td>
+                          <td className="px-3 py-2">{formatDate(inv.inputDate)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <p className="text-sm text-slate-500">
+                  Belum ada investasi tercatat untuk anggota ini.
+                </p>
+              )}
+            </div>
+          </SectionCard>
+        )}
+
         {/* Status Management Action Card */}
         <div className={`rounded-3xl border p-5 shadow-sm ${
           member.status === "aktif"
@@ -1009,7 +1175,13 @@ export function MemberDetailPage({ memberId }: MemberDetailPageProps) {
                         <span className="text-slate-600">Total Simpanan Sukarela</span>
                         <span className="font-semibold text-slate-800">{formatCurrency(totalSukarela)}</span>
                       </div>
-                      
+                      {totalInvestasi > 0 && (
+                        <div className="flex justify-between border-b border-slate-100 pb-2">
+                          <span className="text-slate-600">Total Investasi</span>
+                          <span className="font-semibold text-slate-800">{formatCurrency(totalInvestasi)}</span>
+                        </div>
+                      )}
+
                       <div className="flex justify-between text-red-600 border-b border-slate-100 pb-2 pt-1 text-xs">
                         <span>Potongan / Tunggakan Iuran</span>
                         <span className="font-semibold">-{formatCurrency(arrearsInfo.arrears)}</span>
@@ -1041,6 +1213,7 @@ export function MemberDetailPage({ memberId }: MemberDetailPageProps) {
                         data: {
                           totalWajib,
                           totalSukarela,
+                          totalInvestasi,
                           totalPokok: principalSavingAmount,
                           totalRecap,
                           arrears: arrearsInfo.arrears,
@@ -1222,8 +1395,11 @@ export function MemberDetailPage({ memberId }: MemberDetailPageProps) {
                 <div className="flex justify-between"><span>1. Saldo Pengembalian Simpanan Pokok</span><span>{formatCurrency(principalSavingAmount)}</span></div>
                 <div className="flex justify-between"><span>2. Saldo Pengembalian Simpanan Wajib</span><span>{formatCurrency(activePrintJob.data.totalWajib)}</span></div>
                 <div className="flex justify-between"><span>3. Saldo Pengembalian Simpanan Sukarela</span><span>{formatCurrency(activePrintJob.data.totalSukarela)}</span></div>
-                <div className="flex justify-between font-bold border-t-2 border-slate-400 pt-1 text-slate-900 text-xs"><span>Subtotal Hak Keuangan Simpanan</span><span>{formatCurrency(activePrintJob.data.totalPokok + activePrintJob.data.totalRecap)}</span></div>
-                <div className="flex justify-between text-red-705"><span>4. Potongan / Tunggakan Simpanan Wajib</span><span>-{formatCurrency(activePrintJob.data.arrears)}</span></div>
+                {activePrintJob.data.totalInvestasi > 0 && (
+                  <div className="flex justify-between"><span>4. Saldo Pengembalian Investasi</span><span>{formatCurrency(activePrintJob.data.totalInvestasi)}</span></div>
+                )}
+                <div className="flex justify-between font-bold border-t-2 border-slate-400 pt-1 text-slate-900 text-xs"><span>Subtotal Hak Keuangan Simpanan</span><span>{formatCurrency(activePrintJob.data.totalPokok + activePrintJob.data.totalWajib + activePrintJob.data.totalSukarela + activePrintJob.data.totalInvestasi)}</span></div>
+                <div className="flex justify-between text-red-705"><span>5. Potongan / Tunggakan Simpanan Wajib</span><span>-{formatCurrency(activePrintJob.data.arrears)}</span></div>
                 <div className="flex justify-between font-extrabold border-t-2 border-double border-slate-900 pt-1.5 text-sm text-slate-950"><span>TOTAL BERSIH HAK PENGEMBALIAN</span><span>{formatCurrency(activePrintJob.data.netRefund)}</span></div>
               </div>
 
@@ -1330,8 +1506,11 @@ export function MemberDetailPage({ memberId }: MemberDetailPageProps) {
                     <div className="flex justify-between"><span>1. Pengembalian Simpanan Pokok</span><span>{formatCurrency(principalSavingAmount)}</span></div>
                     <div className="flex justify-between"><span>2. Pengembalian Simpanan Wajib</span><span>{formatCurrency(activePrintJob.data.totalWajib)}</span></div>
                     <div className="flex justify-between"><span>3. Pengembalian Simpanan Sukarela</span><span>{formatCurrency(activePrintJob.data.totalSukarela)}</span></div>
-                    <div className="flex justify-between font-bold border-t border-slate-200 pt-1 text-slate-800"><span>Subtotal Hak Simpanan</span><span>{formatCurrency(activePrintJob.data.totalPokok + activePrintJob.data.totalRecap)}</span></div>
-                    <div className="flex justify-between text-red-600"><span>4. Potongan Tunggakan Iuran</span><span>-{formatCurrency(activePrintJob.data.arrears)}</span></div>
+                    {activePrintJob.data.totalInvestasi > 0 && (
+                      <div className="flex justify-between"><span>4. Pengembalian Investasi</span><span>{formatCurrency(activePrintJob.data.totalInvestasi)}</span></div>
+                    )}
+                    <div className="flex justify-between font-bold border-t border-slate-200 pt-1 text-slate-800"><span>Subtotal Hak Simpanan</span><span>{formatCurrency(activePrintJob.data.totalPokok + activePrintJob.data.totalWajib + activePrintJob.data.totalSukarela + activePrintJob.data.totalInvestasi)}</span></div>
+                    <div className="flex justify-between text-red-600"><span>5. Potongan Tunggakan Iuran</span><span>-{formatCurrency(activePrintJob.data.arrears)}</span></div>
                     <div className="flex justify-between font-extrabold border-t border-slate-300 pt-1 text-sm text-primary"><span>TOTAL DANA BERSIH DITERIMA</span><span>{formatCurrency(activePrintJob.data.netRefund)}</span></div>
                   </div>
 
