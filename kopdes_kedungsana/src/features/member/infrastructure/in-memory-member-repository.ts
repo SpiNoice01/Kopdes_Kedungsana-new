@@ -1,11 +1,13 @@
 import type { Member } from "../domain/member";
 import type { MemberMonthlySaving } from "../domain/member-monthly-saving";
 import type { MemberServiceContribution } from "../domain/member-service-contribution";
+import type { MemberInvestment } from "../domain/member-investment";
 import type { MemberRepository } from "../domain/member-repository";
 import { memberSeed } from "./member-seed";
 
 const members: Member[] = [...memberSeed];
 const memberServiceContributions: MemberServiceContribution[] = [];
+const memberInvestments: MemberInvestment[] = [];
 const memberMonthlySavings: MemberMonthlySaving[] = [
   {
     id: "saving-001",
@@ -158,6 +160,25 @@ export class InMemoryMemberRepository implements MemberRepository {
     }
 
     memberServiceContributions.unshift(contribution);
+  }
+
+  async getInvestmentsByMemberId(memberId: string): Promise<MemberInvestment[]> {
+    return memberInvestments
+      .filter((item) => item.memberId === memberId)
+      .sort((a, b) => a.period.localeCompare(b.period));
+  }
+
+  async addInvestment(investment: MemberInvestment): Promise<void> {
+    const existingIndex = memberInvestments.findIndex(
+      (item) => item.memberId === investment.memberId && item.period === investment.period,
+    );
+
+    if (existingIndex >= 0) {
+      memberInvestments.splice(existingIndex, 1, investment);
+      return;
+    }
+
+    memberInvestments.unshift(investment);
   }
 
   async updatePhoto(id: string, photoUrl: string): Promise<void> {

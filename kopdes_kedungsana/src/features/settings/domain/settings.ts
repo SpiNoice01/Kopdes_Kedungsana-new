@@ -18,4 +18,5 @@ export interface KopdesSettings {
   pctKaryawan: number;
   pctPendidikan: number;
   pctSosial: number;
+  enableInvestasi: boolean;
 }

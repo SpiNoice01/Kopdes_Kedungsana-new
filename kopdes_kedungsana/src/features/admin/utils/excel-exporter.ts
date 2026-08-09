@@ -7,6 +7,7 @@ export interface ExcelExportRow {
   savingWajib: number;
   savingSukarela: number;
   totalSaving: number;
+  investmentAmount: number;
   serviceContribution: number;
   savingShu: number;
   serviceShu: number;
@@ -175,38 +176,39 @@ export const buildShuSheet = (
     { width: 5 },  // NO
     { width: 30 }, // NAMA ANGGOTA
     { width: 20 }, // JML SIMPANAN
+    { width: 20 }, // INVESTASI
     { width: 20 }, // SETORAN JASA
     { width: 20 }, // SHU SIMPANAN
     { width: 20 }, // SHU JASA
     { width: 20 }, // JUMLAH
   ];
 
-  ws.mergeCells("A1:G1");
+  ws.mergeCells("A1:H1");
   ws.getCell("A1").value = "DAFTAR PEMBAGIAN SHU";
   ws.getCell("A1").font = { bold: true, size: 12 };
   ws.getCell("A1").alignment = { horizontal: "center" };
 
-  ws.mergeCells("A2:G2");
+  ws.mergeCells("A2:H2");
   ws.getCell("A2").value = settings.cooperativeName.toUpperCase();
   ws.getCell("A2").font = { bold: true, size: 12 };
   ws.getCell("A2").alignment = { horizontal: "center" };
 
-  ws.mergeCells("A3:G3");
+  ws.mergeCells("A3:H3");
   ws.getCell("A3").value = settings.district.toUpperCase();
   ws.getCell("A3").font = { bold: true, size: 12 };
   ws.getCell("A3").alignment = { horizontal: "center" };
 
-  ws.mergeCells("A4:G4");
+  ws.mergeCells("A4:H4");
   ws.getCell("A4").value = `PER ${formattedDate.toUpperCase()}`;
   ws.getCell("A4").font = { bold: true, size: 12 };
   ws.getCell("A4").alignment = { horizontal: "center" };
 
   const headerRow = ws.getRow(6);
-  headerRow.values = ["NO", "NAMA ANGGOTA", "JML SIMPANAN", "SETORAN JASA", "SHU SIMPANAN", "SHU JASA", "JUMLAH"];
+  headerRow.values = ["NO", "NAMA ANGGOTA", "JML SIMPANAN", "INVESTASI", "SETORAN JASA", "SHU SIMPANAN", "SHU JASA", "JUMLAH"];
   headerRow.font = { bold: true };
   headerRow.alignment = { horizontal: "center", vertical: "middle" };
 
-  for (let i = 1; i <= 7; i++) {
+  for (let i = 1; i <= 8; i++) {
     headerRow.getCell(i).border = { top: { style: "thin" }, left: { style: "thin" }, bottom: { style: "thin" }, right: { style: "thin" } };
   }
 
@@ -217,15 +219,16 @@ export const buildShuSheet = (
       idx + 1,
       row.memberName,
       row.totalSaving,
+      row.investmentAmount,
       row.serviceContribution,
       row.savingShu,
       row.serviceShu,
       row.totalShu
     ];
-    
+
     dataRow.getCell(1).alignment = { horizontal: "center" };
-    
-    for (let i = 1; i <= 7; i++) {
+
+    for (let i = 1; i <= 8; i++) {
       const cell = dataRow.getCell(i);
       cell.border = { top: { style: "thin" }, left: { style: "thin" }, bottom: { style: "thin" }, right: { style: "thin" } };
       if (i >= 3) {
@@ -242,14 +245,15 @@ export const buildShuSheet = (
   sumRow.getCell(1).alignment = { horizontal: "center", vertical: "middle" };
 
   sumRow.getCell(3).value = rows.reduce((a, b) => a + b.totalSaving, 0);
-  sumRow.getCell(4).value = rows.reduce((a, b) => a + b.serviceContribution, 0);
-  sumRow.getCell(5).value = rows.reduce((a, b) => a + b.savingShu, 0);
-  sumRow.getCell(6).value = rows.reduce((a, b) => a + b.serviceShu, 0);
-  sumRow.getCell(7).value = rows.reduce((a, b) => a + b.totalShu, 0);
+  sumRow.getCell(4).value = rows.reduce((a, b) => a + b.investmentAmount, 0);
+  sumRow.getCell(5).value = rows.reduce((a, b) => a + b.serviceContribution, 0);
+  sumRow.getCell(6).value = rows.reduce((a, b) => a + b.savingShu, 0);
+  sumRow.getCell(7).value = rows.reduce((a, b) => a + b.serviceShu, 0);
+  sumRow.getCell(8).value = rows.reduce((a, b) => a + b.totalShu, 0);
 
   sumRow.font = { bold: true };
-  
-  for (let i = 1; i <= 7; i++) {
+
+  for (let i = 1; i <= 8; i++) {
     const cell = sumRow.getCell(i);
     cell.border = { top: { style: "thin" }, left: { style: "thin" }, bottom: { style: "thin" }, right: { style: "thin" } };
     if (i >= 3) {
@@ -258,19 +262,19 @@ export const buildShuSheet = (
   }
 
   currentRow += 3;
-  ws.mergeCells(`A${currentRow}:G${currentRow}`);
+  ws.mergeCells(`A${currentRow}:H${currentRow}`);
   ws.getCell(`A${currentRow}`).value = `${settings.printLocation}, ${formattedDate}`;
   ws.getCell(`A${currentRow}`).font = { bold: true };
   ws.getCell(`A${currentRow}`).alignment = { horizontal: "center" };
 
   currentRow += 1;
-  ws.mergeCells(`A${currentRow}:G${currentRow}`);
+  ws.mergeCells(`A${currentRow}:H${currentRow}`);
   ws.getCell(`A${currentRow}`).value = `Pengurus ${settings.cooperativeName}`;
   ws.getCell(`A${currentRow}`).font = { bold: true };
   ws.getCell(`A${currentRow}`).alignment = { horizontal: "center" };
-  
+
   currentRow += 1;
-  ws.mergeCells(`A${currentRow}:G${currentRow}`);
+  ws.mergeCells(`A${currentRow}:H${currentRow}`);
   ws.getCell(`A${currentRow}`).value = settings.address;
   ws.getCell(`A${currentRow}`).font = { bold: true };
   ws.getCell(`A${currentRow}`).alignment = { horizontal: "center" };

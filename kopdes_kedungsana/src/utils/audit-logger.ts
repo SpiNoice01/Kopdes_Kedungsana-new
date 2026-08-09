@@ -9,6 +9,7 @@ export interface AuditLog {
 }
 
 import { supabase } from "./supabase-client";
+import { recordAuditLog } from "@/src/actions/audit-log-actions";
 
 export const getAuditLogs = async (): Promise<AuditLog[]> => {
   try {
@@ -48,17 +49,8 @@ export const addAuditLog = async (
   username = "Admin Kopdes Kedungsana"
 ): Promise<void> => {
   try {
-    const { error } = await supabase.from("audit_logs").insert({
-      action,
-      details,
-      severity,
-      username,
-      ip_address: "192.168.1.102"
-    });
-
-    if (error) {
-      console.error("Failed to insert audit log", error);
-    }
+    const { data } = await supabase.auth.getSession();
+    await recordAuditLog(action, details, severity, username, data.session?.access_token);
   } catch (error) {
     console.error("Exception adding audit log", error);
   }
