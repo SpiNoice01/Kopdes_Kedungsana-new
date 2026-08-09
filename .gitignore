@@ -1,0 +1,5 @@
+# Only track the kopdes_kedungsana project; ignore everything else at repo root
+/*
+
+!/kopdes_kedungsana
+!/.gitignore
