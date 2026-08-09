@@ -62,6 +62,7 @@ interface FinancialSummaryGridProps {
   totalRequired: number;
   totalVoluntary: number;
   totalAccumulated: number;
+  investmentAmount?: number;
   formatCurrency: (v: number) => string;
 }
 
@@ -70,6 +71,7 @@ export function FinancialSummaryGrid({
   totalRequired,
   totalVoluntary,
   totalAccumulated,
+  investmentAmount = 0,
   formatCurrency,
 }: FinancialSummaryGridProps) {
   return (
@@ -92,6 +94,14 @@ export function FinancialSummaryGrid({
           {formatCurrency(totalVoluntary)}
         </span>
       </div>
+      {investmentAmount > 0 && (
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 text-center">
+          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide block">Investasi</span>
+          <span className="text-lg font-extrabold text-slate-800 block mt-1">
+            {formatCurrency(investmentAmount)}
+          </span>
+        </div>
+      )}
       <div className="bg-primary rounded-2xl border border-primary-hover shadow-sm p-4 text-center text-primary-foreground">
         <span className="text-[10px] font-bold text-primary-soft uppercase tracking-wide block">Total Akumulasi</span>
         <span className="text-lg font-black block mt-1">

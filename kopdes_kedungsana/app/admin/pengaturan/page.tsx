@@ -63,6 +63,7 @@ export default function PengaturanPage() {
     if (form.pctKaryawan !== originalForm.pctKaryawan) changes.push(`Karyawan [${originalForm.pctKaryawan}% ➔ ${form.pctKaryawan}%]`);
     if (form.pctPendidikan !== originalForm.pctPendidikan) changes.push(`Pendidikan [${originalForm.pctPendidikan}% ➔ ${form.pctPendidikan}%]`);
     if (form.pctSosial !== originalForm.pctSosial) changes.push(`Dana Sosial [${originalForm.pctSosial}% ➔ ${form.pctSosial}%]`);
+    if (form.enableInvestasi !== originalForm.enableInvestasi) changes.push(`Fitur Investasi [${originalForm.enableInvestasi ? "Aktif" : "Nonaktif"} ➔ ${form.enableInvestasi ? "Aktif" : "Nonaktif"}]`);
     return changes;
   };
 
@@ -349,6 +350,46 @@ export default function PengaturanPage() {
             <span className="text-xs font-semibold text-slate-600 uppercase tracking-wider">Dana Sosial & Pembangunan (%)</span>
             <input type="number" step="0.01" value={form.pctSosial} onChange={(e) => handleChange("pctSosial", Number(e.target.value))} className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-800 outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 transition" />
           </label>
+        </div>
+      </div>
+
+      {/* Section 5: Fitur Investasi */}
+      <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm space-y-4">
+        <div className="border-b border-slate-100 pb-3">
+          <h3 className="text-sm font-bold text-slate-800">Fitur Investasi (Modal Penyertaan Sederhana)</h3>
+          <p className="text-xs text-slate-400 mt-0.5">
+            Saat aktif, pengurus dapat mencatat investasi anggota di halaman detail anggota, dan nominalnya ikut menjadi basis perhitungan SHU Simpanan bersama Simpanan Pokok + Wajib.
+          </p>
+        </div>
+
+        <div className="flex items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-slate-50/50 p-4">
+          <div>
+            <p className="text-sm font-semibold text-slate-700">
+              {form.enableInvestasi ? "Fitur Investasi Aktif" : "Fitur Investasi Nonaktif"}
+            </p>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Menonaktifkan fitur ini hanya menutup formulir tambah investasi baru — data investasi yang sudah ada tidak akan dihapus dan tetap dihitung dalam SHU.
+            </p>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={form.enableInvestasi}
+            onClick={() => {
+              setForm((prev) => ({ ...prev, enableInvestasi: !prev.enableInvestasi }));
+              setIsDirty(true);
+              setIsSaved(false);
+            }}
+            className={`relative inline-flex h-7 w-12 flex-shrink-0 items-center rounded-full transition-colors cursor-pointer ${
+              form.enableInvestasi ? "bg-primary" : "bg-slate-300"
+            }`}
+          >
+            <span
+              className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${
+                form.enableInvestasi ? "translate-x-6" : "translate-x-1"
+              }`}
+            />
+          </button>
         </div>
       </div>
 

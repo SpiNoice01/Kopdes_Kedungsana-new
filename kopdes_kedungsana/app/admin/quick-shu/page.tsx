@@ -37,6 +37,7 @@ interface MemberRecord {
   savingWajib: number;
   savingSukarela: number;
   serviceContribution: number;
+  investmentAmount: number;
 }
 
 import { useEffect } from "react";
@@ -72,9 +73,10 @@ export default function QuickShuPage() {
           const joinYear = new Date(member.joinDate).getFullYear();
           if (joinYear > loadedSettings.activeFiscalYear) continue;
 
-          const [savings, serviceContributions] = await Promise.all([
+          const [savings, serviceContributions, investments] = await Promise.all([
             memberDependencies.getMemberMonthlySavingsUseCase.execute(member.id),
             memberDependencies.getMemberServiceContributionsUseCase.execute(member.id),
+            memberDependencies.getMemberInvestmentsUseCase.execute(member.id),
           ]);
 
           let savingPokok = 0;
@@ -107,6 +109,17 @@ export default function QuickShuPage() {
             }
           }
 
+          // Always sum existing investment records regardless of the
+          // enableInvestasi toggle — the toggle only gates new entries via
+          // the input form, it must never retroactively hide money members
+          // already invested for a given fiscal year.
+          let investmentAmount = 0;
+          for (const inv of investments) {
+            if (inv.period === loadedSettings.activeFiscalYear.toString()) {
+              investmentAmount += inv.amount;
+            }
+          }
+
           records.push({
             memberId: member.id,
             memberName: member.name,
@@ -114,6 +127,7 @@ export default function QuickShuPage() {
             savingWajib,
             savingSukarela,
             serviceContribution,
+            investmentAmount,
           });
         }
 
@@ -132,15 +146,25 @@ export default function QuickShuPage() {
     return rawMembers.reduce((sum, r) => sum + r.savingPokok + r.savingWajib + r.savingSukarela, 0);
   }, [rawMembers]);
 
+  // Simpanan Sukarela is a liability the co-op owes back to the member, not
+  // equity — only Pokok+Wajib (+ Investasi, when present) count as "modal
+  // sendiri" and form the basis for the SHU Simpanan (Jasa Modal) split.
+  const totalModalBasis = useMemo(() => {
+    return rawMembers.reduce((sum, r) => sum + r.savingPokok + r.savingWajib + r.investmentAmount, 0);
+  }, [rawMembers]);
+
   const totalJasaBasis = useMemo(() => {
     return rawMembers.reduce((sum, r) => sum + r.serviceContribution, 0);
   }, [rawMembers]);
 
   // SHU Kotor and the Simpanan/Jasa split come from the same shared helper
   // Spreadsheet Live uses, so both screens always agree on these figures.
+  // The pool is sized from totalModalBasis (Pokok+Wajib+Investasi), not the
+  // full savings total — Sukarela isn't equity, and Investasi money must
+  // actually grow the distributable pool, not just reshuffle shares of it.
   const shuPools = useMemo(
-    () => calculateShuPools(totalSimpananBasis, settings),
-    [totalSimpananBasis, settings]
+    () => calculateShuPools(totalModalBasis, settings),
+    [totalModalBasis, settings]
   );
   const totalShuKotor = shuPools.totalShuKotor;
 
@@ -169,15 +193,16 @@ export default function QuickShuPage() {
   const computedRows = useMemo(() => {
     return rawMembers.map((row) => {
       const totalSaving = row.savingPokok + row.savingWajib + row.savingSukarela;
-      
-      const savingShu = totalSimpananBasis > 0 
-        ? Math.round((totalSaving / totalSimpananBasis) * valJasaModal) 
+      const modalSaving = row.savingPokok + row.savingWajib + row.investmentAmount;
+
+      const savingShu = totalModalBasis > 0
+        ? Math.round((modalSaving / totalModalBasis) * valJasaModal)
         : 0;
-        
-      const serviceShu = totalJasaBasis > 0 
-        ? Math.round((row.serviceContribution / totalJasaBasis) * valJasaUsaha) 
+
+      const serviceShu = totalJasaBasis > 0
+        ? Math.round((row.serviceContribution / totalJasaBasis) * valJasaUsaha)
         : 0;
-        
+
       const totalShu = savingShu + serviceShu;
 
       return {
@@ -188,7 +213,7 @@ export default function QuickShuPage() {
         totalShu,
       };
     });
-  }, [valJasaModal, valJasaUsaha, totalSimpananBasis, totalJasaBasis]);
+  }, [valJasaModal, valJasaUsaha, totalModalBasis, totalJasaBasis]);
 
   const sortedRows = useMemo(() => {
     return [...computedRows].sort((a, b) => {
@@ -500,11 +525,11 @@ export default function QuickShuPage() {
         <div className="mt-4 grid gap-4 md:grid-cols-3">
           <article className="rounded-2xl border border-primary/20 bg-white p-5">
             <div className="flex items-center gap-2">
-              <p className="text-sm text-slate-500">Total Basis Simpanan</p>
-              <Hint text="Akumulasi basis simpanan seluruh anggota pada periode yang dipilih." />
+              <p className="text-sm text-slate-500">Total Basis Simpanan (Modal)</p>
+              <Hint text="Akumulasi Simpanan Pokok + Wajib + Investasi seluruh anggota (modal sendiri) yang menjadi basis perhitungan SHU Simpanan. Simpanan Sukarela tidak dihitung karena bersifat utang koperasi kepada anggota, bukan modal." />
             </div>
             <p className="mt-2 text-xl font-semibold text-primary">
-              Rp {totalSimpananBasis.toLocaleString("id-ID")}
+              Rp {totalModalBasis.toLocaleString("id-ID")}
             </p>
             <p className="mt-1 text-xs text-slate-500">Gap pembulatan: Rp 0</p>
           </article>
@@ -654,6 +679,9 @@ export default function QuickShuPage() {
                     <th className="px-3 py-2.5 font-bold cursor-pointer group hover:bg-slate-100 transition-colors" onClick={() => handleSort("totalSaving")}>
                       <div className="inline-flex items-center gap-1">Total Iuran<SortIndicator active={sortKey === "totalSaving"} direction={sortDirection} /><Hint text="Jumlah simpanan." /></div>
                     </th>
+                    <th className="px-3 py-2.5 font-bold cursor-pointer group hover:bg-slate-100 transition-colors" onClick={() => handleSort("investmentAmount")}>
+                      <div className="inline-flex items-center gap-1">Investasi<SortIndicator active={sortKey === "investmentAmount"} direction={sortDirection} /><Hint text="Investasi anggota tahun buku berjalan, ikut menjadi basis SHU Simpanan bersama Pokok+Wajib." /></div>
+                    </th>
                     <th className="px-3 py-2.5 font-bold cursor-pointer group hover:bg-slate-100 transition-colors" onClick={() => handleSort("serviceContribution")}>
                       <div className="inline-flex items-center gap-1">Storan Jasa<SortIndicator active={sortKey === "serviceContribution"} direction={sortDirection} /><Hint text="Partisipasi jasa." /></div>
                     </th>
@@ -691,7 +719,7 @@ export default function QuickShuPage() {
               <tbody className="divide-y divide-slate-100 bg-white text-slate-700">
                 {isLoading ? (
                   <tr>
-                    <td colSpan={6} className="px-3 py-10 text-center text-slate-500">
+                    <td colSpan={activeTab === "shu" ? 7 : 6} className="px-3 py-10 text-center text-slate-500">
                       <div className="flex flex-col items-center justify-center gap-3">
                         <div className="w-8 h-8 border-2 border-slate-200 border-t-primary rounded-full animate-spin"></div>
                         <p className="text-sm">Menghitung Data SHU dari Database...</p>
@@ -700,7 +728,7 @@ export default function QuickShuPage() {
                   </tr>
                 ) : sortedRows.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="px-3 py-10 text-center text-slate-500 text-sm">
+                    <td colSpan={activeTab === "shu" ? 7 : 6} className="px-3 py-10 text-center text-slate-500 text-sm">
                       Belum ada data anggota aktif untuk dihitung.
                     </td>
                   </tr>
@@ -711,6 +739,7 @@ export default function QuickShuPage() {
                       <>
                         <td className="px-3 py-2 font-medium">{row.memberName}</td>
                         <td className="px-3 py-2">Rp {row.totalSaving.toLocaleString("id-ID")}</td>
+                        <td className="px-3 py-2">Rp {row.investmentAmount.toLocaleString("id-ID")}</td>
                         <td className="px-3 py-2">Rp {row.serviceContribution.toLocaleString("id-ID")}</td>
                         <td className="px-3 py-2 text-slate-600">Rp {row.savingShu.toLocaleString("id-ID")}</td>
                         <td className="px-3 py-2 text-slate-600">Rp {row.serviceShu.toLocaleString("id-ID")}</td>
@@ -737,6 +766,7 @@ export default function QuickShuPage() {
                   {activeTab === "shu" ? (
                     <>
                       <td className="px-3 py-2.5">Rp {totalSimpananBasis.toLocaleString("id-ID")}</td>
+                      <td className="px-3 py-2.5">Rp {sortedRows.reduce((a, b) => a + b.investmentAmount, 0).toLocaleString("id-ID")}</td>
                       <td className="px-3 py-2.5">Rp {totalJasaBasis.toLocaleString("id-ID")}</td>
                       <td className="px-3 py-2.5 text-slate-600">Rp {valJasaModal.toLocaleString("id-ID")}</td>
                       <td className="px-3 py-2.5 text-slate-600">Rp {valJasaUsaha.toLocaleString("id-ID")}</td>

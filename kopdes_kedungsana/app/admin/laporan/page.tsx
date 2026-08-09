@@ -21,6 +21,7 @@ type MemberAnnualSummary = {
   pokok: number;
   wajib: number;
   sukarela: number;
+  investasi: number;
   total: number;
   savingsInYear: MemberMonthlySaving[];
 };
@@ -59,8 +60,11 @@ export default function LaporanPage() {
           const joinYear = new Date(member.joinDate).getFullYear();
           if (joinYear > selectedYear) continue;
 
-          const allSavings = await memberDependencies.getMemberMonthlySavingsUseCase.execute(member.id);
-          
+          const [allSavings, allInvestments] = await Promise.all([
+            memberDependencies.getMemberMonthlySavingsUseCase.execute(member.id),
+            memberDependencies.getMemberInvestmentsUseCase.execute(member.id),
+          ]);
+
           // Akumulasi simpanan hingga akhir tahun buku yang dipilih (saldo akhir)
           const savingsUpToYear = allSavings.filter((s) => {
             if (s.period === "POKOK") {
@@ -79,12 +83,17 @@ export default function LaporanPage() {
             .filter((s) => s.period === "POKOK")
             .reduce((sum, s) => sum + s.requiredSaving, 0);
 
+          const investasi = allInvestments
+            .filter((inv) => parseInt(inv.period) <= selectedYear)
+            .reduce((sum, inv) => sum + inv.amount, 0);
+
           results.push({
             member,
             pokok,
             wajib,
             sukarela,
-            total: pokok + wajib + sukarela,
+            investasi,
+            total: pokok + wajib + sukarela + investasi,
             savingsInYear: savingsUpToYear,
           });
         }
@@ -104,6 +113,7 @@ export default function LaporanPage() {
     pokok: summaries.reduce((s, r) => s + r.pokok, 0),
     wajib: summaries.reduce((s, r) => s + r.wajib, 0),
     sukarela: summaries.reduce((s, r) => s + r.sukarela, 0),
+    investasi: summaries.reduce((s, r) => s + r.investasi, 0),
     total: summaries.reduce((s, r) => s + r.total, 0),
   }), [summaries]);
 
@@ -134,30 +144,31 @@ export default function LaporanPage() {
       { width: 20 }, // Simpanan Pokok
       { width: 20 }, // Simpanan Wajib
       { width: 20 }, // Simpanan Sukarela
+      { width: 20 }, // Investasi
       { width: 20 }, // Total Simpanan
     ];
 
-    ws.mergeCells("A1:G1");
+    ws.mergeCells("A1:H1");
     ws.getCell("A1").value = settings.cooperativeName.toUpperCase();
     ws.getCell("A1").font = { bold: true, size: 12 };
     ws.getCell("A1").alignment = { horizontal: "center" };
 
-    ws.mergeCells("A2:G2");
+    ws.mergeCells("A2:H2");
     ws.getCell("A2").value = "LAPORAN REKAP SIMPANAN TAHUNAN";
     ws.getCell("A2").font = { bold: true, size: 12 };
     ws.getCell("A2").alignment = { horizontal: "center" };
 
-    ws.mergeCells("A3:G3");
+    ws.mergeCells("A3:H3");
     ws.getCell("A3").value = `Tahun Buku ${selectedYear}`;
     ws.getCell("A3").font = { bold: true, size: 12 };
     ws.getCell("A3").alignment = { horizontal: "center" };
 
     const headerRow = ws.getRow(5);
-    headerRow.values = ["NO", "NAMA ANGGOTA", "NIK", "SIMPANAN POKOK", "SIMPANAN WAJIB", "SIMPANAN SUKARELA", "TOTAL SIMPANAN"];
+    headerRow.values = ["NO", "NAMA ANGGOTA", "NIK", "SIMPANAN POKOK", "SIMPANAN WAJIB", "SIMPANAN SUKARELA", "INVESTASI", "TOTAL SIMPANAN"];
     headerRow.font = { bold: true };
     headerRow.alignment = { horizontal: "center", vertical: "middle" };
-    
-    for (let i = 1; i <= 7; i++) {
+
+    for (let i = 1; i <= 8; i++) {
       headerRow.getCell(i).border = { top: { style: "thin" }, left: { style: "thin" }, bottom: { style: "thin" }, right: { style: "thin" } };
     }
 
@@ -171,13 +182,14 @@ export default function LaporanPage() {
         row.pokok,
         row.wajib,
         row.sukarela,
+        row.investasi,
         row.total,
       ];
-      
+
       dataRow.getCell(1).alignment = { horizontal: "center" };
-      dataRow.getCell(3).numFmt = "@"; 
-      
-      for (let i = 1; i <= 7; i++) {
+      dataRow.getCell(3).numFmt = "@";
+
+      for (let i = 1; i <= 8; i++) {
         const cell = dataRow.getCell(i);
         cell.border = { top: { style: "thin" }, left: { style: "thin" }, bottom: { style: "thin" }, right: { style: "thin" } };
         if (i >= 4) cell.numFmt = '_("Rp"* #,##0_);_("Rp"* (#,##0);_("Rp"* "-"_);_(@_)';
@@ -194,24 +206,25 @@ export default function LaporanPage() {
     sumRow.getCell(4).value = grandTotal.pokok;
     sumRow.getCell(5).value = grandTotal.wajib;
     sumRow.getCell(6).value = grandTotal.sukarela;
-    sumRow.getCell(7).value = grandTotal.total;
+    sumRow.getCell(7).value = grandTotal.investasi;
+    sumRow.getCell(8).value = grandTotal.total;
 
     sumRow.font = { bold: true };
 
-    for (let i = 1; i <= 7; i++) {
+    for (let i = 1; i <= 8; i++) {
       const cell = sumRow.getCell(i);
       cell.border = { top: { style: "thin" }, left: { style: "thin" }, bottom: { style: "thin" }, right: { style: "thin" } };
       if (i >= 4) cell.numFmt = '_("Rp"* #,##0_);_("Rp"* (#,##0);_("Rp"* "-"_);_(@_)';
     }
 
     currentRow += 3;
-    ws.mergeCells(`A${currentRow}:G${currentRow}`);
+    ws.mergeCells(`A${currentRow}:H${currentRow}`);
     ws.getCell(`A${currentRow}`).value = `${settings.printLocation}, ${formattedDate}`;
     ws.getCell(`A${currentRow}`).font = { bold: true };
     ws.getCell(`A${currentRow}`).alignment = { horizontal: "center" };
 
     currentRow += 1;
-    ws.mergeCells(`A${currentRow}:G${currentRow}`);
+    ws.mergeCells(`A${currentRow}:H${currentRow}`);
     ws.getCell(`A${currentRow}`).value = `Pengurus ${settings.cooperativeName}`;
     ws.getCell(`A${currentRow}`).font = { bold: true };
     ws.getCell(`A${currentRow}`).alignment = { horizontal: "center" };
@@ -288,12 +301,15 @@ export default function LaporanPage() {
         </div>
 
         {/* Grand Total Summary Cards */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className={`grid grid-cols-2 gap-4 ${!isLoading && grandTotal.investasi > 0 ? "md:grid-cols-5" : "md:grid-cols-4"}`}>
           {[
             { label: "Total Anggota Aktif", value: isLoading ? "-" : `${summaries.length} orang`, color: "blue" },
             { label: "Total Simpanan Pokok", value: isLoading ? "-" : formatCurrency(grandTotal.pokok), color: "indigo" },
             { label: "Total Simpanan Wajib", value: isLoading ? "-" : formatCurrency(grandTotal.wajib), color: "emerald" },
             { label: "Total Simpanan Sukarela", value: isLoading ? "-" : formatCurrency(grandTotal.sukarela), color: "amber" },
+            ...(!isLoading && grandTotal.investasi > 0
+              ? [{ label: "Total Investasi", value: formatCurrency(grandTotal.investasi), color: "rose" }]
+              : []),
           ].map((card) => (
             <div key={card.label} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
               <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">{card.label}</p>
@@ -353,6 +369,7 @@ export default function LaporanPage() {
                     <th className="px-4 py-3 text-right font-semibold">Simpanan Pokok</th>
                     <th className="px-4 py-3 text-right font-semibold">Simpanan Wajib</th>
                     <th className="px-4 py-3 text-right font-semibold">Simpanan Sukarela</th>
+                    <th className="px-4 py-3 text-right font-semibold">Investasi</th>
                     <th className="px-4 py-3 text-right font-semibold">Total Simpanan</th>
                   </tr>
                 </thead>
@@ -372,6 +389,7 @@ export default function LaporanPage() {
                       <td className="px-4 py-3 text-right text-slate-700 font-mono">{formatCurrency(row.pokok)}</td>
                       <td className="px-4 py-3 text-right text-slate-700 font-mono">{formatCurrency(row.wajib)}</td>
                       <td className="px-4 py-3 text-right text-slate-700 font-mono">{formatCurrency(row.sukarela)}</td>
+                      <td className="px-4 py-3 text-right text-slate-700 font-mono">{formatCurrency(row.investasi)}</td>
                       <td className="px-4 py-3 text-right font-bold text-primary font-mono">{formatCurrency(row.total)}</td>
                     </tr>
                   ))}
@@ -382,6 +400,7 @@ export default function LaporanPage() {
                     <td className="px-4 py-3 text-right font-extrabold text-slate-800 font-mono">{formatCurrency(grandTotal.pokok)}</td>
                     <td className="px-4 py-3 text-right font-extrabold text-slate-800 font-mono">{formatCurrency(grandTotal.wajib)}</td>
                     <td className="px-4 py-3 text-right font-extrabold text-slate-800 font-mono">{formatCurrency(grandTotal.sukarela)}</td>
+                    <td className="px-4 py-3 text-right font-extrabold text-slate-800 font-mono">{formatCurrency(grandTotal.investasi)}</td>
                     <td className="px-4 py-3 text-right font-extrabold text-primary font-mono text-base">{formatCurrency(grandTotal.total)}</td>
                   </tr>
                 </tfoot>
@@ -420,6 +439,7 @@ export default function LaporanPage() {
               <th className="border border-slate-400 px-2 py-1.5 text-right">Simp. Pokok</th>
               <th className="border border-slate-400 px-2 py-1.5 text-right">Simp. Wajib</th>
               <th className="border border-slate-400 px-2 py-1.5 text-right">Simp. Sukarela</th>
+              <th className="border border-slate-400 px-2 py-1.5 text-right">Investasi</th>
               <th className="border border-slate-400 px-2 py-1.5 text-right font-extrabold">Total</th>
             </tr>
           </thead>
@@ -432,6 +452,7 @@ export default function LaporanPage() {
                 <td className="border border-slate-300 px-2 py-1 text-right">{formatCurrency(row.pokok)}</td>
                 <td className="border border-slate-300 px-2 py-1 text-right">{formatCurrency(row.wajib)}</td>
                 <td className="border border-slate-300 px-2 py-1 text-right">{formatCurrency(row.sukarela)}</td>
+                <td className="border border-slate-300 px-2 py-1 text-right">{formatCurrency(row.investasi)}</td>
                 <td className="border border-slate-300 px-2 py-1 text-right font-extrabold">{formatCurrency(row.total)}</td>
               </tr>
             ))}
@@ -442,6 +463,7 @@ export default function LaporanPage() {
               <td className="border border-slate-500 px-2 py-2 text-right">{formatCurrency(grandTotal.pokok)}</td>
               <td className="border border-slate-500 px-2 py-2 text-right">{formatCurrency(grandTotal.wajib)}</td>
               <td className="border border-slate-500 px-2 py-2 text-right">{formatCurrency(grandTotal.sukarela)}</td>
+              <td className="border border-slate-500 px-2 py-2 text-right">{formatCurrency(grandTotal.investasi)}</td>
               <td className="border border-slate-500 px-2 py-2 text-right text-base">{formatCurrency(grandTotal.total)}</td>
             </tr>
           </tfoot>

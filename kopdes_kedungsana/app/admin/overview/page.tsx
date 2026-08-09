@@ -20,6 +20,7 @@ export default function OverviewPage() {
   const [sumPokok, setSumPokok] = useState(0);
   const [sumWajib, setSumWajib] = useState(0);
   const [sumSukarela, setSumSukarela] = useState(0);
+  const [sumInvestasi, setSumInvestasi] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   // Monthly trend: last 6 months label => total savings
   const [monthlyTrend, setMonthlyTrend] = useState<{ label: string; wajib: number; sukarela: number }[]>([]);
@@ -36,6 +37,7 @@ export default function OverviewPage() {
         setSumPokok(stats.sumPokok);
         setSumWajib(stats.sumWajib);
         setSumSukarela(stats.sumSukarela);
+        setSumInvestasi(stats.sumInvestasi);
         setTotalSavings(stats.totalSavings);
         setArrearsCount(stats.arrearsCount);
 
@@ -153,7 +155,7 @@ export default function OverviewPage() {
             Selamat Datang di Panel Koperasi Kedungsana
           </h2>
           <p className="mt-1.5 text-xs sm:text-sm text-slate-500 max-w-xl">
-            Sistem pengawasan digital in-memory untuk memantau administrasi, simpanan berkala, status tunggakan iuran, dan transparansi log audit pra-RAT secara langsung.
+            Sistem pengawasan digital terpusat untuk memantau administrasi, simpanan berkala, status tunggakan iuran, dan transparansi log audit pra-RAT secara langsung.
           </p>
         </div>
         <div className="bg-primary/10 text-primary px-4 py-2.5 rounded-2xl flex items-center gap-2 flex-shrink-0 self-start md:self-auto">
@@ -165,7 +167,7 @@ export default function OverviewPage() {
       </div>
 
       {/* Analytics Grid */}
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className={`grid gap-4 ${sumInvestasi > 0 ? "md:grid-cols-4" : "md:grid-cols-3"}`}>
         {/* Card 1: Total Members */}
         <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm relative overflow-hidden group">
           <div className="absolute right-0 top-0 translate-x-4 -translate-y-4 w-24 h-24 bg-blue-500/5 rounded-full transition-transform group-hover:scale-110"></div>
@@ -256,6 +258,34 @@ export default function OverviewPage() {
             </span>
           </div>
         </div>
+
+        {/* Card 4: Total Investasi (only shown once any member has invested) */}
+        {sumInvestasi > 0 && (
+          <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm relative overflow-hidden group">
+            <div className="absolute right-0 top-0 translate-x-4 -translate-y-4 w-24 h-24 bg-amber-500/5 rounded-full transition-transform group-hover:scale-110"></div>
+            <div className="flex items-center gap-3">
+              <div className="bg-amber-50 text-amber-600 p-3 rounded-2xl">
+                <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+                </svg>
+              </div>
+              <div>
+                <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Total Investasi</p>
+                <h3 className="text-2xl font-bold text-slate-800 mt-0.5 font-mono">
+                  {isLoading ? (
+                    <span className="inline-block w-24 h-6 bg-slate-200 animate-pulse rounded"></span>
+                  ) : (
+                    formatCurrency(sumInvestasi)
+                  )}
+                </h3>
+              </div>
+            </div>
+            <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs">
+              <span className="text-slate-400">Modal Penyertaan Anggota</span>
+              <span className="text-amber-600 font-semibold bg-amber-50 px-2 py-0.5 rounded-full text-[10px]">Ikut Basis SHU</span>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Advanced Visual Charts Row */}
