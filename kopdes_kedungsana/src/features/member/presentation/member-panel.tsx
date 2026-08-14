@@ -8,6 +8,7 @@ import type { Member } from "../domain/member";
 import type { MemberMonthlySaving } from "../domain/member-monthly-saving";
 import { memberDependencies } from "../infrastructure/member-dependencies";
 import { loadSettingsAsync } from "@/src/actions/settings-actions";
+import { scanKtpImage } from "@/src/actions/ktp-scan-actions";
 import type { KopdesSettings } from "@/src/features/settings/domain/settings";
 import { formatCurrency } from "@/src/utils/formatters";
 import { calculateArrears } from "../domain/member-services";
@@ -474,34 +475,9 @@ export function MemberPanel() {
       });
 
       if (!imageUrl) throw new Error("Gagal membaca gambar KTP.");
-      
+
       const base64Data = imageUrl.split(",")[1];
-      const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
-      
-      if (!apiKey) throw new Error("Gemini API Key tidak ditemukan!");
-
-      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [{
-            parts: [
-              { text: "Anda adalah sistem ahli ekstraksi data KTP Indonesia. Ekstrak data dari gambar KTP ini ke dalam format JSON. Kunci JSON harus persis: 'nik', 'name', 'birthPlace', 'birthDate' (format YYYY-MM-DD), 'gender' (hanya 'laki-laki' atau 'perempuan'), 'address' (gabungkan jalan, RT/RW, kel/desa, dan kecamatan menjadi satu string dengan koma), 'bloodType' (hanya 'A', 'B', 'AB', 'O', atau '-'), 'religion' (hanya 'Islam', 'Kristen', 'Katolik', 'Hindu', 'Buddha', 'Khonghucu'), 'maritalStatus' (hanya 'Belum Kawin', 'Kawin', 'Cerai Hidup', 'Cerai Mati'), 'occupation'. Hanya kembalikan output JSON tanpa format markdown." },
-              { inlineData: { mimeType: "image/jpeg", data: base64Data } }
-            ]
-          }],
-          generationConfig: {
-            temperature: 0.1,
-            responseMimeType: "application/json"
-          }
-        })
-      });
-
-      const responseData = await response.json();
-      if (!response.ok) throw new Error(responseData.error?.message || "Gagal menghubungi Gemini API");
-      
-      const rawText = responseData.candidates[0].content.parts[0].text;
-      const parsedData = JSON.parse(rawText);
+      const parsedData = await scanKtpImage(base64Data);
       setOcrProgress(100);
 
       setKtpForm((prev) => ({
@@ -510,7 +486,7 @@ export function MemberPanel() {
         name: parsedData.name || prev.name,
         birthPlace: parsedData.birthPlace || prev.birthPlace,
         birthDate: parsedData.birthDate || prev.birthDate,
-        gender: parsedData.gender || prev.gender,
+        gender: (parsedData.gender as KtpFormState["gender"]) || prev.gender,
         address: parsedData.address || prev.address,
         bloodType: parsedData.bloodType || prev.bloodType,
         religion: parsedData.religion || prev.religion,
