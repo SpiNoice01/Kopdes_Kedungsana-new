@@ -42,15 +42,33 @@ export const getAuditLogs = async (): Promise<AuditLog[]> => {
   }
 };
 
+// Fallback for the rare case there's genuinely no active session when this
+// fires — every real call site runs inside the authenticated admin area, so
+// this should be unreachable in practice, not a routine identity.
+const FALLBACK_IDENTITY = "Admin Kopdes Kedungsana (sesi tidak diketahui)";
+
+/**
+ * `username` is an optional override — leave it unset (as almost every call
+ * site does) and the real logged-in admin's identity (email/phone/id from
+ * the live Supabase session) is used automatically. Previously this always
+ * fell back to a hardcoded generic string unless the caller explicitly
+ * passed a username, which none did except the backup feature — meaning
+ * every other action (add member, record savings, print documents, export,
+ * navigation, ...) was logged under the same name no matter who was
+ * actually logged in, defeating the individual-accountability role the
+ * audit trail is documented to play (SRS 5.5, SCRAM 5.3).
+ */
 export const addAuditLog = async (
   action: string,
   details: string,
   severity: "info" | "warning" | "danger" | "success" = "info",
-  username = "Admin Kopdes Kedungsana"
+  username?: string
 ): Promise<void> => {
   try {
     const { data } = await supabase.auth.getSession();
-    await recordAuditLog(action, details, severity, username, data.session?.access_token);
+    const identity =
+      username ?? data.session?.user?.email ?? data.session?.user?.phone ?? data.session?.user?.id ?? FALLBACK_IDENTITY;
+    await recordAuditLog(action, details, severity, identity, data.session?.access_token);
   } catch (error) {
     console.error("Exception adding audit log", error);
   }
