@@ -74,16 +74,21 @@ Klien minta file database dan file laporan RAT terpisah (bukan digabung 7-sheet 
 
 ---
 
-## 3. Cetak Kartu Anggota — FITUR YANG TERLEWAT, PERLU DIBANGUN
+## 3. Cetak Kartu Anggota — SUDAH DIBANGUN (26 Agustus 2026)
 
-**Konteks dari klien (25 Agustus 2026):** Ini memang direncanakan sejak wawancara awal (Lampiran 1 Q3: *"kita akan menyetak semacam kartu pengenal"*, Lampiran 6: contoh kartu), masuk SCRAM sebagai requirement Optional, tapi lupa diimplementasikan. Lokasi: halaman detail anggota, memanfaatkan foto profil yang sudah ada.
+**Konteks dari klien:** Direncanakan sejak wawancara awal (Lampiran 1 Q3: *"kita akan menyetak semacam kartu pengenal"*, Lampiran 6: contoh kartu), masuk SCRAM sebagai requirement Optional, sempat lupa diimplementasikan. Klien mengirim foto referensi kartu fisik asli (lanyard, Aryanto/Sekretaris) pada 26 Agustus 2026 untuk acuan desain.
 
-### [BUILD] — Spek untuk Claude Code
-- **Lokasi:** `src/features/member/presentation/member-detail-page.tsx` — file ini sudah punya pola print-job yang konsisten (`activePrintJob` state dengan varian `"kwitansi"` dan `"mutasi"`, container print-only tersembunyi di baris ~1273, `window.print()` di ~1560, log via `addAuditLog`). Tambahkan varian baru `activePrintJob.type === "kartu"` mengikuti pola yang sama persis — jangan bikin arsitektur print terpisah.
-- **Sumber data:** `member.photo_url` (sudah ada di domain `member.ts`), `member.nik`, `member.name`, `member.join_date`, `member.status`, ditambah identitas koperasi dari `cooperative_settings` (nama koperasi, mungkin logo — cek `app/admin/pengaturan/page.tsx` untuk field yang tersedia, sudah ada `logo`? cek `public/logo`).
-- **Layout:** ukuran kartu identitas standar (mirip KTP/kartu anggota fisik), foto di satu sisi, data di sisi lain atau bawahnya — ambil referensi visual dari Lampiran 6 skripsi ("Contoh Card Anggota") kalau memungkinkan diakses.
-- **Tombol:** tambahkan tombol "Cetak Kartu Anggota" di halaman detail anggota, sejajar dengan tombol "Cetak Kwitansi" yang sudah ada.
-- **Audit log:** action baru mis. `"MEMBER_CARD_PRINT"`.
+### [BUILD] — STATUS: SUDAH DIBANGUN
+Ditambahkan ke `src/features/member/presentation/member-detail-page.tsx`, mengikuti persis pola `activePrintJob` yang sudah ada (varian `"receipt"`/`"mutasi"`/`"liquidation"`) — ditambah varian baru `"kartu"`, bukan arsitektur print terpisah:
+- **Tombol:** "Cetak Kartu Anggota" di bagian foto profil, sejajar tombol "Ganti Foto"/"Unggah Foto".
+- **Ukuran fisik:** 90mm × 140mm (ukuran badge lanyard umum untuk cetak DIY di kertas biasa + laminating — bukan ukuran kartu CR80 profesional, karena skala koperasi ini printer rumahan/kantor biasa, bukan card printer).
+- **Konten:** logo `/logo/KDMP.jpg`, nama koperasi + kecamatan (dari `cooperative_settings.cooperativeName`/`district`, merah bold, meniru referensi), nomor badan hukum (`legalNumber`), foto profil anggota (`member.photoUrl`), nama anggota, label "ANGGOTA" (statis — domain `Member` tidak punya field jabatan, jadi tidak bisa dibedakan per-anggota seperti "SEKRETARIS" di kartu contoh; kartu contoh itu punya pengurus, bukan anggota biasa), aksen diagonal merah di bawah (dekorasi, pakai CSS `clip-path`, bukan gambar).
+- Ditambahkan juga preview versi kecil di modal pratinjau cetak (sebelum `window.print()`), dan audit log baru `MEMBER_CARD_PRINT`.
+- **Diverifikasi visual via screenshot** (Playwright, preview route sementara yang sudah dihapus) — hasil renderernya sudah dicocokkan langsung ke foto referensi klien, cukup mirip.
+- Lolos `tsc --noEmit` dan `npm run lint`.
+- **Fix 1 (26 Agustus 2026):** aksen diagonal merah di bawah kartu hilang saat Save as PDF, teks merah tetap muncul. Penyebab: browser default membuang `background-color` saat print/PDF untuk hemat tinta (cuma berlaku ke fill/background, bukan warna teks). Fix: utility `.print-color-exact` di `globals.css` (`print-color-adjust: exact` dalam `@media print`, di-scope cuma ke konten print).
+- **Fix 2 (26 Agustus 2026):** hasil PDF/print banyak whitespace di sekitar kartu, karena wrapper print umum (dipakai bersama kwitansi/mutasi/berita acara) selalu punya padding `print:p-12` dan halaman default ke ukuran A4, padahal kartu cuma 90mm×140mm. Fix: `<style>@page { size: 90mm 140mm; margin: 0; }</style>` yang **hanya dirender saat `activePrintJob.type === "kartu"`** (tidak menyentuh dokumen A4 lain), plus padding wrapper dibuat kondisional (`print:p-0` khusus kartu, `print:p-12` tetap untuk yang lain). Catatan: dukungan `@page size` tergantung browser/driver printer — kalau cetak ke printer fisik (bukan Save as PDF) hasilnya tidak pas, klien mungkin perlu pilih ukuran kertas custom/"Fit to page" manual di dialog print.
+- Sudah lolos `tsc`/`lint` lagi setelah kedua fix. **Klien perlu coba print ulang untuk konfirmasi.**
 
 ### [DOC] — Revisi yang diperlukan
 - **SRS Bagian 4.2 (Pengelolaan Data Anggota):** tambahkan requirement baru, mis. **FR-40** — "Sistem harus dapat mencetak Kartu Anggota berisi foto profil, NIK, nama, dan status keanggotaan dari halaman detail anggota."
@@ -135,6 +140,7 @@ Tidak ada kode POS/Unit Toko yang perlu dibangun atau dihapus (memang tidak pern
 | Fitur | Kode | Butuh Build? | Butuh Revisi Dokumen? |
 |---|---|---|---|
 | Setoran/Partisipasi Jasa | struktur data saja, sengaja | ❌ (memang belum waktunya) | ✅ tegaskan sebagai limitasi/future work |
-| Backup Data | ✅ **sudah dibangun 2026-08-25**, belum dites manual ke Supabase asli | ✅ selesai | ✅ SRS/SDD/SCRAM/BAB I |
-| Cetak Kartu Anggota | belum ada — menunggu referensi desain gambar dari klien | ⏸️ ditunda sampai referensi dikirim | ✅ SRS/SDD/SCRAM |
+| Backup Data (2 berkas: DB + RAT) | ✅ **sudah dibangun**, code-review 5 temuan sudah diperbaiki | ✅ selesai | ✅ SRS/SDD/SCRAM/BAB I |
+| Ekspor Semua Laporan (Bundel RAT) | ✅ **sudah dibangun**, tombol di halaman Quick SHU | ✅ selesai | ✅ SRS/SDD |
+| Cetak Kartu Anggota | ✅ **sudah dibangun 2026-08-26**, diverifikasi visual via screenshot, belum dites cetak fisik | ✅ selesai | ✅ SRS/SDD/SCRAM |
 | Unit Toko / POS | tidak ada, memang tidak perlu | ❌ | ✅ hapus dari Lembar Orisinalitas |
