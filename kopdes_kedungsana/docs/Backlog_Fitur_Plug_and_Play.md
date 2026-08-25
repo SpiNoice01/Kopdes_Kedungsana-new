@@ -18,6 +18,28 @@ Urutan bukan urutan prioritas wajib — kerjakan sesuai kebutuhan pengguna (klie
 
 ---
 
+## Catatan verifikasi review eksternal (GPT), 26 Agustus 2026
+
+User minta review kedua dokumen (SRS/SDD/skripsi vs kode) dari GPT, lalu minta dicek ulang. Hasil cross-check:
+
+**Temuan baru yang GPT lewatkan (paling penting, lihat item 5 di bawah):** audit log **tidak benar-benar mencatat identitas individual admin**. `addAuditLog()` di `src/utils/audit-logger.ts` defaultnya `username = "Admin Kopdes Kedungsana"` (string hardcoded), dan **tidak ada satupun** pemanggilan di `member-panel.tsx`, `member-detail-page.tsx`, `admin-shell.tsx`, `spreadsheet-modal.tsx` yang override dengan identitas asli — satu-satunya yang benar kirim identitas asli adalah `backup-guard.ts` (fitur backup, dibangun 26 Agustus). Ini penting karena SRS 5.5 & SCRAM 5.3 sama-sama mengklaim "akuntabilitas individu digantikan lewat log aktivitas yang mencatat siapa melakukan apa" sebagai pembenaran kenapa sistem tidak perlu role-based permission — klaim itu **tidak benar-benar terpenuhi di implementasi** untuk hampir semua aksi.
+
+**Yang GPT benar tapi ternyata REDUNDAN** (sudah tercatat di SRS, GPT sepertinya tidak baca sampai Lampiran C/Bagian 5.5): login nomor telepon (TBD-2), Setoran Jasa belum ada UI (TBD-1), validasi total % SHU (TBD-4), dokumentasi pengguna (TBD-5), admin tidak dibedakan jabatan (SRS 5.5), data investasi tetap dipakai walau fitur off (FR-21).
+
+**Yang GPT salah/kadaluarsa:** "Backup internal belum tersedia, nyatakan bergantung penyedia" — ini benar untuk SRS versi saat ini (belum diupdate), tapi **kode aslinya sudah punya backup buatan sendiri** (dibangun 25-26 Agustus, lihat item 2). Kalau instruksi GPT ini diikuti mentah-mentah, dokumen jadi salah arah — SRS harus diupdate untuk MENGAKUI backup baru, bukan menegaskan ketiadaannya.
+
+**Yang saya tidak sepakat:** GPT menyarankan Use Case Diagram dipindah dari SDD ke SRS. Struktur dokumen proyek ini sudah konsisten menaruh Use Case/Activity/Sequence Diagram di SDD (Bagian 3.2 & 8, `SDD_UseCasePerFitur.drawio` dkk, dipakai di 11 kelompok fitur) — ini keputusan struktural yang sudah dijalankan taat asas, bukan kesalahan.
+
+**Yang genuinely baru & valid dari GPT:** (a) SHU belum ada mekanisme "kunci tahun buku" — selalu dihitung ulang live dari persentase settings saat itu, jadi kalau persentase diubah setelah RAT, angka lama ikut berubah retroaktif (risiko nyata, belum ada di dokumen manapun); (b) rate limiting untuk LOGIN (bukan cuma portal NIK yang sudah TBD-3).
+
+**Keputusan klien atas daftar Grup 3 (26 Agustus 2026):**
+- Verifikasi tambahan portal NIK, rate limiting portal NIK, rate limiting login, batasi log NAVIGATE — **dibiarkan/tidak dikerjakan sekarang**.
+- Audit log tidak individual per admin — **belum diputuskan**, klien masih mempertimbangkan (lihat item 5 di bawah, sudah lengkap spek-nya kalau mau dikerjakan nanti).
+- Persetujuan sebelum foto e-KTP dikirim ke AI — **diterapkan**, lihat item 6.
+- Backup + restore — **restore diterapkan sekarang**, alasan klien: "masih belum berat dipakai" (data masih sedikit, waktu paling aman untuk uji coba fitur berisiko ini). Lihat item 9.
+
+---
+
 ## 1. Setoran/Partisipasi Jasa — DITEGASKAN SEBAGAI FITUR MASA DEPAN (bukan fokus sekarang)
 
 **Konteks dari klien (25 Agustus 2026):** Fitur ini nantinya dipicu saat anggota koperasi melakukan **jual-beli barang** di koperasi (mis. membeli pupuk/pakan ikan dari unit usaha koperasi). Transaksi jual-beli itulah yang jadi basis data "partisipasi jasa" untuk SHU Jasa Usaha. Ini eksplisit **bukan fokus riset TA saat ini** — bukan sekadar "belum sempat", tapi memang sengaja dibatasi.
@@ -135,6 +157,60 @@ Tidak ada kode POS/Unit Toko yang perlu dibangun atau dihapus (memang tidak pern
 
 ---
 
+## 5. Audit Log Tidak Mencatat Identitas Individual Admin — TEMUAN BARU, BELUM DIPERBAIKI
+
+**Konteks:** Ditemukan 26 Agustus 2026 saat cross-check review eksternal (GPT). SRS 5.5 dan SCRAM 5.3 sama-sama mengklaim akuntabilitas individu pengurus digantikan oleh audit trail ("mencatat siapa melakukan apa") sebagai alasan kenapa sistem tidak perlu role-based permission. Klaim ini **tidak benar-benar terpenuhi** di kode.
+
+### [BUILD] — Perlu diperbaiki
+- **Akar masalah:** `addAuditLog()` (`src/utils/audit-logger.ts`) punya parameter `username` dengan default hardcoded `"Admin Kopdes Kedungsana"`. Semua pemanggilan di `member-panel.tsx`, `member-detail-page.tsx`, `admin-shell.tsx`, `spreadsheet-modal.tsx` **tidak pernah** override parameter ini — jadi siapapun pengurus yang login, semua tindakannya (tambah anggota, catat simpanan, edit profil, cetak dokumen, ekspor, navigasi) tercatat atas nama string generik yang sama. Hanya `backup-guard.ts` (fitur backup, dibangun 26 Agustus) yang benar mengirim identitas asli (`user.email || user.phone || user.id` dari sesi Supabase).
+- **Perbaikan:** buat helper (mis. `getCurrentAdminIdentity()`) yang mengambil email/phone dari `supabase.auth.getSession()` — pola yang sudah ada di `backup-guard.ts`, tinggal diekstrak jadi reusable — lalu **semua** pemanggilan `addAuditLog()` di keempat file di atas perlu diteruskan identitas asli ini sebagai argumen `username`, bukan mengandalkan default.
+- **Cakupan:** cukup luas (banyak titik panggil), sebaiknya dikerjakan sebagai task tersendiri, bukan disisipkan ke fitur lain.
+
+### [DOC] — Revisi yang diperlukan
+- **SRS 5.5 (Peraturan Bisnis):** kalimat "digantikan lewat log aktivitas (audit trail) yang mencatat siapa melakukan apa" perlu diverifikasi ulang setelah fix di atas selesai — kalau belum diperbaiki saat sidang, sebaiknya kalimat ini dilunakkan jadi jujur tentang keterbatasannya (masuk Lampiran C: Daftar TBD), bukan diklaim sebagai fakta yang sudah berjalan.
+- **SCRAM 5.3 (Design Rationale):** baris "Single Admin, akuntabilitas... digantikan log aktivitas" — sama, perlu catatan bahwa implementasi saat ini belum sepenuhnya mendukung klaim ini.
+- **SDD Lampiran 8 (Keterbatasan Desain):** tambahkan poin baru soal ini — cocok masuk kategori yang sama dengan keterbatasan lain yang sudah dicatat di sana.
+
+---
+
+## 6. Persetujuan Sebelum Foto e-KTP Dikirim ke AI — SUDAH DIBANGUN (26 Agustus 2026)
+
+**Konteks:** Salah satu poin dari review Grup 3 GPT — belum ada consent eksplisit sebelum foto KTP diproses layanan AI pihak ketiga.
+
+### [BUILD] — STATUS: SUDAH DIBANGUN
+- `src/features/member/presentation/member-panel.tsx` — state baru `hasKtpAiConsent`, checkbox persetujuan ditambahkan di banner "Pindai KTP Otomatis (OCR)", teks: *"Saya menyetujui foto KTP ini diproses oleh layanan AI pihak ketiga (Google Gemini)..."*
+- Input file dan tombol scan sama-sama `disabled` sampai checkbox dicentang, plus guard defensif di `handleKtpScanChange` (menolak dengan pesan error kalau somehow terpanggil tanpa consent).
+- Diverifikasi visual via screenshot (preview route sementara, sudah dihapus).
+- Lolos `tsc --noEmit` dan `npm run lint`.
+
+### [DOC] — Revisi yang diperlukan
+- **SRS Bagian 4.2 atau NFR Keamanan:** tambahkan requirement baru soal persetujuan eksplisit sebelum data KTP diproses pihak ketiga.
+- **SDD Bagian 5.2 (Algoritma Pemindaian e-KTP):** tambahkan langkah consent di awal alur.
+
+---
+
+## 9. Pemulihan Data (Restore dari Backup) — SUDAH DIBANGUN (26 Agustus 2026), BELUM DITES NYATA
+
+**Konteks:** Backup (item 2) cuma separuh dari kisah "mekanisme backup dan pemulihan yang diuji" yang GPT sebutkan — separuh lagi (restore) belum ada. Klien minta ini dikerjakan sekarang selagi data koperasi masih sedikit ("belum berat dipakai"), supaya kalau ada bug, dampaknya kecil.
+
+### [BUILD] — STATUS: SUDAH DIBANGUN, perlu ditekankan ini fitur BERISIKO
+- **Lokasi:** halaman Pengaturan (`app/admin/pengaturan/page.tsx`), section baru "Pemulihan Data (Restore dari Backup)", styling amber (zona sensitif, beda dari section merah "Keluar dari Sistem").
+- **Semantik restore — sengaja dipilih paling aman:** **gabung/upsert, bukan timpa-total**. Data yang ada di database sekarang **tidak pernah dihapus** oleh restore; baris dengan `id` yang sama di berkas backup akan menimpa nilainya, baris baru ditambahkan. Baris yang sudah dihapus dari database setelah backup dibuat **tidak akan kembali** (bukan "rewind ke masa lalu", cuma "isi ulang dari cadangan"). Ini keputusan desain sadar untuk menghindari skenario terburuk (accidental full wipe).
+- **Proteksi kolom yang terpotong saat backup:** `photo_url` anggota bisa terpotong saat backup (base64 foto > 30.000 karakter, lihat item 2). Kalau restore menimpa kolom itu dengan versi terpotong, foto asli rusak permanen. Fix: `database-restore.ts` mendeteksi penanda potongan per-baris-per-kolom, dan **tidak menyertakan** kolom itu di payload upsert untuk baris tsb — nilai lama di database tetap dipertahankan untuk kolom itu saja, kolom lain di baris yang sama tetap direstore normal.
+- **File baru:**
+  - `src/features/admin/utils/database-restore.ts` — `parseBackupWorkbook(file)` (baca .xlsx sisi klien pakai ExcelJS, validasi tiap sheet punya kolom "id", deteksi baris terpotong) dan `performDatabaseRestore(parsed, onProgress)` (upsert **satu baris per panggilan**, bukan batch — supaya tiap baris bisa punya set kolom berbeda kalau ada yang terpotong, tanpa error "ragged keys" dari batch upsert Supabase).
+- **UI flow:** upload file → preview (jumlah baris per tabel + daftar peringatan) → checkbox wajib "saya paham risikonya" → tombol "Proses Restore" → progress → ringkasan hasil. Tercatat ke audit log sebagai `DATABASE_RESTORE` (severity "danger").
+- Diverifikasi visual via screenshot (preview route sementara, sudah dihapus).
+- Lolos `tsc --noEmit` dan `npm run lint`.
+- **Fix (26 Agustus 2026):** klien coba restore beneran ke Supabase, error `"new row violates row-level security policy for table cooperative_settings"`. Penyebab: `cooperative_settings` singleton, RLS-nya cuma izinkan UPDATE (bukan INSERT) — tapi `upsert()` Postgres selalu mencoba jalur INSERT dulu (`INSERT ... ON CONFLICT DO UPDATE`) meski barisnya sudah ada, jadi gagal RLS sebelum sempat jatuh ke UPDATE. Fix: tabel ini di-special-case pakai `.update().eq("id", ...)` biasa (persis pola yang sudah dipakai `settings-repository.ts` selama ini), 4 tabel lain tetap upsert seperti semula. 4 tabel lain (members dkk) sudah berhasil duluan sebelum error ini muncul (cooperative_settings diproses terakhir), jadi fix ini menutup satu-satunya masalah yang ketemu dari tes nyata.
+- **Terkonfirmasi berhasil (26 Agustus 2026):** klien tes ulang setelah fix, restore selesai tanpa error untuk `members`, `member_monthly_savings`, `member_investments`, `cooperative_settings` (`member_service_contributions` tidak muncul di ringkasan karena 0 baris — wajar, Setoran Jasa masih dorman).
+
+### [DOC] — Revisi yang diperlukan
+- **SRS Bagian 5.2 (Persyaratan Keselamatan):** tambahkan FR baru untuk mekanisme restore, sekaligus jelaskan semantik gabung/upsert (bukan rewind/point-in-time-recovery) supaya tidak ada ekspektasi keliru dari pembaca dokumen.
+- **SDD Bagian 5 (Desain Komponen):** tambahkan algoritma "Mekanisme Restore dari Backup", termasuk penjelasan kenapa upsert per-baris (bukan batch) dan proteksi kolom terpotong.
+
+---
+
 ## Ringkasan Status
 
 | Fitur | Kode | Butuh Build? | Butuh Revisi Dokumen? |
@@ -144,3 +220,6 @@ Tidak ada kode POS/Unit Toko yang perlu dibangun atau dihapus (memang tidak pern
 | Ekspor Semua Laporan (Bundel RAT) | ✅ **sudah dibangun**, tombol di halaman Quick SHU | ✅ selesai | ✅ SRS/SDD |
 | Cetak Kartu Anggota | ✅ **sudah dibangun 2026-08-26**, diverifikasi visual via screenshot, belum dites cetak fisik | ✅ selesai | ✅ SRS/SDD/SCRAM |
 | Unit Toko / POS | tidak ada, memang tidak perlu | ❌ | ✅ hapus dari Lembar Orisinalitas |
+| Audit Log — identitas individual admin | ❌ **belum diperbaiki**, semua aksi (kecuali backup) tercatat atas nama generik | ⏸️ belum diputuskan klien | ✅ SRS 5.5/SCRAM 5.3/SDD Lampiran |
+| Persetujuan AI sebelum scan e-KTP | ✅ **sudah dibangun 2026-08-26** | ✅ selesai | ✅ SRS/SDD |
+| Restore Data dari Backup | ✅ **sudah dibangun & terkonfirmasi berhasil 2026-08-26** | ✅ selesai | ✅ SRS/SDD |
