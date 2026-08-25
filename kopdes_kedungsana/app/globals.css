@@ -47,3 +47,17 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
+
+/* Browsers strip background-color/background-image by default when
+   printing or saving as PDF, to save ink — text color survives, but fills
+   like the Kartu Anggota's red diagonal accent don't unless forced back on.
+   Scoped to print-only content (not the whole app) so nothing changes
+   on-screen. */
+@media print {
+  .print-color-exact,
+  .print-color-exact * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    color-adjust: exact !important;
+  }
+}

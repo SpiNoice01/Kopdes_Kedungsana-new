@@ -136,7 +136,7 @@ export function MemberDetailPage({ memberId }: MemberDetailPageProps) {
   
   // State for active document printing pratinjau (modal) and browser print template
   const [activePrintJob, setActivePrintJob] = useState<{
-    type: "receipt" | "liquidation" | "mutasi";
+    type: "receipt" | "liquidation" | "mutasi" | "kartu";
     data: any;
   } | null>(null);
 
@@ -509,6 +509,17 @@ export function MemberDetailPage({ memberId }: MemberDetailPageProps) {
                   {member.photoUrl ? "Ganti Foto" : "Unggah Foto"}
                 </span>
               </label>
+
+              <button
+                type="button"
+                onClick={() => setActivePrintJob({ type: "kartu", data: member })}
+                className="inline-flex items-center gap-1.5 rounded-xl border border-primary/30 bg-primary-soft px-3 py-1.5 text-xs font-bold text-primary shadow-sm hover:bg-primary/10 transition cursor-pointer"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                </svg>
+                Cetak Kartu Anggota
+              </button>
             </div>
 
             <div className="flex-1 space-y-4">
@@ -1270,9 +1281,23 @@ export function MemberDetailPage({ memberId }: MemberDetailPageProps) {
         </div>
       )}
 
+      {/* Kartu Anggota is a small physical card, not an A4 document — set the
+          print page size to match it exactly so "Save as PDF"/print doesn't
+          leave the card floating in a sea of A4 whitespace. Scoped to a
+          <style> tag that only exists while this print job is active, so
+          the other print jobs (kwitansi/mutasi/liquidation) keep printing
+          on the default page size as before. */}
+      {activePrintJob?.type === "kartu" && (
+        <style>{`@page { size: 90mm 140mm; margin: 0; }`}</style>
+      )}
+
       {/* 🖨️ NATIVE PRINT-ONLY CONTAINER (Zero layout shift, hides all other DOM elements on window.print()) */}
       {activePrintJob && (
-        <div className="hidden print:block print:fixed print:inset-0 print:bg-white print:p-12 print:z-[99999] text-slate-800 text-sm font-sans">
+        <div
+          className={`hidden print:block print:fixed print:inset-0 print:bg-white print:z-[99999] text-slate-800 text-sm font-sans ${
+            activePrintJob.type === "kartu" ? "print:p-0" : "print:p-12"
+          }`}
+        >
           {activePrintJob.type === "receipt" ? (
             /* Kwitansi Print Layout */
             <div className="max-w-2xl mx-auto border-2 border-slate-300 p-8 space-y-6 font-mono text-xs">
@@ -1364,6 +1389,49 @@ export function MemberDetailPage({ memberId }: MemberDetailPageProps) {
                   <div className="h-14"></div>
                   <p className="font-bold border-t border-slate-400 pt-1 inline-block min-w-[100px]">Admin Kedungsana</p>
                 </div>
+              </div>
+            </div>
+          ) : activePrintJob.type === "kartu" ? (
+            /* Kartu Anggota Print Layout — sized for a lanyard badge (90mm x 140mm), centered on the printed page */
+            <div className="mx-auto bg-white print-color-exact" style={{ width: "90mm", height: "140mm" }}>
+              <div className="relative flex h-full w-full flex-col items-center overflow-hidden rounded-2xl border-2 border-slate-200 px-4 pt-5 pb-10">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src="/logo/KDMP.jpg" alt="Logo Kopdes Merah Putih" className="h-20 w-20 object-contain" />
+
+                <h2 className="mt-2 text-center text-[13px] font-extrabold uppercase leading-tight text-red-600">
+                  {settings?.cooperativeName || "Koperasi Desa Merah Putih Kedungsana"}
+                </h2>
+                {settings?.district && (
+                  <p className="text-center text-[12px] font-extrabold uppercase leading-tight text-red-600">
+                    {settings.district}
+                  </p>
+                )}
+                <p className="mt-1 text-center text-[9px] tracking-wide text-slate-700">
+                  {settings?.legalNumber || "-"}
+                </p>
+
+                <div className="relative mt-5 aspect-[3/4] w-[62mm] overflow-hidden rounded-md border-2 border-slate-300 bg-slate-100">
+                  {member.photoUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={member.photoUrl} alt={member.name} className="h-full w-full object-cover" />
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center text-3xl font-bold text-slate-400">
+                      {member.name.slice(0, 1).toUpperCase()}
+                    </div>
+                  )}
+                </div>
+
+                <p className="mt-4 text-center text-[13px] font-extrabold uppercase text-slate-900">
+                  {member.name}
+                </p>
+                <p className="text-center text-[10px] font-bold uppercase tracking-wider text-slate-600">
+                  Anggota
+                </p>
+
+                <div
+                  className="absolute inset-x-0 bottom-0 h-12 bg-red-600"
+                  style={{ clipPath: "polygon(0 45%, 100% 0%, 100% 100%, 0% 100%)" }}
+                />
               </div>
             </div>
           ) : (
@@ -1478,6 +1546,39 @@ export function MemberDetailPage({ memberId }: MemberDetailPageProps) {
                     </div>
                   </div>
                 </div>
+              ) : activePrintJob.type === "kartu" ? (
+                /* Kartu Anggota Preview Panel */
+                <div className="flex justify-center rounded-2xl border-2 border-dashed border-slate-300 bg-slate-50/50 p-6">
+                  <div className="relative flex h-80 w-52 flex-col items-center overflow-hidden rounded-2xl border-2 border-slate-200 bg-white px-3 pt-4 pb-8 shadow-sm">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src="/logo/KDMP.jpg" alt="Logo Kopdes Merah Putih" className="h-12 w-12 object-contain" />
+                    <h4 className="mt-1.5 text-center text-[10px] font-extrabold uppercase leading-tight text-red-600">
+                      {settings?.cooperativeName || "Koperasi Desa Merah Putih Kedungsana"}
+                    </h4>
+                    {settings?.district && (
+                      <p className="text-center text-[9px] font-extrabold uppercase leading-tight text-red-600">
+                        {settings.district}
+                      </p>
+                    )}
+                    <p className="mt-0.5 text-center text-[7px] text-slate-500">{settings?.legalNumber || "-"}</p>
+                    <div className="relative mt-3 aspect-[3/4] w-24 overflow-hidden rounded border-2 border-slate-300 bg-slate-100">
+                      {member.photoUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={member.photoUrl} alt={member.name} className="h-full w-full object-cover" />
+                      ) : (
+                        <div className="flex h-full w-full items-center justify-center text-lg font-bold text-slate-400">
+                          {member.name.slice(0, 1).toUpperCase()}
+                        </div>
+                      )}
+                    </div>
+                    <p className="mt-3 text-center text-[10px] font-extrabold uppercase text-slate-900">{member.name}</p>
+                    <p className="text-center text-[8px] font-bold uppercase tracking-wider text-slate-600">Anggota</p>
+                    <div
+                      className="absolute inset-x-0 bottom-0 h-6 bg-red-600"
+                      style={{ clipPath: "polygon(0 45%, 100% 0%, 100% 100%, 0% 100%)" }}
+                    />
+                  </div>
+                </div>
               ) : (
                 /* Liquidation Preview Panel */
                 <div className="border-2 border-dashed border-slate-300 rounded-2xl p-6 bg-slate-50/50 font-serif text-xs text-slate-700 space-y-4">
@@ -1554,6 +1655,8 @@ export function MemberDetailPage({ memberId }: MemberDetailPageProps) {
                 onClick={() => {
                   if (activePrintJob.type === "receipt") {
                     addAuditLog("RECEIPT_PRINT", `Mencetak Kwitansi Setoran Simpanan: ${member.name} periode ${activePrintJob.data.period}`, "success");
+                  } else if (activePrintJob.type === "kartu") {
+                    addAuditLog("MEMBER_CARD_PRINT", `Mencetak Kartu Anggota: ${member.name}`, "success");
                   } else {
                     addAuditLog("MUTASI_PERSONAL", `Mencetak dokumen Berita Acara Keluar Anggota: ${member.name}`, "success");
                   }
