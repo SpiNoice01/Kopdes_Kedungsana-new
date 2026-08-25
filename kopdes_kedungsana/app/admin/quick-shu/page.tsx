@@ -4,7 +4,8 @@ import { useMemo, useState } from "react";
 import ExcelJS from "exceljs";
 import { addAuditLog } from "../../../src/utils/audit-logger";
 import { buildSimpananSheet, buildShuSheet, downloadExcelBuffer } from "@/src/features/admin/utils/excel-exporter";
-import { calculateShuPools } from "@/src/features/admin/utils/shu-calculator";
+import { calculateShuPools, computeMemberShu } from "@/src/features/admin/utils/shu-calculator";
+import { loadMemberShuBasisRows, type MemberShuBasisRow } from "@/src/features/admin/utils/shu-basis-loader";
 
 type HintProps = {
   text: string;
@@ -30,27 +31,16 @@ function Hint({ text }: HintProps) {
   );
 }
 
-interface MemberRecord {
-  memberId: string;
-  memberName: string;
-  savingPokok: number;
-  savingWajib: number;
-  savingSukarela: number;
-  serviceContribution: number;
-  investmentAmount: number;
-}
-
 import { useEffect } from "react";
-import { memberDependencies } from "@/src/features/member/infrastructure/member-dependencies";
 import { loadSettingsAsync, defaultSettings } from "@/src/actions/settings-actions";
 import type { KopdesSettings } from "@/src/features/settings/domain/settings";
 
 export default function QuickShuPage() {
   const [activeTab, setActiveTab] = useState<"shu" | "simpanan">("shu");
-  const [sortKey, setSortKey] = useState<keyof MemberRecord | "totalSaving" | "savingShu" | "serviceShu" | "totalShu">("memberName");
+  const [sortKey, setSortKey] = useState<keyof MemberShuBasisRow | "totalSaving" | "savingShu" | "serviceShu" | "totalShu">("memberName");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
   const [isSimulasiOpen, setIsSimulasiOpen] = useState(false);
-  const [rawMembers, setRawMembers] = useState<MemberRecord[]>([]);
+  const [rawMembers, setRawMembers] = useState<MemberShuBasisRow[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   const [settings, setSettings] = useState<KopdesSettings>(defaultSettings);
@@ -59,78 +49,9 @@ export default function QuickShuPage() {
     const fetchData = async () => {
       try {
         setIsLoading(true);
-        const [members, loadedSettings] = await Promise.all([
-          memberDependencies.getMembersUseCase.execute(),
-          loadSettingsAsync()
-        ]);
+        const loadedSettings = await loadSettingsAsync();
         setSettings(loadedSettings);
-
-        const records: MemberRecord[] = [];
-        
-        for (const member of members) {
-          if (member.status !== "aktif") continue;
-
-          const joinYear = new Date(member.joinDate).getFullYear();
-          if (joinYear > loadedSettings.activeFiscalYear) continue;
-
-          const [savings, serviceContributions, investments] = await Promise.all([
-            memberDependencies.getMemberMonthlySavingsUseCase.execute(member.id),
-            memberDependencies.getMemberServiceContributionsUseCase.execute(member.id),
-            memberDependencies.getMemberInvestmentsUseCase.execute(member.id),
-          ]);
-
-          let savingPokok = 0;
-          let savingWajib = 0;
-          let savingSukarela = 0;
-
-          for (const s of savings) {
-            let sYear;
-            if (s.period === "POKOK") {
-              sYear = new Date(s.inputDate).getFullYear();
-            } else {
-              sYear = parseInt(s.period.split("-")[0]);
-            }
-
-            if (sYear <= loadedSettings.activeFiscalYear) {
-              if (s.period === "POKOK") {
-                savingPokok += s.requiredSaving;
-              } else {
-                savingWajib += s.requiredSaving;
-                savingSukarela += s.voluntarySaving;
-              }
-            }
-          }
-
-          let serviceContribution = 0;
-          for (const c of serviceContributions) {
-            const cYear = parseInt(c.period.split("-")[0]);
-            if (cYear <= loadedSettings.activeFiscalYear) {
-              serviceContribution += c.amount;
-            }
-          }
-
-          // Always sum existing investment records regardless of the
-          // enableInvestasi toggle — the toggle only gates new entries via
-          // the input form, it must never retroactively hide money members
-          // already invested for a given fiscal year.
-          let investmentAmount = 0;
-          for (const inv of investments) {
-            if (inv.period === loadedSettings.activeFiscalYear.toString()) {
-              investmentAmount += inv.amount;
-            }
-          }
-
-          records.push({
-            memberId: member.id,
-            memberName: member.name,
-            savingPokok,
-            savingWajib,
-            savingSukarela,
-            serviceContribution,
-            investmentAmount,
-          });
-        }
-
+        const records = await loadMemberShuBasisRows(loadedSettings);
         setRawMembers(records);
       } catch (e) {
         console.error("Failed to load Quick SHU data", e);
@@ -191,29 +112,11 @@ export default function QuickShuPage() {
 
   // Compute calculated metrics for each row in real-time
   const computedRows = useMemo(() => {
-    return rawMembers.map((row) => {
-      const totalSaving = row.savingPokok + row.savingWajib + row.savingSukarela;
-      const modalSaving = row.savingPokok + row.savingWajib + row.investmentAmount;
-
-      const savingShu = totalModalBasis > 0
-        ? Math.round((modalSaving / totalModalBasis) * valJasaModal)
-        : 0;
-
-      const serviceShu = totalJasaBasis > 0
-        ? Math.round((row.serviceContribution / totalJasaBasis) * valJasaUsaha)
-        : 0;
-
-      const totalShu = savingShu + serviceShu;
-
-      return {
-        ...row,
-        totalSaving,
-        savingShu,
-        serviceShu,
-        totalShu,
-      };
-    });
-  }, [valJasaModal, valJasaUsaha, totalModalBasis, totalJasaBasis]);
+    return rawMembers.map((row) => ({
+      ...row,
+      ...computeMemberShu(row, totalModalBasis, totalJasaBasis, shuPools),
+    }));
+  }, [shuPools, totalModalBasis, totalJasaBasis]);
 
   const sortedRows = useMemo(() => {
     return [...computedRows].sort((a, b) => {
@@ -263,6 +166,15 @@ export default function QuickShuPage() {
     buildSimpananSheet(wb, settings, sortedRows);
     const buffer = await wb.xlsx.writeBuffer();
     downloadExcelBuffer(buffer as ExcelJS.Buffer, `DAFTAR_SIMPANAN_${year}.xlsx`);
+  };
+
+  const handleExportBundleRat = async () => {
+    addAuditLog("EXPORT_EXCEL", `Mengekspor Bundel Laporan RAT (Daftar Simpanan & Daftar SHU) ${year} ke dalam satu berkas Excel (.xlsx).`, "info");
+    const wb = new ExcelJS.Workbook();
+    buildSimpananSheet(wb, settings, sortedRows);
+    buildShuSheet(wb, settings, sortedRows);
+    const buffer = await wb.xlsx.writeBuffer();
+    downloadExcelBuffer(buffer as ExcelJS.Buffer, `BUNDEL_RAT_${year}.xlsx`);
   };
 
   const SortIndicator = ({ active, direction }: { active: boolean; direction: "asc" | "desc" }) => (
@@ -642,16 +554,28 @@ export default function QuickShuPage() {
                 Daftar Simpanan
               </button>
             </div>
-            <button
-              type="button"
-              onClick={activeTab === "shu" ? handleExportSHU : handleExportSimpanan}
-              className="inline-flex items-center gap-2 rounded-xl bg-green-700 hover:bg-green-800 px-4 py-2 text-xs sm:text-sm font-semibold text-white shadow-sm transition-all hover:shadow-md focus:outline-none focus:ring-2 focus:ring-green-300"
-            >
-              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-              </svg>
-              Export Format RAT {year}
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={activeTab === "shu" ? handleExportSHU : handleExportSimpanan}
+                className="inline-flex items-center gap-2 rounded-xl bg-green-700 hover:bg-green-800 px-4 py-2 text-xs sm:text-sm font-semibold text-white shadow-sm transition-all hover:shadow-md focus:outline-none focus:ring-2 focus:ring-green-300"
+              >
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                Export Format RAT {year}
+              </button>
+              <button
+                type="button"
+                onClick={handleExportBundleRat}
+                className="inline-flex items-center gap-2 rounded-xl border border-green-700 text-green-700 hover:bg-green-50 px-4 py-2 text-xs sm:text-sm font-semibold shadow-sm transition-all focus:outline-none focus:ring-2 focus:ring-green-300"
+              >
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 13h6m-6 4h6m2 5H7a2 2 0 01-2-2V4a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V20a2 2 0 01-2 2z" />
+                </svg>
+                Ekspor Semua Laporan (Bundel RAT)
+              </button>
+            </div>
           </div>
 
           <div className="mb-4">
