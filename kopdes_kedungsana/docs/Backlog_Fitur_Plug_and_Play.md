@@ -37,6 +37,7 @@ User minta review kedua dokumen (SRS/SDD/skripsi vs kode) dari GPT, lalu minta d
 - Audit log tidak individual per admin — **belum diputuskan**, klien masih mempertimbangkan (lihat item 5 di bawah, sudah lengkap spek-nya kalau mau dikerjakan nanti).
 - Persetujuan sebelum foto e-KTP dikirim ke AI — **diterapkan**, lihat item 6.
 - Backup + restore — **restore diterapkan sekarang**, alasan klien: "masih belum berat dipakai" (data masih sedikit, waktu paling aman untuk uji coba fitur berisiko ini). Lihat item 9.
+- Validasi total alokasi SHU = 100% (TBD-4 di SRS) — **diterapkan** (26 Agustus 2026), lihat item 8.
 
 ---
 
@@ -157,18 +158,21 @@ Tidak ada kode POS/Unit Toko yang perlu dibangun atau dihapus (memang tidak pern
 
 ---
 
-## 5. Audit Log Tidak Mencatat Identitas Individual Admin — TEMUAN BARU, BELUM DIPERBAIKI
+## 5. Audit Log Tidak Mencatat Identitas Individual Admin — SUDAH DIPERBAIKI (26 Agustus 2026)
 
-**Konteks:** Ditemukan 26 Agustus 2026 saat cross-check review eksternal (GPT). SRS 5.5 dan SCRAM 5.3 sama-sama mengklaim akuntabilitas individu pengurus digantikan oleh audit trail ("mencatat siapa melakukan apa") sebagai alasan kenapa sistem tidak perlu role-based permission. Klaim ini **tidak benar-benar terpenuhi** di kode.
+**Konteks:** Ditemukan 26 Agustus 2026 saat cross-check review eksternal (GPT). SRS 5.5 dan SCRAM 5.3 sama-sama mengklaim akuntabilitas individu pengurus digantikan oleh audit trail ("mencatat siapa melakukan apa") sebagai alasan kenapa sistem tidak perlu role-based permission. Klaim ini **tidak benar-benar terpenuhi** di kode — dibuktikan langsung ke klien lewat pembacaan kode `audit-logger.ts` + contoh nyata pemanggilan di `member-detail-page.tsx` yang tidak pernah mengisi `username`.
 
-### [BUILD] — Perlu diperbaiki
-- **Akar masalah:** `addAuditLog()` (`src/utils/audit-logger.ts`) punya parameter `username` dengan default hardcoded `"Admin Kopdes Kedungsana"`. Semua pemanggilan di `member-panel.tsx`, `member-detail-page.tsx`, `admin-shell.tsx`, `spreadsheet-modal.tsx` **tidak pernah** override parameter ini — jadi siapapun pengurus yang login, semua tindakannya (tambah anggota, catat simpanan, edit profil, cetak dokumen, ekspor, navigasi) tercatat atas nama string generik yang sama. Hanya `backup-guard.ts` (fitur backup, dibangun 26 Agustus) yang benar mengirim identitas asli (`user.email || user.phone || user.id` dari sesi Supabase).
-- **Perbaikan:** buat helper (mis. `getCurrentAdminIdentity()`) yang mengambil email/phone dari `supabase.auth.getSession()` — pola yang sudah ada di `backup-guard.ts`, tinggal diekstrak jadi reusable — lalu **semua** pemanggilan `addAuditLog()` di keempat file di atas perlu diteruskan identitas asli ini sebagai argumen `username`, bukan mengandalkan default.
-- **Cakupan:** cukup luas (banyak titik panggil), sebaiknya dikerjakan sebagai task tersendiri, bukan disisipkan ke fitur lain.
+### [BUILD] — STATUS: SUDAH DIPERBAIKI, lebih simpel dari rencana awal
+Rencana awal (edit satu-satu semua titik panggil di 4 file) **tidak jadi dipakai** — ternyata bisa diperbaiki di **satu tempat saja**: `addAuditLog()` sendiri sudah memanggil `supabase.auth.getSession()` untuk keperluan `access_token`, jadi tinggal dipakai juga untuk identitas, tanpa perlu menyentuh titik panggil manapun.
+- `src/utils/audit-logger.ts` — parameter `username` diubah dari default hardcoded jadi **opsional**. Kalau tidak diisi eksplisit (mayoritas pemanggilan), sistem otomatis pakai `data.session?.user?.email ?? ...phone ?? ...id` dari sesi asli yang sedang login. Fallback ke string generik (`"Admin Kopdes Kedungsana (sesi tidak diketahui)"`) cuma dipakai kalau benar-benar tidak ada sesi aktif (seharusnya tidak pernah terjadi karena semua pemanggilan ada di area admin yang sudah ter-autentikasi).
+- `backup-guard.ts` tetap mengirim `identity` eksplisit seperti sebelumnya — tidak salah, cuma jadi nilai yang sama dengan yang sekarang otomatis diturunkan, jadi dibiarkan (tidak perlu diubah, variabelnya sudah ada di scope untuk keperluan lain).
+- Lolos `tsc --noEmit` dan `npm run lint`.
+- **Catatan penting:** ini cuma berlaku untuk aksi **baru** sejak fix ini di-deploy. Baris log lama yang sudah tersimpan di database (dari sebelum fix) tetap menampilkan string generik lama — data historis tidak bisa diperbaiki retroaktif, cuma catatan ke depan yang benar.
+- **Belum dites manual** — login pakai akun berbeda (kalau ada lebih dari satu), lakukan aksi apapun (edit anggota, catat simpanan, dll), cek Log Aktivitas menampilkan email/identitas asli, bukan lagi "Admin Kopdes Kedungsana".
 
 ### [DOC] — Revisi yang diperlukan
-- **SRS 5.5 (Peraturan Bisnis):** kalimat "digantikan lewat log aktivitas (audit trail) yang mencatat siapa melakukan apa" perlu diverifikasi ulang setelah fix di atas selesai — kalau belum diperbaiki saat sidang, sebaiknya kalimat ini dilunakkan jadi jujur tentang keterbatasannya (masuk Lampiran C: Daftar TBD), bukan diklaim sebagai fakta yang sudah berjalan.
-- **SCRAM 5.3 (Design Rationale):** baris "Single Admin, akuntabilitas... digantikan log aktivitas" — sama, perlu catatan bahwa implementasi saat ini belum sepenuhnya mendukung klaim ini.
+- **SRS 5.5 (Peraturan Bisnis):** kalimat "digantikan lewat log aktivitas (audit trail) yang mencatat siapa melakukan apa" sekarang **benar** (setelah fix ini) — tapi sebaiknya ditambah catatan bahwa data historis sebelum tanggal fix tidak individual.
+- **SCRAM 5.3 (Design Rationale):** baris "Single Admin, akuntabilitas... digantikan log aktivitas" — sama, sekarang klaimnya didukung implementasi, bisa dicatat sebagai iterasi lanjutan (pola serupa 6.4 Investasi) dengan tanggal fix.
 - **SDD Lampiran 8 (Keterbatasan Desain):** tambahkan poin baru soal ini — cocok masuk kategori yang sama dengan keterbatasan lain yang sudah dicatat di sana.
 
 ---
@@ -211,6 +215,24 @@ Tidak ada kode POS/Unit Toko yang perlu dibangun atau dihapus (memang tidak pern
 
 ---
 
+## 8. Validasi Total Alokasi SHU = 100% — SUDAH DIBANGUN (26 Agustus 2026)
+
+**Konteks:** SRS sudah lama mengakui ini sebagai TBD-4 ("Belum ditentukan apakah sistem perlu memvalidasi otomatis bahwa total 7 persentase alokasi SHU berjumlah 100%"). Alasan klien: mencegah kondisi total 110% (atau kurang dari 100%) yang bikin perhitungan SHU salah tanpa admin sadar.
+
+### [BUILD] — STATUS: SUDAH DIBANGUN
+- `app/admin/pengaturan/page.tsx` — badge "Total: X%" yang sudah ada sebelumnya (cuma kosmetik, pakai `=== 100` strict) sekarang jadi validasi sungguhan: `pctTotal`/`isPctTotalValid` dihitung dengan toleransi (`Math.abs(pctTotal - 100) < 0.01`, menghindari false-negative dari pembulatan floating point), dipakai untuk:
+  - Menonaktifkan tombol "Simpan Perubahan" (berubah teks jadi "Total Belum 100%") selama total ≠ 100%.
+  - Pesan peringatan merah eksplisit di atas form persentase saat tidak valid.
+  - Guard tambahan di `handleSave()` (jaga-jaga, walau tombolnya sudah di-gate).
+- Lolos `tsc --noEmit` dan `npm run lint`.
+- **Belum dites manual** — coba ubah salah satu dari 7 field persentase di halaman Pengaturan sampai totalnya bukan 100%, pastikan tombol Simpan benar-benar terkunci.
+
+### [DOC] — Revisi yang diperlukan
+- **SRS Lampiran C:** TBD-4 bisa dihapus/ditandai selesai — sudah tidak lagi "belum ditentukan", sudah diimplementasikan sebagai validasi blocking.
+- **SRS Bagian 4 (FR):** tambahkan FR baru, mis. "Sistem harus memvalidasi bahwa total 7 persentase alokasi SHU berjumlah tepat 100% sebelum pengaturan dapat disimpan."
+
+---
+
 ## Ringkasan Status
 
 | Fitur | Kode | Butuh Build? | Butuh Revisi Dokumen? |
@@ -220,6 +242,7 @@ Tidak ada kode POS/Unit Toko yang perlu dibangun atau dihapus (memang tidak pern
 | Ekspor Semua Laporan (Bundel RAT) | ✅ **sudah dibangun**, tombol di halaman Quick SHU | ✅ selesai | ✅ SRS/SDD |
 | Cetak Kartu Anggota | ✅ **sudah dibangun 2026-08-26**, diverifikasi visual via screenshot, belum dites cetak fisik | ✅ selesai | ✅ SRS/SDD/SCRAM |
 | Unit Toko / POS | tidak ada, memang tidak perlu | ❌ | ✅ hapus dari Lembar Orisinalitas |
-| Audit Log — identitas individual admin | ❌ **belum diperbaiki**, semua aksi (kecuali backup) tercatat atas nama generik | ⏸️ belum diputuskan klien | ✅ SRS 5.5/SCRAM 5.3/SDD Lampiran |
+| Audit Log — identitas individual admin | ✅ **sudah diperbaiki 2026-08-26**, aksi baru pakai identitas asli (data lama tetap generik) | ✅ selesai | ✅ SRS 5.5/SCRAM 5.3 |
 | Persetujuan AI sebelum scan e-KTP | ✅ **sudah dibangun 2026-08-26** | ✅ selesai | ✅ SRS/SDD |
 | Restore Data dari Backup | ✅ **sudah dibangun & terkonfirmasi berhasil 2026-08-26** | ✅ selesai | ✅ SRS/SDD |
+| Validasi Total Alokasi SHU = 100% | ✅ **sudah dibangun 2026-08-26**, belum dites manual | ✅ selesai | ✅ SRS (hapus TBD-4) |
