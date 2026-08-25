@@ -7,6 +7,7 @@ import { loadSettingsAsync } from "@/src/actions/settings-actions";
 import type { KopdesSettings } from "@/src/features/settings/domain/settings";
 import { memberDependencies } from "@/src/features/member/infrastructure/member-dependencies";
 import type { Member } from "@/src/features/member/domain/member";
+import { searchMemberByNik } from "@/src/actions/nik-search-actions";
 import type { MemberMonthlySaving } from "@/src/features/member/domain/member-monthly-saving";
 import type { MemberInvestment } from "@/src/features/member/domain/member-investment";
 
@@ -55,16 +56,21 @@ export default function CekSimpananPage() {
     setIsSearching(true);
 
     try {
-      const allMembers = await memberDependencies.getMembersUseCase.execute();
-      const matchedMember = allMembers.find(
-        (m) => m.nik === cleanNik || m.nik.replace(/\s+/g, "") === cleanNik.replace(/\s+/g, "")
-      );
+      const result = await searchMemberByNik(cleanNik);
 
-      if (!matchedMember) {
+      if (result.status === "rate_limited") {
+        setSearchError("Terlalu banyak percobaan pencarian. Silakan coba lagi dalam beberapa menit.");
+        setIsSearching(false);
+        return;
+      }
+
+      if (result.status === "not_found") {
         setSearchError("NIK Anda tidak terdaftar sebagai anggota. Silakan hubungi pengurus di kantor koperasi.");
         setIsSearching(false);
         return;
       }
+
+      const matchedMember = result.member;
 
       const [memberSavings, memberInvestments] = await Promise.all([
         memberDependencies.getMemberMonthlySavingsUseCase.execute(matchedMember.id),
