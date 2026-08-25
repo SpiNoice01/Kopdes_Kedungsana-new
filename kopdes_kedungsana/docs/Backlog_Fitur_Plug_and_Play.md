@@ -233,6 +233,27 @@ Rencana awal (edit satu-satu semua titik panggil di 4 file) **tidak jadi dipakai
 
 ---
 
+## 10. Portal Cek Simpanan — Kebocoran Data Penuh (ditemukan) + Rate Limiting NIK — SUDAH DIPERBAIKI (26 Agustus 2026)
+
+**Konteks:** Awalnya cuma diminta bangun rate limiting untuk portal NIK (TBD-3 di SRS). Saat dicek kodenya sebelum mulai, ketemu masalah **jauh lebih serius** yang bikin rate limiting saja tidak cukup.
+
+### Temuan: kebocoran data (ditemukan sebelum fix)
+`app/cek-simpanan/page.tsx` (halaman publik, tanpa login) memanggil `getMembersUseCase.execute()` → di baliknya `select("*")` tanpa filter apapun ke tabel `members`, lalu pencarian NIK dilakukan di JavaScript sisi browser (`allMembers.find(...)`). Artinya: **seluruh tabel anggota** (NIK, nama, alamat, telepon, foto profil, tanggal lahir — semua kolom, semua anggota) terkirim ke browser siapapun yang buka halaman itu, **sebelum mereka ketik NIK apapun sama sekali**. Rate limiting form pencarian tidak ada gunanya kalau data lengkapnya sudah "bocor" duluan saat halaman dimuat.
+
+### [BUILD] — STATUS: SUDAH DIPERBAIKI
+- **Fix kebocoran:** `src/actions/nik-search-actions.ts` (Server Action baru) — pencarian NIK sekarang dilakukan sepenuhnya di server, pakai `SupabaseMemberRepository.findByNik()` yang sudah ada sebelumnya tapi tidak pernah dipakai (query terfilter `.eq("nik", nik)`, bukan ambil semua lalu filter sendiri). Client cuma menerima **satu anggota yang cocok** (atau tidak sama sekali), tidak pernah menerima daftar penuh.
+- **Rate limiting:** action yang sama juga menghitung percobaan pencarian per alamat IP (tabel baru `nik_search_attempts`, lihat `setup_nik_search_rate_limit.sql`) — maksimal 5 percobaan per 5 menit per IP, sesudah itu ditolak dengan pesan "Terlalu banyak percobaan pencarian.".
+- **Desain gagal-aman:** kalau tabel `nik_search_attempts` belum dibuat di Supabase, pencarian NIK **tetap jalan normal** (rate limit-nya cuma belum aktif, bukan bikin situs error) — supaya deploy fix kebocoran tidak terikat wajib pada migrasi SQL dijalankan dulu.
+- **⚠️ PERLU DIJALANKAN MANUAL:** `setup_nik_search_rate_limit.sql` di Supabase SQL Editor supaya rate limiting benar-benar aktif (pola yang sama seperti `setup_audit_logs.sql`, `setup_member_investments.sql` sebelumnya — saya tidak punya akses eksekusi SQL langsung ke project Supabase-mu).
+- Lolos `tsc --noEmit` dan `npm run lint`. **Belum dites manual.**
+
+### [DOC] — Revisi yang diperlukan
+- **SRS TBD-3:** bisa ditandai selesai (rate limiting) sekaligus catat temuan kebocoran data yang ditemukan & diperbaiki bersamaan — ini contoh baik untuk BAB V (refleksi metodologis): audit kode menemukan masalah yang lebih serius dari yang diminta.
+- **SDD Lampiran 8 (Keterbatasan Desain):** baris soal "Portal publik cek simpanan tidak memiliki rate limiting... berpotensi disalahgunakan untuk enumerasi data anggota" perlu diperbarui — akar masalahnya ternyata lebih dalam dari sekadar enumerasi (data penuh ter-expose tanpa perlu enumerasi sama sekali), sekarang sudah diperbaiki di kedua sisi.
+- **SDD Bagian 3.2 (Portal Publik):** perbarui deskripsi arsitektur — pencarian NIK sekarang lewat Server Action (`nik-search-actions.ts`), bukan query langsung dari client seperti sebelumnya.
+
+---
+
 ## Ringkasan Status
 
 | Fitur | Kode | Butuh Build? | Butuh Revisi Dokumen? |
@@ -246,3 +267,4 @@ Rencana awal (edit satu-satu semua titik panggil di 4 file) **tidak jadi dipakai
 | Persetujuan AI sebelum scan e-KTP | ✅ **sudah dibangun 2026-08-26** | ✅ selesai | ✅ SRS/SDD |
 | Restore Data dari Backup | ✅ **sudah dibangun & terkonfirmasi berhasil 2026-08-26** | ✅ selesai | ✅ SRS/SDD |
 | Validasi Total Alokasi SHU = 100% | ✅ **sudah dibangun 2026-08-26**, belum dites manual | ✅ selesai | ✅ SRS (hapus TBD-4) |
+| Portal NIK — fix kebocoran data + rate limiting | ✅ **sudah dibangun 2026-08-26**, ⚠️ SQL belum dijalankan manual di Supabase | ✅ selesai (perlu jalankan SQL + tes) | ✅ SRS TBD-3/SDD |
