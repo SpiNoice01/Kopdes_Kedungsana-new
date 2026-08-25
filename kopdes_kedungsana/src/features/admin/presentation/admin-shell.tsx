@@ -5,7 +5,9 @@ import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { ReactNode, useEffect, useMemo, useState } from "react";
 import SpreadsheetModal from "./spreadsheet-modal";
+import { BackupPromptModal } from "./backup-prompt-modal";
 import { addAuditLog } from "../../../utils/audit-logger";
+import { checkIfBackupNeeded, type BackupCheckResult } from "../utils/backup-guard";
 
 type AdminShellProps = {
   children: ReactNode;
@@ -26,6 +28,7 @@ const navigationItems: NavigationItem[] = [
 export function AdminShell({ children }: AdminShellProps) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isSpreadsheetOpen, setIsSpreadsheetOpen] = useState(false);
+  const [backupPrompt, setBackupPrompt] = useState<BackupCheckResult | null>(null);
   const pathname = usePathname();
 
   const currentPageTitle = useMemo(() => {
@@ -53,6 +56,17 @@ export function AdminShell({ children }: AdminShellProps) {
       addAuditLog("NAVIGATE", `Admin membuka halaman: ${currentPageTitle}`, "info");
     }
   }, [pathname, currentPageTitle]);
+
+  // Backup lock modal: check once per mount whether this admin still needs
+  // today's backup; the actual download only happens from the admin's click
+  // inside BackupPromptModal, never silently (see docs/Backlog_Fitur_Plug_and_Play.md).
+  useEffect(() => {
+    checkIfBackupNeeded().then((result) => {
+      if (result?.needed) {
+        setBackupPrompt(result);
+      }
+    });
+  }, []);
 
   return (
     <div className="h-screen w-screen overflow-hidden bg-primary-soft text-slate-900 flex flex-col print:h-auto print:w-auto print:overflow-visible print:block print:bg-white">
@@ -214,6 +228,12 @@ export function AdminShell({ children }: AdminShellProps) {
       <SpreadsheetModal
         isOpen={isSpreadsheetOpen}
         onClose={() => setIsSpreadsheetOpen(false)}
+      />
+
+      <BackupPromptModal
+        isOpen={!!backupPrompt}
+        identity={backupPrompt?.identity ?? ""}
+        onDone={() => setBackupPrompt(null)}
       />
     </div>
   );
