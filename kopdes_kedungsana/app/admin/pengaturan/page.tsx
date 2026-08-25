@@ -10,6 +10,8 @@ import { clearAuthCookie } from "@/src/actions/auth-actions";
 
 import { loadSettingsAsync, saveSettingsAsync, defaultSettings } from "@/src/actions/settings-actions";
 import type { KopdesSettings } from "@/src/features/settings/domain/settings";
+import { parseBackupWorkbook, performDatabaseRestore } from "@/src/features/admin/utils/database-restore";
+import type { ParsedRestoreData, RestoreSummary } from "@/src/features/admin/utils/database-restore";
 
 export default function PengaturanPage() {
   const router = useRouter();
@@ -26,7 +28,79 @@ export default function PengaturanPage() {
     router.push("/");
   };
 
+  const resetRestoreState = () => {
+    setRestoreStatus("idle");
+    setRestoreFileName("");
+    setRestoreParsed(null);
+    setRestoreSummary([]);
+    setRestoreError("");
+    setRestoreConfirmChecked(false);
+    setRestoreProgress({ done: 0, total: 0 });
+  };
+
+  const handleRestoreFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+
+    setRestoreFileName(file.name);
+    setRestoreStatus("parsing");
+    setRestoreError("");
+    try {
+      const parsed = await parseBackupWorkbook(file);
+      const totalRows = parsed.tables.reduce((sum, t) => sum + t.rows.length, 0);
+      if (totalRows === 0) {
+        setRestoreError("Tidak ada baris yang bisa direstore dari berkas ini — pastikan ini berkas backup_database_*.xlsx yang benar.");
+        setRestoreStatus("error");
+        return;
+      }
+      setRestoreParsed(parsed);
+      setRestoreStatus("parsed");
+    } catch (error) {
+      console.error("Gagal membaca berkas restore", error);
+      setRestoreError(error instanceof Error ? error.message : String(error));
+      setRestoreStatus("error");
+    }
+  };
+
+  const handleConfirmRestore = async () => {
+    if (!restoreParsed) return;
+    setRestoreStatus("restoring");
+    const totalRows = restoreParsed.tables.reduce((sum, t) => sum + t.rows.length, 0);
+    setRestoreProgress({ done: 0, total: totalRows });
+
+    try {
+      let doneSoFar = 0;
+      const summary = await performDatabaseRestore(restoreParsed, (_table, done, tableTotal) => {
+        setRestoreProgress({ done: doneSoFar + done, total: totalRows });
+        if (done === tableTotal) doneSoFar += tableTotal;
+      });
+      setRestoreSummary(summary);
+      setRestoreStatus("done");
+
+      const summaryText = summary.map((s) => `${s.table}: ${s.rowCount} baris`).join(", ");
+      addAuditLog(
+        "DATABASE_RESTORE",
+        `Admin melakukan restore data dari berkas backup "${restoreFileName}". Baris diproses — ${summaryText}.`,
+        "danger",
+      );
+    } catch (error) {
+      console.error("Gagal melakukan restore", error);
+      setRestoreError(error instanceof Error ? error.message : String(error));
+      setRestoreStatus("error");
+    }
+  };
+
   const [isLoading, setIsLoading] = useState(true);
+
+  // Restore-from-backup state
+  const [restoreStatus, setRestoreStatus] = useState<"idle" | "parsing" | "parsed" | "restoring" | "done" | "error">("idle");
+  const [restoreFileName, setRestoreFileName] = useState("");
+  const [restoreParsed, setRestoreParsed] = useState<ParsedRestoreData | null>(null);
+  const [restoreSummary, setRestoreSummary] = useState<RestoreSummary>([]);
+  const [restoreError, setRestoreError] = useState("");
+  const [restoreConfirmChecked, setRestoreConfirmChecked] = useState(false);
+  const [restoreProgress, setRestoreProgress] = useState({ done: 0, total: 0 });
 
   useEffect(() => {
     loadSettingsAsync().then((data) => {
@@ -447,6 +521,122 @@ export default function PengaturanPage() {
         <div className="text-xs text-slate-500">
           Sesi aktif saat ini: <strong className="text-slate-700">Admin Kopdes Kedungsana</strong> (admin@kopdeskedungsana.id)
         </div>
+      </div>
+
+      {/* Section 5: Pemulihan Data (Restore dari Backup) */}
+      <div className="rounded-3xl border border-amber-200 bg-amber-50/30 p-6 shadow-sm space-y-4">
+        <div className="border-b border-amber-200/50 pb-3">
+          <h3 className="text-sm font-bold text-amber-800">Pemulihan Data (Restore dari Backup)</h3>
+          <p className="text-xs text-amber-700/80 mt-0.5">
+            Unggah berkas <code className="font-mono">backup_database_...xlsx</code> yang pernah diunduh dari popup backup wajib untuk mengembalikan data.
+            Restore ini bersifat <strong>gabung (upsert)</strong> — data yang sudah ada di database sekarang tidak akan dihapus; baris dengan ID yang sama akan
+            ditimpa nilainya, baris baru dari berkas akan ditambahkan. Data yang sudah dihapus setelah backup dibuat <strong>tidak akan kembali</strong>.
+          </p>
+        </div>
+
+        {restoreStatus === "idle" && (
+          <label className="inline-flex items-center gap-2 rounded-xl border border-amber-300 bg-white px-4 py-2 text-xs font-bold text-amber-700 shadow-sm hover:bg-amber-50 transition cursor-pointer">
+            <input type="file" accept=".xlsx" onChange={handleRestoreFileChange} className="hidden" />
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+            </svg>
+            Pilih Berkas Backup (.xlsx)
+          </label>
+        )}
+
+        {restoreStatus === "parsing" && (
+          <p className="text-xs text-amber-700">Membaca berkas {restoreFileName}...</p>
+        )}
+
+        {restoreStatus === "error" && (
+          <div className="space-y-2">
+            <p className="rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-xs text-red-700">{restoreError}</p>
+            <button
+              type="button"
+              onClick={resetRestoreState}
+              className="text-xs font-semibold text-amber-700 underline cursor-pointer"
+            >
+              Coba berkas lain
+            </button>
+          </div>
+        )}
+
+        {restoreStatus === "parsed" && restoreParsed && (
+          <div className="space-y-3">
+            <div className="rounded-xl border border-amber-200 bg-white p-4 text-xs">
+              <p className="font-bold text-slate-700 mb-2">Berkas: {restoreFileName}</p>
+              <ul className="space-y-1 text-slate-600">
+                {restoreParsed.tables.map((t) => (
+                  <li key={t.table} className="flex justify-between">
+                    <span className="font-mono">{t.table}</span>
+                    <span className="font-bold">{t.rows.length} baris</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            {restoreParsed.warnings.length > 0 && (
+              <div className="rounded-xl border border-amber-300 bg-amber-100/60 p-3 text-[11px] text-amber-800 space-y-1 max-h-40 overflow-y-auto">
+                <p className="font-bold">Peringatan ({restoreParsed.warnings.length}):</p>
+                {restoreParsed.warnings.map((w, i) => (
+                  <p key={i}>• {w}</p>
+                ))}
+              </div>
+            )}
+
+            <label className="flex items-start gap-2 text-xs text-amber-800 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={restoreConfirmChecked}
+                onChange={(e) => setRestoreConfirmChecked(e.target.checked)}
+                className="mt-0.5 h-3.5 w-3.5 rounded border-amber-400 text-amber-600 focus:ring-amber-300 cursor-pointer"
+              />
+              <span>Saya paham restore ini akan menimpa data yang ada di database dengan isi berkas ini, dan tindakan ini tidak bisa dibatalkan.</span>
+            </label>
+
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={resetRestoreState}
+                className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50 transition cursor-pointer"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmRestore}
+                disabled={!restoreConfirmChecked}
+                className="rounded-xl bg-amber-600 hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed text-white px-4 py-2 text-xs font-bold shadow-sm transition cursor-pointer"
+              >
+                Proses Restore
+              </button>
+            </div>
+          </div>
+        )}
+
+        {restoreStatus === "restoring" && (
+          <p className="text-xs text-amber-700">
+            Memproses restore... {restoreProgress.done}/{restoreProgress.total} baris
+          </p>
+        )}
+
+        {restoreStatus === "done" && (
+          <div className="space-y-3">
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-700">
+              <p className="font-bold mb-1">Restore selesai.</p>
+              {restoreSummary.map((s) => (
+                <p key={s.table}>{s.table}: {s.rowCount} baris diproses</p>
+              ))}
+            </div>
+            <button
+              type="button"
+              onClick={resetRestoreState}
+              className="text-xs font-semibold text-amber-700 underline cursor-pointer"
+            >
+              Restore berkas lain
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Watermark Last Updated */}
