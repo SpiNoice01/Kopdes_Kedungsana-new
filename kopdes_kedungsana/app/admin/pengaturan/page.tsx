@@ -141,7 +141,17 @@ export default function PengaturanPage() {
     return changes;
   };
 
+  // 7-category SHU allocation must sum to exactly 100% (AD/ART requirement,
+  // previously unvalidated — see docs/Backlog_Fitur_Plug_and_Play.md item 8).
+  // Tolerance guards against float rounding artifacts (e.g. 0.1+0.2), not a
+  // real allowance for an actually-wrong total.
+  const pctTotal =
+    form.pctCadangan + form.pctJasaModal + form.pctJasaTransaksi +
+    form.pctPengurus + form.pctKaryawan + form.pctPendidikan + form.pctSosial;
+  const isPctTotalValid = Math.abs(pctTotal - 100) < 0.01;
+
   const handleSave = async () => {
+    if (!isPctTotalValid) return; // belt-and-suspenders — the button that opens this flow is already gated
     setIsLoading(true);
     try {
       await saveSettingsAsync(form);
@@ -390,10 +400,16 @@ export default function PengaturanPage() {
             <h3 className="text-sm font-bold text-slate-800">Persentase Pos Pembagian SHU</h3>
             <p className="text-xs text-slate-400 mt-0.5">Persentase ini akan digunakan sebagai default dalam fitur Quick SHU.</p>
           </div>
-          <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${(form.pctCadangan + form.pctJasaModal + form.pctJasaTransaksi + form.pctPengurus + form.pctKaryawan + form.pctPendidikan + form.pctSosial) === 100 ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>
-            Total: {(form.pctCadangan + form.pctJasaModal + form.pctJasaTransaksi + form.pctPengurus + form.pctKaryawan + form.pctPendidikan + form.pctSosial).toFixed(2)}%
+          <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${isPctTotalValid ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>
+            Total: {pctTotal.toFixed(2)}%
           </span>
         </div>
+
+        {!isPctTotalValid && (
+          <p className="rounded-xl bg-red-50 border border-red-200 px-3 py-2 text-xs text-red-700">
+            Total ketujuh persentase harus tepat 100% sebelum pengaturan bisa disimpan (sekarang {pctTotal.toFixed(2)}%). Sesuaikan salah satu nilai di bawah.
+          </p>
+        )}
 
         <div className="grid gap-4 sm:grid-cols-2">
           <label className="block space-y-1.5">
@@ -480,13 +496,14 @@ export default function PengaturanPage() {
         </button>
         <button
           onClick={() => setIsConfirmModalOpen(true)}
-          disabled={!isDirty}
+          disabled={!isDirty || !isPctTotalValid}
+          title={!isPctTotalValid ? "Total persentase alokasi SHU harus 100% sebelum bisa disimpan" : undefined}
           className="inline-flex items-center gap-1.5 rounded-xl bg-primary hover:opacity-90 disabled:opacity-50 text-primary-foreground px-5 py-2 text-sm font-bold shadow-sm transition cursor-pointer"
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
           </svg>
-          {isDirty ? "Simpan Perubahan" : "Tersimpan"}
+          {!isPctTotalValid ? "Total Belum 100%" : isDirty ? "Simpan Perubahan" : "Tersimpan"}
         </button>
       </div>
 
