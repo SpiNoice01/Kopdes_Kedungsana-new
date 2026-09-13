@@ -4,6 +4,7 @@ import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import { authDependencies } from "../infrastructure/auth-dependencies";
 import { setAuthCookie } from "@/src/actions/auth-actions";
+import { checkLoginRateLimit } from "@/src/actions/login-attempt-actions";
 
 type LoginState = {
   message: string;
@@ -26,6 +27,16 @@ export function LoginForm() {
     event.preventDefault();
     setIsLoading(true);
     setLoginState(initialState);
+
+    const rateLimit = await checkLoginRateLimit();
+    if (!rateLimit.allowed) {
+      setLoginState({
+        message: "Terlalu banyak percobaan login. Coba lagi dalam beberapa menit.",
+        isError: true,
+      });
+      setIsLoading(false);
+      return;
+    }
 
     const result = await authDependencies.loginUseCase.execute({
       identifier,
