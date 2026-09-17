@@ -8,10 +8,14 @@ import type { Member } from "../domain/member";
 import type { MemberMonthlySaving } from "../domain/member-monthly-saving";
 import { memberDependencies } from "../infrastructure/member-dependencies";
 import { loadSettingsAsync } from "@/src/actions/settings-actions";
-import { scanKtpImage } from "@/src/actions/ktp-scan-actions";
+import { scanKtpImage } from "@/src/actions/ktp-ocr-actions";
 import type { KopdesSettings } from "@/src/features/settings/domain/settings";
 import { formatCurrency } from "@/src/utils/formatters";
 import { calculateArrears } from "../domain/member-services";
+
+// Set true sementara kalau butuh lihat lagi teks mentah hasil OCR (mis. debugging
+// akurasi ekstraksi field baru). Dimatikan karena sudah tidak dibutuhkan sehari-hari.
+const ENABLE_OCR_DEBUG_VIEW = false;
 
 type FeedbackState = {
   message: string;
@@ -71,7 +75,7 @@ export function MemberPanel() {
     useState<FeedbackState>(initialFeedbackState);
   const [isOcrLoading, setIsOcrLoading] = useState(false);
   const [ocrProgress, setOcrProgress] = useState(0);
-  const [hasKtpAiConsent, setHasKtpAiConsent] = useState(false);
+  const [debugOcrText, setDebugOcrText] = useState<string | null>(null);
   const [showValidationErrors, setShowValidationErrors] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [arrearsFilter, setArrearsFilter] = useState<"all" | "lunas" | "menunggak">("all");
@@ -246,26 +250,39 @@ export function MemberPanel() {
         const month = dateMatch[2];
         const year = dateMatch[3];
         result.birthDate = `${year}-${month}-${day}`;
-        
-        // Extract the place (everything before the date on that line)
+
+        // Extract the place (everything before the date on that line). Prefer
+        // splitting on the last ":" when present — the colon survives OCR far
+        // more reliably than the label text itself, which can fuse with nearby
+        // characters (e.g. "Tempat/Tgl Lahir" -> "TempatTgiiahir") and cause the
+        // label-stripping regex below to cut in the wrong place.
         const beforeDate = targetLine.split(dateStr)[0];
-        let cleanPlace = beforeDate
-          .replace(/.*(lahir|tgl|tanggal|tgi)\s*[:\-]?/i, "") // Remove label if it's on this line
+        const beforeDateColonIdx = beforeDate.lastIndexOf(":");
+        const placeSource =
+          beforeDateColonIdx !== -1
+            ? beforeDate.slice(beforeDateColonIdx + 1)
+            : beforeDate.replace(/.*(lahir|tgl|tanggal|tgi)\s*[:\-]?/i, ""); // Remove label if it's on this line
+        let cleanPlace = placeSource
           .replace(/[^a-zA-Z\s]/g, "") // Keep only letters
           .trim()
           .toUpperCase();
-          
+
         // If cleanPlace is empty, it means the place was on the previous line!
         // e.g. Line 1: "Tempat/Tgl Lahir : LOREM,"
         //      Line 2: "25-10-1990"
         if (!cleanPlace && targetLine === lines[lahirIndex + 1]) {
-          cleanPlace = lines[lahirIndex]
-            .replace(/.*(lahir|tgl|tanggal|tgi)\s*[:\-]?/i, "")
+          const labelLine = lines[lahirIndex];
+          const labelColonIdx = labelLine.lastIndexOf(":");
+          cleanPlace = (
+            labelColonIdx !== -1
+              ? labelLine.slice(labelColonIdx + 1)
+              : labelLine.replace(/.*(lahir|tgl|tanggal|tgi)\s*[:\-]?/i, "")
+          )
             .replace(/[^a-zA-Z\s]/g, "")
             .trim()
             .toUpperCase();
         }
-        
+
         if (cleanPlace) {
           result.birthPlace = cleanPlace;
         }
@@ -305,43 +322,111 @@ export function MemberPanel() {
       result.gender = "laki-laki";
     }
 
-    // 5. EXTRACT ALAMAT LENGKAP (Block-based extraction, 100% resilient to line splits)
-    const rawTextClean = text.replace(/\n/g, " "); // Flatten everything to a single line
-    
-    // The address on a KTP is always sandwiched between "Alamat" and "Agama" (or Status Perkawinan)
-    const blockMatch = rawTextClean.match(/(alamat|alama|alarnat|alamt)[\s:;\-|]*(.*?)(agama|agam|status|kawin)/i);
-    
-    if (blockMatch) {
-      let addressBlock = blockMatch[2].toUpperCase();
-      
-      // Normalize the sub-labels (RT/RW, Kel/Desa, Kecamatan) into comma-separated values
-      addressBlock = addressBlock
-        // Normalize RT/RW
-        .replace(/(RT\s*[/|I1l\\]\s*RW|RT\s*RW)[\s:;\-|.]*/ig, ", RT/RW ")
-        // Normalize Kel/Desa
-        .replace(/(KEL\s*[/|I1l\\]\s*DESA|KELURAHAN|DESA)[\s:;\-|.]*/ig, ", DESA/KEL ")
-        // Normalize Kecamatan
-        .replace(/(KECAMATAN|KECAM|KEC\.)[\s:;\-|.]*/ig, ", KEC. ");
-        
-      // Clean up unwanted characters (keep letters, numbers, spaces, commas, dots, slashes)
-      addressBlock = addressBlock
-        .replace(/[^A-Z0-9\s.,/]/g, "")
-        .replace(/\s+/g, " ")     // Remove extra spaces
-        .replace(/\s,/g, ",")     // Fix spaces before commas
-        .replace(/,+/g, ",")      // Fix double commas
-        .trim();
-        
-      // Remove any leading or trailing commas/dots
-      addressBlock = addressBlock.replace(/^[,.\s]+|[,.\s]+$/g, "");
-      
-      result.address = addressBlock;
+    // 5. EXTRACT ALAMAT LENGKAP (component-based: each sub-field — Alamat, RT/RW,
+    // Kel/Desa, Kecamatan — is read from its own line independently, so extraction
+    // doesn't depend on an "Agama" line existing right after the address block).
+    // Label matching anchors on whichever part of each label survives OCR most
+    // reliably (e.g. "RT" alone, "Desa" alone) instead of the full label, because
+    // Tesseract frequently misreads individual letters (RW -> AW, Kel -> Kal) while
+    // the rest of the line stays legible.
+    const extractLabelValue = (labelPattern: RegExp, excludePattern?: RegExp): string => {
+      const idx = lines.findIndex((l) => {
+        if (excludePattern && excludePattern.test(l)) return false;
+        return labelPattern.test(l);
+      });
+      if (idx === -1) return "";
+      const match = lines[idx].match(labelPattern);
+      // Slice everything AFTER the matched label, so OCR garbage sitting before the
+      // label on the same line (stray "|", misread prefix fragments) gets discarded
+      // along with the label itself, instead of just removing the label substring.
+      let value = match
+        ? lines[idx].slice((match.index ?? 0) + match[0].length)
+        : lines[idx];
+      value = value.replace(/^[\s:;\-|.=]+/, "").trim();
+      if (!value && idx + 1 < lines.length) {
+        value = lines[idx + 1].trim();
+      }
+      return value;
+    };
+
+    // Strip short (1-2 char) trailing tokens, which are almost always leftover
+    // watermark/line noise rather than real address text (e.g. "BLOK SITINGAL BY").
+    // Looped because noise often chains multiple short fragments in a row
+    // (e.g. "PLUMBON I AS O" -> "PLUMBON").
+    const stripTrailingNoise = (value: string): string => {
+      let result = value;
+      let previous: string;
+      do {
+        previous = result;
+        result = result.replace(/\s+[A-Z0-9]{1,2}$/i, "").trim();
+      } while (result !== previous);
+      return result;
+    };
+
+    const coreAlamat = stripTrailingNoise(
+      extractLabelValue(/(alamat|alama|alarnat|alamt)/i, /provinsi|kabupaten|kota/i)
+        .replace(/rt\s*\/?\s*rw.*/i, "") // avoid swallowing RT/RW if it leaked onto the same line
+        .replace(/[^a-zA-Z0-9\s.,]/g, "")
+        .replace(/\s+/g, " ")
+        .trim()
+        .toUpperCase()
+    );
+
+    // RT/RW: anchor on the standalone "RT" token (very OCR-stable) and pull the
+    // digit pair straight from that line — "RW" itself is frequently misread
+    // (e.g. "AW"), so we don't require it to match at all. Also check the next
+    // line, since some OCR engines (e.g. OCR.space) put the label and value on
+    // separate lines instead of the same one.
+    const rtRwLineIdx = lines.findIndex((l) => /\brt\b/i.test(l));
+    let rtRwDigitMatch: RegExpMatchArray | null = null;
+    if (rtRwLineIdx !== -1) {
+      rtRwDigitMatch = lines[rtRwLineIdx].match(/(\d{1,3})\s*\/\s*(\d{1,3})/);
+      if (!rtRwDigitMatch && rtRwLineIdx + 1 < lines.length) {
+        rtRwDigitMatch = lines[rtRwLineIdx + 1].match(/(\d{1,3})\s*\/\s*(\d{1,3})/);
+      }
+    }
+    const rtRw = rtRwDigitMatch
+      ? `${rtRwDigitMatch[1].padStart(3, "0")}/${rtRwDigitMatch[2].padStart(3, "0")}`
+      : "";
+
+    // Kel/Desa: anchor on "desa"/"kelurahan" alone — "Kel" is frequently misread
+    // (e.g. "Kal") while "Desa" itself tends to survive intact.
+    const kelDesa = stripTrailingNoise(
+      extractLabelValue(/kel\s*[/|I1l\\]?\s*desa|kelurahan|desa/i)
+        .replace(/[^a-zA-Z0-9\s.]/g, "")
+        .replace(/\s+/g, " ")
+        .trim()
+        .toUpperCase()
+    );
+
+    const kecamatan = stripTrailingNoise(
+      extractLabelValue(/kecamatan|kecam|kec\./i)
+        .replace(/[^a-zA-Z0-9\s.]/g, "")
+        .replace(/\s+/g, " ")
+        .trim()
+        .toUpperCase()
+    );
+
+    const addressParts = [
+      coreAlamat,
+      rtRw && `RT/RW ${rtRw}`,
+      kelDesa && `DESA/KEL ${kelDesa}`,
+      kecamatan && `KEC. ${kecamatan}`,
+    ].filter((part): part is string => Boolean(part));
+
+    if (addressParts.length > 0) {
+      result.address = addressParts.join(", ");
     } else {
-      // Ultimate fallback if Agama boundary isn't found
-      const alamatIndex = lines.findIndex(l => l.toLowerCase().includes("alamat"));
-      if (alamatIndex !== -1) {
-         let fallback = lines[alamatIndex].replace(/.*(alamat|alama)\s*[:\-]?/i, "").trim();
-         if (!fallback && alamatIndex + 1 < lines.length) fallback = lines[alamatIndex + 1];
-         result.address = fallback.replace(/[^A-Z0-9\s.,/]/ig, "").toUpperCase();
+      // Fallback for run-on OCR output where the whole address landed on one line:
+      // grab everything sandwiched between "Alamat" and "Agama"/"Status"/"Kawin"
+      const rawTextClean = text.replace(/\n/g, " ");
+      const blockMatch = rawTextClean.match(/(alamat|alama|alarnat|alamt)[\s:;\-|]*(.*?)(agama|agam|status|kawin)/i);
+      if (blockMatch) {
+        result.address = blockMatch[2]
+          .replace(/[^A-Z0-9\s.,/]/gi, "")
+          .replace(/\s+/g, " ")
+          .trim()
+          .toUpperCase();
       }
     }
 
@@ -360,17 +445,18 @@ export function MemberPanel() {
       }
     }
 
-    // 7. EXTRACT AGAMA
-    const agamaLine = lines.find((l) => l.toLowerCase().includes("agama"));
-    if (agamaLine) {
-      const cleanAgama = agamaLine.replace(/^.*agama\s*[:\-]?/i, "").trim().toLowerCase();
-      if (cleanAgama.includes("islam")) result.religion = "Islam";
-      else if (cleanAgama.includes("kristen")) result.religion = "Kristen";
-      else if (cleanAgama.includes("katolik")) result.religion = "Katolik";
-      else if (cleanAgama.includes("hindu")) result.religion = "Hindu";
-      else if (cleanAgama.includes("buda") || cleanAgama.includes("buddha")) result.religion = "Buddha";
-      else if (cleanAgama.includes("khong") || cleanAgama.includes("kong")) result.religion = "Khonghucu";
-    }
+    // 7. EXTRACT AGAMA. Pakai extractLabelValue (bukan cek baris yang sama saja) —
+    // OCR.space sering naruh label dan nilai di baris terpisah (mis. "Agama" lalu
+    // ": ISLAM" di baris berikutnya), dan tanpa fallback ke baris berikutnya ini
+    // gagal diam-diam (kebetulan tidak kelihatan sebelumnya karena default-nya
+    // sudah "Islam").
+    const cleanAgama = extractLabelValue(/agama/i).toLowerCase();
+    if (cleanAgama.includes("islam")) result.religion = "Islam";
+    else if (cleanAgama.includes("kristen")) result.religion = "Kristen";
+    else if (cleanAgama.includes("katolik")) result.religion = "Katolik";
+    else if (cleanAgama.includes("hindu")) result.religion = "Hindu";
+    else if (cleanAgama.includes("buda") || cleanAgama.includes("buddha")) result.religion = "Buddha";
+    else if (cleanAgama.includes("khong") || cleanAgama.includes("kong")) result.religion = "Khonghucu";
 
     // 8. EXTRACT STATUS PERKAWINAN
     const statusLine = lines.find((l) => l.toLowerCase().includes("status") && (l.toLowerCase().includes("kawin") || l.toLowerCase().includes("pernikahan") || l.toLowerCase().includes("perkawinan")));
@@ -387,12 +473,11 @@ export function MemberPanel() {
       }
     }
 
-    // 9. EXTRACT PEKERJAAN
-    const pekerjaanLine = lines.find((l) => l.toLowerCase().includes("pekerjaan") || l.toLowerCase().includes("pekerja"));
-    if (pekerjaanLine) {
-      const cleanPekerjaan = pekerjaanLine.replace(/^.*pekerjaan\s*[:\-]?/i, "").trim().toUpperCase();
-      result.occupation = cleanPekerjaan.replace(/[^a-zA-Z\s]/g, "").replace(/\s+/g, " ").trim();
-    }
+    // 9. EXTRACT PEKERJAAN. Sama seperti Agama di atas — pakai extractLabelValue
+    // supaya nilai yang ada di baris berikutnya (bukan di baris label yang sama)
+    // tetap ketemu.
+    const cleanPekerjaan = extractLabelValue(/pekerjaan|pekerja/i).toUpperCase();
+    result.occupation = cleanPekerjaan.replace(/[^a-zA-Z\s/]/g, "").replace(/\s+/g, " ").trim();
 
     return result;
   };
@@ -400,15 +485,6 @@ export function MemberPanel() {
   const handleKtpScanChange = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
-
-    if (!hasKtpAiConsent) {
-      setFeedbackState({
-        message: "Centang persetujuan pemindaian AI terlebih dahulu sebelum mengunggah foto KTP.",
-        isError: true,
-      });
-      event.target.value = "";
-      return;
-    }
 
     if (!file.type.startsWith("image/")) {
       setFeedbackState({
@@ -478,17 +554,20 @@ export function MemberPanel() {
         }
       }
 
-      setOcrProgress(50);
       setFeedbackState({
-        message: "Menganalisis KTP dengan Google Gemini AI...",
+        message: "Menganalisis KTP dengan OCR.space...",
         isError: false,
       });
 
       if (!imageUrl) throw new Error("Gagal membaca gambar KTP.");
-
       const base64Data = imageUrl.split(",")[1];
-      const parsedData = await scanKtpImage(base64Data);
+      const ocrText = await scanKtpImage(base64Data);
       setOcrProgress(100);
+
+      // TEMP DEBUG: tampilkan teks mentah hasil OCR (hapus setelah debugging selesai)
+      setDebugOcrText(ocrText);
+
+      const parsedData = parseKtpText(ocrText);
 
       setKtpForm((prev) => ({
         ...prev,
@@ -978,12 +1057,12 @@ export function MemberPanel() {
                       type="file"
                       accept="image/*"
                       onChange={handleKtpScanChange}
-                      disabled={isOcrLoading || !hasKtpAiConsent}
+                      disabled={isOcrLoading}
                       className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed z-10"
                     />
                     <button
                       type="button"
-                      disabled={isOcrLoading || !hasKtpAiConsent}
+                      disabled={isOcrLoading}
                       className="w-full sm:w-auto px-4 py-2 bg-primary text-primary-foreground text-xs font-bold rounded-lg hover:opacity-90 transition shadow-sm flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {isOcrLoading ? (
@@ -1006,18 +1085,10 @@ export function MemberPanel() {
                     </div>
                   </div>
 
-                  <label className="flex items-start gap-2 text-[11px] text-slate-600 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={hasKtpAiConsent}
-                      onChange={(e) => setHasKtpAiConsent(e.target.checked)}
-                      className="mt-0.5 h-3.5 w-3.5 rounded border-slate-300 text-primary focus:ring-primary/30 cursor-pointer"
-                    />
-                    <span>
-                      Saya menyetujui foto KTP ini diproses oleh layanan AI pihak ketiga (Google Gemini) untuk
-                      mengekstrak data secara otomatis. Hasil ekstraksi tetap wajib diverifikasi ulang sebelum disimpan.
-                    </span>
-                  </label>
+                  <p className="text-[11px] text-slate-500">
+                    Pemindaian diproses sepenuhnya di perangkat Anda (OCR lokal) — foto KTP tidak dikirim ke
+                    layanan pihak ketiga. Hasil ekstraksi tetap wajib diverifikasi ulang sebelum disimpan.
+                  </p>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -1405,6 +1476,46 @@ export function MemberPanel() {
                 </div>
               </div>
             </form>
+          </div>
+        </div>
+      ) : null}
+
+      {/* TEMP DEBUG: popup teks mentah hasil OCR, hapus setelah debugging selesai */}
+      {ENABLE_OCR_DEBUG_VIEW && debugOcrText !== null ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-lg rounded-2xl bg-white shadow-2xl border border-slate-100 flex flex-col max-h-[85vh]">
+            <div className="flex items-center justify-between px-5 py-3 border-b border-slate-100">
+              <h3 className="text-sm font-bold text-slate-800">[DEBUG] Teks Mentah Hasil OCR</h3>
+              <button
+                type="button"
+                onClick={() => setDebugOcrText(null)}
+                className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-600 hover:bg-slate-50 cursor-pointer"
+              >
+                Tutup
+              </button>
+            </div>
+            <textarea
+              readOnly
+              value={debugOcrText}
+              className="flex-1 w-full resize-none px-5 py-3 text-xs font-mono outline-none"
+              rows={16}
+            />
+            <div className="px-5 py-3 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={async () => {
+                  try {
+                    await navigator.clipboard.writeText(debugOcrText);
+                    setFeedbackState({ message: "Teks OCR disalin ke clipboard.", isError: false });
+                  } catch (e) {
+                    console.error("Gagal menyalin ke clipboard", e);
+                  }
+                }}
+                className="w-full rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:opacity-90 cursor-pointer"
+              >
+                Copy ke Clipboard
+              </button>
+            </div>
           </div>
         </div>
       ) : null}
