@@ -1086,8 +1086,7 @@ export function MemberPanel() {
                   </div>
 
                   <p className="text-[11px] text-slate-500">
-                    Pemindaian diproses sepenuhnya di perangkat Anda (OCR lokal) — foto KTP tidak dikirim ke
-                    layanan pihak ketiga. Hasil ekstraksi tetap wajib diverifikasi ulang sebelum disimpan.
+                    Hasil pemindaian OCR wajib diverifikasi ulang sebelum disimpan.
                   </p>
                 </div>
 
@@ -1244,7 +1243,8 @@ export function MemberPanel() {
                       />
                     </label>
                   </div>
-                  {/* Kolom Kanan: Data KTP Tambahan & Dokumen Pendukung */}
+
+                  {/* Kolom Kanan: Data KTP Tambahan & Dokumen Pendukung */}
                   <div className="space-y-5">
                     
                     {/* Bagian: Data Tambahan KTP */}
