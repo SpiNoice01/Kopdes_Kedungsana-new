@@ -1243,7 +1243,8 @@ export function MemberPanel() {
                       />
                     </label>
                   </div>
-                  {/* Kolom Kanan: Data KTP Tambahan & Dokumen Pendukung */}
+
+                  {/* Kolom Kanan: Data KTP Tambahan & Dokumen Pendukung */}
                   <div className="space-y-5">
                     
                     {/* Bagian: Data Tambahan KTP */}
