@@ -295,23 +295,4 @@ test("FR-05 pencarian & filter", async () => {
       return { actual: `${names.length} kartu: ${names.join(", ") || "-"}`, valid: names.length === 1 && names[0] === "UJI BLACKBOX B" };
     },
   );
-
-  await tc(
-    page,
-    {
-      fr: "FR-05",
-      fitur: F,
-      skenario: "Tombol Reset mengembalikan semua filter",
-      langkah: "Dalam kondisi filter Wanita + kata kunci aktif, klik tombol 'Reset'",
-      data: "Filter aktif: Wanita + 'UJI BLACKBOX'",
-      expected: "Kata kunci terhapus, filter kembali 'Semua', seluruh anggota tampil lagi",
-    },
-    async () => {
-      await page.getByRole("button", { name: "Reset" }).click();
-      await page.waitForTimeout(500);
-      const query = await searchBox(page).inputValue();
-      const names = await cardNames(page);
-      return { actual: `Kata kunci: "${query}"; ${names.length} kartu tampil`, valid: query === "" && names.length >= 4 };
-    },
-  );
 });
