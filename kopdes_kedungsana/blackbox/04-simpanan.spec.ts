@@ -12,8 +12,8 @@ test.beforeAll(async ({ browser }) => {
 });
 
 const savingForm = () => page.locator("form", { has: page.locator('input[type="month"]') });
-const wajibInput = () => savingForm().getByPlaceholder("50.000");
-const sukarelaInput = () => savingForm().getByPlaceholder("10.000");
+const wajibInput = () => savingForm().getByLabel("Simpanan Wajib");
+const sukarelaInput = () => savingForm().getByLabel("Simpanan Sukarela");
 const savingFeedback = async () => {
   await page.waitForTimeout(2500);
   const p = savingForm().locator("p.md\\:col-span-2");

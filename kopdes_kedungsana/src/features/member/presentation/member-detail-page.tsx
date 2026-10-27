@@ -807,7 +807,7 @@ export function MemberDetailPage({ memberId }: MemberDetailPageProps) {
                       requiredSaving: formatInputCurrency(event.target.value),
                     }))
                   }
-                  placeholder="50.000"
+                  placeholder={formatInputCurrency(String(settings?.monthlyDuesAmount ?? 10_000))}
                   className="w-full rounded-xl border border-slate-300 pl-9 pr-3 py-2 outline-none focus:border-primary"
                 />
               </div>
