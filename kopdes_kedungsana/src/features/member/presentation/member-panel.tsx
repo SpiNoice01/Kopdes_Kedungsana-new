@@ -101,9 +101,11 @@ export function MemberPanel() {
       return matchesSearch && matchesArrears && matchesGender;
     });
 
-    // ✅ Sort: members with arrears float to TOP (descending by arrears amount)
-    // Within each group, sort alphabetically by name
+    // ✅ Sort: inactive members always sink below active ones.
+    // Within each status, members with arrears float to TOP (descending by arrears amount),
+    // then alphabetically by name
     return filtered.sort((a, b) => {
+      if (a.status !== b.status) return a.status === "aktif" ? -1 : 1;
       const arrearsA = calculateArrears(a, savingsMap[a.id] || [], settings).arrears;
       const arrearsB = calculateArrears(b, savingsMap[b.id] || [], settings).arrears;
       if (arrearsB !== arrearsA) return arrearsB - arrearsA; // highest arrears first
@@ -935,7 +937,7 @@ export function MemberPanel() {
               className="flex overflow-hidden rounded-2xl border border-slate-200 bg-white text-left transition hover:border-primary/30 hover:shadow-md min-h-[220px]"
             >
               {/* Left Column: Full User Photo */}
-              <div className="relative w-32 sm:w-36 bg-slate-100 flex-shrink-0">
+              <div className={`relative w-32 sm:w-36 bg-slate-100 flex-shrink-0 ${member.status === "aktif" ? "" : "grayscale"}`}>
                 {member.photoUrl ? (
                   <Image
                     src={member.photoUrl}
@@ -968,7 +970,11 @@ export function MemberPanel() {
 
                 {/* Status & Join Date */}
                 <div className="mt-2.5 flex items-center justify-between gap-1.5 pt-2 border-t border-slate-100">
-                  <span className="inline-flex rounded-full bg-primary-soft px-2.5 py-0.5 text-[10px] font-extrabold text-primary uppercase">
+                  <span
+                    className={`inline-flex rounded-full px-2.5 py-0.5 text-[10px] font-extrabold uppercase ${
+                      member.status === "aktif" ? "bg-primary-soft text-primary" : "bg-slate-200 text-slate-500"
+                    }`}
+                  >
                     {member.status}
                   </span>
                   <span className="text-[10px] text-slate-400 font-bold font-mono">Join: {member.joinDate}</span>
