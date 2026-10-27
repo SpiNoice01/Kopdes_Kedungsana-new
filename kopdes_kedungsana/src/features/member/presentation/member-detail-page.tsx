@@ -12,7 +12,7 @@ import type { MemberInvestment } from "../domain/member-investment";
 import { memberDependencies } from "../infrastructure/member-dependencies";
 import { loadSettingsAsync } from "@/src/actions/settings-actions";
 import type { KopdesSettings } from "@/src/features/settings/domain/settings";
-import { formatCurrency, formatDate } from "@/src/utils/formatters";
+import { formatCurrency, formatDate, formatPeriod } from "@/src/utils/formatters";
 import { calculateArrears } from "../domain/member-services";
 
 type MemberDetailPageProps = {
@@ -125,6 +125,7 @@ export function MemberDetailPage({ memberId }: MemberDetailPageProps) {
     amount: "",
   });
   const [isSavingInvestment, setIsSavingInvestment] = useState(false);
+  const [isArrearsOpen, setIsArrearsOpen] = useState(false);
   const [investmentFeedback, setInvestmentFeedback] = useState<FeedbackState>({
     message: "",
     isError: false,
@@ -174,7 +175,7 @@ export function MemberDetailPage({ memberId }: MemberDetailPageProps) {
 
   const arrearsInfo = useMemo(() => {
     if (!member) {
-      return { monthsElapsed: 0, target: 0, paid: 0, arrears: 0 };
+      return { monthsElapsed: 0, target: 0, paid: 0, arrears: 0, paidThroughPeriod: null, arrearsSincePeriod: null };
     }
     return calculateArrears(member, monthlySavings, settings);
   }, [member, monthlySavings, settings]);
@@ -649,7 +650,7 @@ export function MemberDetailPage({ memberId }: MemberDetailPageProps) {
             <div className="space-y-3">
               <div className="flex flex-wrap items-center gap-3">
                 <StatusBadge
-                  label={hasPaidPokok ? "LUNAS (TERVALIDASI)" : "BELUM LUNAS"}
+                  label={hasPaidPokok ? "LUNAS" : "BELUM LUNAS"}
                   tone={hasPaidPokok ? "success" : "danger"}
                 />
                 <p className="text-sm text-slate-600">
@@ -716,9 +717,14 @@ export function MemberDetailPage({ memberId }: MemberDetailPageProps) {
           description="Isi transaksi simpanan bulanan per anggota."
           collapsible
         >
-          <details className="mb-5 group">
-            <summary className="flex items-center gap-2 cursor-pointer list-none text-sm font-semibold text-slate-700 bg-slate-50 px-4 py-2.5 rounded-xl border border-slate-200 select-none hover:bg-slate-100 transition">
-              <svg className="w-4 h-4 text-slate-500 transition-transform group-open:rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <div className="mb-5 rounded-xl border border-slate-200 bg-slate-50 overflow-hidden">
+            <button
+              type="button"
+              onClick={() => setIsArrearsOpen((previous) => !previous)}
+              aria-expanded={isArrearsOpen}
+              className="w-full flex items-center gap-2 cursor-pointer text-left text-sm font-semibold text-slate-700 px-4 py-2.5 select-none hover:bg-slate-100 transition"
+            >
+              <svg className={`w-4 h-4 text-slate-500 transition-transform duration-300 ${isArrearsOpen ? "rotate-90" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
               </svg>
               Info Status Tunggakan Iuran
@@ -731,8 +737,13 @@ export function MemberDetailPage({ memberId }: MemberDetailPageProps) {
                   Lunas
                 </span>
               )}
-            </summary>
-            <div className="mt-3">
+            </button>
+            <div
+              aria-hidden={!isArrearsOpen}
+              className={`grid transition-[grid-template-rows] duration-300 ease-in-out ${isArrearsOpen ? "grid-rows-[1fr]" : "grid-rows-[0fr]"}`}
+            >
+            <div className="overflow-hidden">
+            <div className="px-3 pb-3">
               {arrearsInfo.arrears > 0 ? (
                 <div className="bg-red-50 border border-red-200 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                   <div className="flex items-start gap-3">
@@ -745,7 +756,15 @@ export function MemberDetailPage({ memberId }: MemberDetailPageProps) {
                       <h4 className="text-sm font-bold text-red-800">Terdapat Tunggakan Simpanan Wajib</h4>
                       <p className="text-xs text-red-600 mt-0.5 leading-relaxed">
                         Anggota terdaftar sejak <strong>{member.joinDate}</strong> ({arrearsInfo.monthsElapsed} bulan). <br/>
-                        Target akumulasi simpanan wajib: <strong>{formatCurrency(arrearsInfo.target)}</strong> | Sudah dibayar: <strong>{formatCurrency(arrearsInfo.paid)}</strong>
+                        Target akumulasi simpanan wajib: <strong>{formatCurrency(arrearsInfo.target)}</strong> | Sudah dibayar: <strong>{formatCurrency(arrearsInfo.paid)}</strong> <br/>
+                        {arrearsInfo.arrearsSincePeriod ? (
+                          <>Menunggak sejak <strong>{formatPeriod(arrearsInfo.arrearsSincePeriod)}</strong> | </>
+                        ) : null}
+                        {arrearsInfo.paidThroughPeriod ? (
+                          <>Terakhir lunas: <strong>{formatPeriod(arrearsInfo.paidThroughPeriod)}</strong></>
+                        ) : (
+                          <>Belum ada bulan yang lunas</>
+                        )}
                       </p>
                     </div>
                   </div>
@@ -765,7 +784,10 @@ export function MemberDetailPage({ memberId }: MemberDetailPageProps) {
                     <div>
                       <h4 className="text-sm font-bold text-emerald-800">Simpanan Wajib Lunas</h4>
                       <p className="text-xs text-emerald-600 mt-0.5 leading-relaxed">
-                        Status iuran simpanan wajib anggota ini aman dan lunas. Seluruh kewajiban pembayaran bulanan hingga bulan ini telah diselesaikan.
+                        Status iuran simpanan wajib anggota ini aman dan lunas. Seluruh kewajiban pembayaran bulanan telah diselesaikan
+                        {arrearsInfo.paidThroughPeriod ? (
+                          <> hingga <strong>{formatPeriod(arrearsInfo.paidThroughPeriod)}</strong></>
+                        ) : null}.
                       </p>
                     </div>
                   </div>
@@ -776,7 +798,9 @@ export function MemberDetailPage({ memberId }: MemberDetailPageProps) {
                 </div>
               )}
             </div>
-          </details>
+            </div>
+            </div>
+          </div>
 
           <form onSubmit={handleSubmit} className="grid gap-3 md:grid-cols-2">
             <label className="space-y-2 text-sm">
@@ -865,7 +889,6 @@ export function MemberDetailPage({ memberId }: MemberDetailPageProps) {
           title="Riwayat Simpanan Bulanan"
           description="Sumber data untuk kalkulasi di halaman Quick SHU."
           collapsible
-          defaultCollapsed
         >
           <div className="space-y-3">
             <div className="flex items-center justify-between">
