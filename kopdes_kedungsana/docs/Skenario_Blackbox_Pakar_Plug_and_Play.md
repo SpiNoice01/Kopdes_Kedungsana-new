@@ -158,8 +158,8 @@ Keterangan kolom Kesimpulan: ☐ Valid ☐ Tidak Valid — centang salah satu.
 
 | No | Kode FR | Skenario Pengujian | Langkah Pengujian | Data Uji | Hasil yang Diharapkan | Hasil Aktual | Kesimpulan |
 |---|---|---|---|---|---|---|---|
-| E-01 | FR-14 | Validasi pembayaran simpanan pokok | Di detail UJI PAKAR A (pokok belum lunas), klik **Bayar & Validasi**. | Simpanan Pokok Rp 100.000 | Status Simpanan Pokok berubah dari BELUM LUNAS menjadi LUNAS (TERVALIDASI) disertai pesan berhasil | | ☐ Valid ☐ Tidak Valid |
-| E-02 | FR-14 | Simpanan pokok otomatis lunas bila bukti diunggah saat daftar | Buka detail UJI PAKAR B. | UJI PAKAR B (mengunggah bukti pokok di D-11) | Status Simpanan Pokok langsung LUNAS (TERVALIDASI) tanpa validasi ulang | | ☐ Valid ☐ Tidak Valid |
+| E-01 | FR-14 | Validasi pembayaran simpanan pokok | Di detail UJI PAKAR A (pokok belum lunas), klik **Bayar & Validasi**. | Simpanan Pokok Rp 100.000 | Status Simpanan Pokok berubah dari BELUM LUNAS menjadi LUNAS disertai pesan berhasil | | ☐ Valid ☐ Tidak Valid |
+| E-02 | FR-14 | Simpanan pokok otomatis lunas bila bukti diunggah saat daftar | Buka detail UJI PAKAR B. | UJI PAKAR B (mengunggah bukti pokok di D-11) | Status Simpanan Pokok langsung LUNAS tanpa validasi ulang | | ☐ Valid ☐ Tidak Valid |
 | E-03 | FR-15 | Simpan dengan nominal wajib dan sukarela kosong | Di detail UJI PAKAR A, bagian Input Simpanan Bulanan, biarkan kedua nominal kosong, klik **Simpan**. | Periode: bulan berjalan; Wajib & Sukarela: (kosong) | Ditolak dengan pesan "Isi minimal salah satu nominal simpanan" | | ☐ Valid ☐ Tidak Valid |
 | E-04 | FR-15 | Mengetik nominal negatif atau huruf | 1) Ketik -5000 di Simpanan Wajib. 2) Hapus, lalu ketik abc di Wajib dan Sukarela. 3) Klik **Simpan**. | Wajib: -5000, lalu abc; Sukarela: abc | Tanda minus dan huruf tidak dapat dimasukkan; penyimpanan ditolak karena nominal kosong | | ☐ Valid ☐ Tidak Valid |
 | E-05 | FR-15 | Simpan dengan periode kosong | Kosongkan kolom Periode, isi Wajib 10.000, klik **Simpan**. | Periode: (kosong); Wajib: 10.000 | Ditolak dengan pesan periode wajib berformat YYYY-MM | | ☐ Valid ☐ Tidak Valid |

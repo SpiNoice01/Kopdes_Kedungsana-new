@@ -21,7 +21,7 @@ const savingFeedback = async () => {
 };
 const pokokBadge = async () => {
   const text = await bodyText(page);
-  return text.includes("LUNAS (TERVALIDASI)") ? "LUNAS (TERVALIDASI)" : text.includes("BELUM LUNAS") ? "BELUM LUNAS" : "?";
+  return text.match(/Simpanan Pokok\s+(BELUM LUNAS|LUNAS)\b/)?.[1] ?? "?";
 };
 
 const inputSaving = async (period: string, wajib: string, sukarela: string) => {
@@ -44,7 +44,7 @@ test("FR-14 catat simpanan pokok/wajib/sukarela", async () => {
       skenario: "Validasi pembayaran Simpanan Pokok",
       langkah: "Buka detail UJI BLACKBOX A (belum bayar pokok), klik 'Bayar & Validasi'",
       data: `Anggota: ${A.name}; Simpanan Pokok Rp 100.000`,
-      expected: "Status berubah dari BELUM LUNAS menjadi LUNAS (TERVALIDASI) dengan pesan berhasil",
+      expected: "Status berubah dari BELUM LUNAS menjadi LUNAS dengan pesan berhasil",
     },
     async () => {
       await openDetail(page, "A");
@@ -52,7 +52,7 @@ test("FR-14 catat simpanan pokok/wajib/sukarela", async () => {
       await page.getByRole("button", { name: "Bayar & Validasi" }).click();
       const msg = await savingFeedback();
       const after = await pokokBadge();
-      return { actual: `Status awal: ${before}; pesan: "${msg}"; status akhir: ${after}`, valid: before === "BELUM LUNAS" && after === "LUNAS (TERVALIDASI)" };
+      return { actual: `Status awal: ${before}; pesan: "${msg}"; status akhir: ${after}`, valid: before === "BELUM LUNAS" && after === "LUNAS" };
     },
   );
 
@@ -64,12 +64,12 @@ test("FR-14 catat simpanan pokok/wajib/sukarela", async () => {
       skenario: "Simpanan Pokok tercatat otomatis saat daftar dengan bukti pokok",
       langkah: "Buka detail UJI BLACKBOX B (saat pendaftaran mengunggah bukti simpanan pokok)",
       data: `Anggota: ${B.name}`,
-      expected: "Status Simpanan Pokok langsung LUNAS (TERVALIDASI) tanpa perlu validasi ulang",
+      expected: "Status Simpanan Pokok langsung LUNAS tanpa perlu validasi ulang",
     },
     async () => {
       await openDetail(page, "B");
       const badge = await pokokBadge();
-      return { actual: `Status Simpanan Pokok: ${badge}`, valid: badge === "LUNAS (TERVALIDASI)" };
+      return { actual: `Status Simpanan Pokok: ${badge}`, valid: badge === "LUNAS" };
     },
   );
 
