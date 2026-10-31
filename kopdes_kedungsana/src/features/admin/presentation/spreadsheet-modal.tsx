@@ -2,7 +2,8 @@
 
 import { buildSimpananSheet, buildShuSheet, downloadExcelBuffer } from "@/src/features/admin/utils/excel-exporter";
 import type { ExcelExportRow } from "@/src/features/admin/utils/excel-exporter";
-import { calculateShuPools } from "@/src/features/admin/utils/shu-calculator";
+import { calculateShuPools, calculateShuRate, computeMemberShu, totalShuBasis } from "@/src/features/admin/utils/shu-calculator";
+import { loadFiscalYearNetShu } from "@/src/features/admin/utils/shu-basis-loader";
 import ExcelJS from "exceljs";
 import { useMemo, useState } from "react";
 import { addAuditLog } from "../../../utils/audit-logger";
@@ -76,10 +77,11 @@ export default function SpreadsheetModal({ isOpen, onClose }: { isOpen: boolean;
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [settings, setSettings] = useState<KopdesSettings>(defaultSettings);
+  const [netShu, setNetShu] = useState(0);
 
   useEffect(() => {
     if (!isOpen) return;
-    
+
     const fetchData = async () => {
       try {
         setIsLoading(true);
@@ -88,7 +90,14 @@ export default function SpreadsheetModal({ isOpen, onClose }: { isOpen: boolean;
           loadSettingsAsync()
         ]);
         setSettings(fetchedSettings);
-        
+
+        try {
+          setNetShu((await loadFiscalYearNetShu(fetchedSettings)) ?? 0);
+        } catch (e) {
+          console.error("Failed to load fiscal year SHU for Spreadsheet Live", e);
+          setNetShu(0);
+        }
+
         const records: MemberRow[] = [];
         
         for (const member of members) {
@@ -172,53 +181,20 @@ export default function SpreadsheetModal({ isOpen, onClose }: { isOpen: boolean;
   const [editingCell, setEditingCell] = useState<{ rowIdx: number; colName: string } | null>(null);
   const [editValue, setEditValue] = useState("");
 
-  const totalSimpananBasis = useMemo(() => {
-    return rows.reduce((sum, r) => sum + r.savingPokok + r.savingWajib + r.savingSukarela, 0);
-  }, [rows]);
-
-  // Simpanan Sukarela is a liability the co-op owes back to the member, not
-  // equity — only Pokok+Wajib (+ Investasi, when present) count as "modal
-  // sendiri" and form the basis for the SHU Simpanan (Jasa Modal) split.
-  const totalModalBasis = useMemo(() => {
-    return rows.reduce((sum, r) => sum + r.savingPokok + r.savingWajib + r.investmentAmount, 0);
-  }, [rows]);
-
-  const totalJasaBasis = useMemo(() => {
-    return rows.reduce((sum, r) => sum + r.serviceContribution, 0);
-  }, [rows]);
-
-  // The pool is sized from totalModalBasis (Pokok+Wajib+Investasi), not the
-  // full savings total — Sukarela isn't equity, and Investasi money must
-  // actually grow the distributable pool, not just reshuffle shares of it.
-  const shuPools = useMemo(
-    () => calculateShuPools(totalModalBasis, settings),
-    [totalModalBasis, settings]
+  // Dana Anggota comes from the net SHU entered for the fiscal year in Quick
+  // SHU, and is split at one rate via the same shared helpers Quick SHU and
+  // the RAT bundle export use.
+  const shuRate = useMemo(
+    () => calculateShuRate(calculateShuPools(netShu, settings).danaAnggota, totalShuBasis(rows)),
+    [netShu, settings, rows]
   );
 
   const computedRows: ComputedMemberRow[] = useMemo(() => {
-    return rows.map((row) => {
-      const totalSaving = row.savingPokok + row.savingWajib + row.savingSukarela;
-      const modalSaving = row.savingPokok + row.savingWajib + row.investmentAmount;
-
-      const savingShu = totalModalBasis > 0
-        ? Math.round((modalSaving / totalModalBasis) * shuPools.danaShuSimpanan)
-        : 0;
-
-      const serviceShu = totalJasaBasis > 0
-        ? Math.round((row.serviceContribution / totalJasaBasis) * shuPools.danaShuJasa)
-        : 0;
-
-      const totalShu = savingShu + serviceShu;
-
-      return {
-        ...row,
-        totalSaving,
-        savingShu,
-        serviceShu,
-        totalShu,
-      };
-    });
-  }, [rows, totalModalBasis, totalJasaBasis, shuPools]);
+    return rows.map((row) => ({
+      ...row,
+      ...computeMemberShu(row, shuRate),
+    }));
+  }, [rows, shuRate]);
 
   const filteredRows = useMemo(() => {
     if (!searchQuery.trim()) return computedRows;

@@ -12,11 +12,13 @@ export interface KopdesSettings {
   monthlyDuesAmount: number;
   activeFiscalYear: number;
   pctCadangan: number;
-  pctJasaModal: number;
-  pctJasaTransaksi: number;
+  /** Dana Anggota — the single member-facing pos, split across savings and service participation at one rate. */
+  pctDanaAnggota: number;
   pctPengurus: number;
   pctKaryawan: number;
   pctPendidikan: number;
+  /** Pembangunan Daerah Kerja. */
+  pctPmdk: number;
   pctSosial: number;
   enableInvestasi: boolean;
 }

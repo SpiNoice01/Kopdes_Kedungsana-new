@@ -14,21 +14,21 @@ export const SETTINGS_FIELDS = [
   { key: "principalSavingAmount", label: "Simpanan Pokok (Rp)", kind: "input" },
   { key: "monthlyDuesAmount", label: "Iuran Wajib / Bulan (Rp)", kind: "input" },
   { key: "pctCadangan", label: "Cadangan Koperasi (%)", kind: "input" },
-  { key: "pctJasaModal", label: "Jasa Modal (%)", kind: "input" },
-  { key: "pctJasaTransaksi", label: "Jasa Transaksi (%)", kind: "input" },
+  { key: "pctDanaAnggota", label: "Dana Anggota (%)", kind: "input" },
   { key: "pctPengurus", label: "Dana Pengurus & Manajemen (%)", kind: "input" },
   { key: "pctKaryawan", label: "Dana Karyawan / Pegawai (%)", kind: "input" },
   { key: "pctPendidikan", label: "Dana Pendidikan (%)", kind: "input" },
-  { key: "pctSosial", label: "Dana Sosial & Pembangunan (%)", kind: "input" },
+  { key: "pctPmdk", label: "Dana Pembangunan Daerah Kerja / PMDK (%)", kind: "input" },
+  { key: "pctSosial", label: "Dana Sosial (%)", kind: "input" },
 ] as const;
 
 export const PCT_KEYS = [
   "pctCadangan",
-  "pctJasaModal",
-  "pctJasaTransaksi",
+  "pctDanaAnggota",
   "pctPengurus",
   "pctKaryawan",
   "pctPendidikan",
+  "pctPmdk",
   "pctSosial",
 ] as const;
 

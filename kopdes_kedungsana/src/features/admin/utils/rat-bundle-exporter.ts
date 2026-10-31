@@ -1,7 +1,7 @@
 import ExcelJS from "exceljs";
 import { loadSettingsAsync } from "@/src/actions/settings-actions";
-import { loadMemberShuBasisRows } from "./shu-basis-loader";
-import { calculateShuPools, computeMemberShu } from "./shu-calculator";
+import { loadFiscalYearNetShu, loadMemberShuBasisRows } from "./shu-basis-loader";
+import { calculateShuPools, calculateShuRate, computeMemberShu, totalShuBasis } from "./shu-calculator";
 import { buildSimpananSheet, buildShuSheet } from "./excel-exporter";
 import type { ExcelExportRow } from "./excel-exporter";
 
@@ -16,14 +16,13 @@ import type { ExcelExportRow } from "./excel-exporter";
  */
 export const appendRatBundleSheets = async (wb: ExcelJS.Workbook): Promise<void> => {
   const settings = await loadSettingsAsync();
-  const rows = await loadMemberShuBasisRows(settings);
+  const [rows, netShu] = await Promise.all([
+    loadMemberShuBasisRows(settings),
+    loadFiscalYearNetShu(settings),
+  ]);
 
-  const totalModalBasis = rows.reduce(
-    (sum, r) => sum + r.savingPokok + r.savingWajib + r.investmentAmount,
-    0,
-  );
-  const totalJasaBasis = rows.reduce((sum, r) => sum + r.serviceContribution, 0);
-  const shuPools = calculateShuPools(totalModalBasis, settings);
+  const shuPools = calculateShuPools(netShu ?? 0, settings);
+  const shuRate = calculateShuRate(shuPools.danaAnggota, totalShuBasis(rows));
 
   const exportRows: ExcelExportRow[] = rows.map((row) => ({
     memberName: row.memberName,
@@ -32,7 +31,7 @@ export const appendRatBundleSheets = async (wb: ExcelJS.Workbook): Promise<void>
     savingSukarela: row.savingSukarela,
     investmentAmount: row.investmentAmount,
     serviceContribution: row.serviceContribution,
-    ...computeMemberShu(row, totalModalBasis, totalJasaBasis, shuPools),
+    ...computeMemberShu(row, shuRate),
   }));
 
   buildSimpananSheet(wb, settings, exportRows);

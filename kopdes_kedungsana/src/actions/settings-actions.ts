@@ -13,12 +13,13 @@ export const defaultSettings: KopdesSettings = {
   principalSavingAmount: 100_000,
   monthlyDuesAmount: 10_000,
   activeFiscalYear: new Date().getFullYear(),
-  pctCadangan: 40,
-  pctJasaModal: 33.32,
-  pctJasaTransaksi: 6.68,
-  pctPengurus: 5,
+  // Pembagian SHU per AD pada Laporan RAT 2024 (acuan klien).
+  pctCadangan: 25,
+  pctDanaAnggota: 50,
+  pctPengurus: 10,
   pctKaryawan: 5,
-  pctPendidikan: 5,
+  pctPendidikan: 2.5,
+  pctPmdk: 2.5,
   pctSosial: 5,
   enableInvestasi: false,
 };

@@ -1,5 +1,16 @@
 import { memberDependencies } from "@/src/features/member/infrastructure/member-dependencies";
+import { shuDependencies } from "@/src/features/shu/infrastructure/shu-dependencies";
 import type { KopdesSettings } from "@/src/features/settings/domain/settings";
+
+/**
+ * Net SHU entered for the active fiscal year, or null when none has been
+ * entered yet. Throws if fiscal_year_shu can't be read (e.g. the
+ * setup_fiscal_year_shu.sql migration hasn't been run).
+ */
+export const loadFiscalYearNetShu = async (settings: KopdesSettings): Promise<number | null> => {
+  const record = await shuDependencies.getFiscalYearShuUseCase.execute(settings.activeFiscalYear);
+  return record ? record.netShu : null;
+};
 
 export interface MemberShuBasisRow {
   memberId: string;

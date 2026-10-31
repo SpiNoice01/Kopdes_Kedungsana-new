@@ -1,20 +1,23 @@
 import type { KopdesSettings } from "@/src/features/settings/domain/settings";
 
 export interface ShuPools {
-  totalShuKotor: number;
-  danaShuSimpanan: number;
-  danaShuJasa: number;
+  netShu: number;
+  danaAnggota: number;
 }
 
+/**
+ * Sizes the Dana Anggota pos from the fiscal year's net SHU (entered by the
+ * treasurer from the income statement, see fiscal_year_shu). The other six
+ * pos (Cadangan, Pengurus, ...) are organisational funds and are never split
+ * per member.
+ */
 export const calculateShuPools = (
-  totalSimpananBasis: number,
+  netShu: number,
   settings: KopdesSettings
 ): ShuPools => {
-  const totalShuKotor = Math.round(totalSimpananBasis * 0.1);
-  const danaShuSimpanan = Math.round((totalShuKotor * settings.pctJasaModal) / 100);
-  const danaShuJasa = Math.round((totalShuKotor * settings.pctJasaTransaksi) / 100);
+  const danaAnggota = Math.round((netShu * settings.pctDanaAnggota) / 100);
 
-  return { totalShuKotor, danaShuSimpanan, danaShuJasa };
+  return { netShu, danaAnggota };
 };
 
 export interface MemberShuBasisRow {
@@ -33,28 +36,46 @@ export interface MemberShuResult {
 }
 
 /**
+ * A member's SHU Simpanan basis: every savings type plus Investasi. Sukarela
+ * is included because that is how the client's reference RAT (Laporan RAT
+ * 2024, "JML SIMPANAN" column) computes it.
+ */
+export const memberSavingBasis = (row: MemberShuBasisRow): number =>
+  row.savingPokok + row.savingWajib + row.savingSukarela + row.investmentAmount;
+
+export interface ShuBasisTotals {
+  savingBasis: number;
+  serviceBasis: number;
+}
+
+export const totalShuBasis = (rows: MemberShuBasisRow[]): ShuBasisTotals => ({
+  savingBasis: rows.reduce((sum, r) => sum + memberSavingBasis(r), 0),
+  serviceBasis: rows.reduce((sum, r) => sum + r.serviceContribution, 0),
+});
+
+/**
+ * One rate for both savings and service participation, as in the reference
+ * RAT: Dana Anggota ÷ (total simpanan + total setoran jasa). With no service
+ * data yet, the whole Dana Anggota simply flows to savings — nothing is left
+ * undistributed.
+ */
+export const calculateShuRate = (danaAnggota: number, totals: ShuBasisTotals): number => {
+  const basis = totals.savingBasis + totals.serviceBasis;
+  return basis > 0 ? danaAnggota / basis : 0;
+};
+
+/**
  * Single source of truth for a member's SHU split, shared by every screen
- * that renders a Daftar SHU (Quick SHU, RAT bundle export) so the formula
- * can't silently drift between them the way it once did (Sukarela was
- * previously double-counted in one screen's modal basis but not the
- * other's).
+ * that renders a Daftar SHU (Quick SHU, Spreadsheet Live, RAT bundle export)
+ * so the formula can't silently drift between them.
  */
 export const computeMemberShu = (
   row: MemberShuBasisRow,
-  totalModalBasis: number,
-  totalJasaBasis: number,
-  shuPools: ShuPools
+  shuRate: number
 ): MemberShuResult => {
   const totalSaving = row.savingPokok + row.savingWajib + row.savingSukarela;
-  const modalSaving = row.savingPokok + row.savingWajib + row.investmentAmount;
-
-  const savingShu = totalModalBasis > 0
-    ? Math.round((modalSaving / totalModalBasis) * shuPools.danaShuSimpanan)
-    : 0;
-
-  const serviceShu = totalJasaBasis > 0
-    ? Math.round((row.serviceContribution / totalJasaBasis) * shuPools.danaShuJasa)
-    : 0;
+  const savingShu = Math.round(memberSavingBasis(row) * shuRate);
+  const serviceShu = Math.round(row.serviceContribution * shuRate);
 
   return { totalSaving, savingShu, serviceShu, totalShu: savingShu + serviceShu };
 };

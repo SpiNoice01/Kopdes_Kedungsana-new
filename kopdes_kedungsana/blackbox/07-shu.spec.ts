@@ -29,7 +29,7 @@ test("FR-23 & FR-41 persentase SHU di pengaturan", async () => {
       skenario: "Menampilkan 7 input persentase pembagian SHU",
       langkah: "Buka Pengaturan, lihat bagian 'Persentase Pos Pembagian SHU'",
       data: "-",
-      expected: "Tampil 7 field persentase (Cadangan, Jasa Modal, Jasa Transaksi, Pengurus, Karyawan, Pendidikan, Sosial) dengan total 100.00% berwarna hijau",
+      expected: "Tampil 7 field persentase (Cadangan, Dana Anggota, Pengurus, Karyawan, Pendidikan, PMDK, Sosial) dengan total 100.00% berwarna hijau",
     },
     async () => {
       await openSettings(page);
@@ -67,9 +67,10 @@ test("FR-23 & FR-41 persentase SHU di pengaturan", async () => {
       },
     );
 
-  await invalidTotal("Total persentase lebih dari 100%", "41", "101.00%");
-  await invalidTotal("Total persentase kurang dari 100%", "39", "99.00%");
-  await invalidTotal("Total persentase selisih 0,01% (batas)", "40.01", "100.01%");
+  const cad = Number(original.pctCadangan);
+  await invalidTotal("Total persentase lebih dari 100%", String(cad + 1), "101.00%");
+  await invalidTotal("Total persentase kurang dari 100%", String(cad - 1), "99.00%");
+  await invalidTotal("Total persentase selisih 0,01% (batas)", String(Math.round((cad + 0.01) * 100) / 100), "100.01%");
 
   await tc(
     page,
@@ -78,7 +79,7 @@ test("FR-23 & FR-41 persentase SHU di pengaturan", async () => {
       fitur: F,
       skenario: "Perubahan persentase tidak valid tidak tersimpan",
       langkah: "Tanpa menyimpan, muat ulang halaman Pengaturan",
-      data: "Cadangan sempat diubah menjadi 40.01 (tidak disimpan)",
+      data: `Cadangan sempat diubah menjadi ${original.pctCadangan} + 0,01 (tidak disimpan)`,
       expected: `Semua nilai kembali seperti semula (Cadangan ${original.pctCadangan}, total 100.00%)`,
     },
     async () => {
@@ -118,11 +119,15 @@ test("FR-24/25/26 hitung SHU", async () => {
   }
 
   const list = Object.values(rows);
-  const totalModal = list.reduce((a, r) => a + r.pokok + r.wajib + r.inv, 0);
-  const totalWithSukarela = list.reduce((a, r) => a + r.pokok + r.wajib + r.sukarela + r.inv, 0);
-  const kotor = Math.round(totalModal * 0.1);
-  const danaModal = Math.round((kotor * pct.pctJasaModal) / 100);
-  const danaJasa = Math.round((kotor * pct.pctJasaTransaksi) / 100);
+  // Basis simpanan = Pokok + Wajib + Sukarela + Investasi (kolom JML SIMPANAN pada Laporan RAT acuan).
+  const totalSimpanan = list.reduce((a, r) => a + r.pokok + r.wajib + r.sukarela + r.inv, 0);
+  const totalJasa = list.reduce((a, r) => a + r.jasa, 0);
+  // Prasyarat: SHU bersih tahun buku aktif sudah diisi di SHU Cepat (dari laporan laba-rugi).
+  const netShuRaw = await page.locator("#net-shu").inputValue();
+  const netShu = Number(netShuRaw || 0);
+  const danaAnggota = Math.round((netShu * pct.pctDanaAnggota) / 100);
+  const tarif = totalSimpanan + totalJasa > 0 ? danaAnggota / (totalSimpanan + totalJasa) : 0;
+  const tarifLabel = `${(tarif * 100).toFixed(4)}%`;
 
   await tc(
     page,
@@ -131,20 +136,19 @@ test("FR-24/25/26 hitung SHU", async () => {
       fitur: F,
       skenario: "Menampilkan alokasi SHU per pos AD/ART",
       langkah: "Buka SHU Cepat, klik panel 'Transparansi Alokasi SHU AD/ART'",
-      data: `Persentase dari Pengaturan: ${PCT_KEYS.map((k) => `${k.replace("pct", "")} ${pct[k]}%`).join(", ")}`,
-      expected: `Total SHU Kotor = 10% × total modal (Pokok+Wajib+Investasi anggota aktif) = 10% × ${rupiah(totalModal)} = ${rupiah(kotor)}; Jasa Modal = ${rupiah(danaModal)}; Jasa Transaksi = ${rupiah(danaJasa)}; total persentase 100.00%`,
+      data: `SHU bersih tahun buku (input): ${netShuRaw ? rupiah(netShu) : "belum diisi"}; persentase dari Pengaturan: ${PCT_KEYS.map((k) => `${k.replace("pct", "")} ${pct[k]}%`).join(", ")}`,
+      expected: `Dana Anggota = ${rupiah(netShu)} × ${pct.pctDanaAnggota}% = ${rupiah(danaAnggota)}; total persentase 100.00%`,
     },
     async () => {
+      if (!netShuRaw) return { actual: "SHU bersih tahun buku belum diisi di SHU Cepat (prasyarat tidak terpenuhi)", valid: false };
       await page.getByRole("button", { name: /Transparansi Alokasi SHU AD\/ART/ }).click();
       await page.waitForTimeout(600);
       const text = await bodyText(page);
-      const shownKotor = parseRupiah(text.match(/Total SHU Kotor Rp ([\d.]+)/i)?.[1] ?? "");
-      const shownJM = parseRupiah(text.match(/Jasa Modal \([\d.]+%\): Rp ([\d.]+)/i)?.[1] ?? "");
-      const shownJT = parseRupiah(text.match(/Jasa Transaksi \([\d.]+%\): Rp ([\d.]+)/i)?.[1] ?? "");
+      const shownDA = parseRupiah(text.match(/Dana Anggota \([\d.,]+%\)\s*Rp ([\d.]+)/i)?.[1] ?? "");
       const totalPct = text.match(/Total: ([\d.]+%)/i)?.[1] ?? "?";
       return {
-        actual: `SHU Kotor tampil ${rupiah(shownKotor)}; Jasa Modal ${rupiah(shownJM)}; Jasa Transaksi ${rupiah(shownJT)}; total persentase ${totalPct}`,
-        valid: shownKotor === kotor && shownJM === danaModal && shownJT === danaJasa && totalPct === "100.00%",
+        actual: `SHU bersih ${rupiah(netShu)}; Dana Anggota tampil ${rupiah(shownDA)}; total persentase ${totalPct}`,
+        valid: shownDA === danaAnggota && totalPct === "100.00%",
       };
     },
   );
@@ -154,18 +158,21 @@ test("FR-24/25/26 hitung SHU", async () => {
     {
       fr: "FR-25",
       fitur: F,
-      skenario: "SHU Jasa Modal tiap anggota aktif sesuai rumus",
-      langkah: "Di SHU Cepat, bandingkan kolom SHU Simpanan (Jasa Modal) tiap anggota dengan hitungan manual: (Pokok+Wajib+Investasi) / Total Modal × Dana Jasa Modal",
-      data: `${list.length} anggota aktif; Total Modal ${rupiah(totalModal)}; Dana Jasa Modal ${rupiah(danaModal)}`,
-      expected: "Nilai SHU Jasa Modal di layar sama dengan hitungan manual untuk setiap anggota",
+      skenario: "SHU Simpanan dan SHU Jasa tiap anggota aktif sesuai rumus",
+      langkah: "Di SHU Cepat, bandingkan kolom SHU Simpanan dan SHU Jasa tiap anggota dengan hitungan manual: Tarif = Dana Anggota / (Total Simpanan + Total Setoran Jasa); SHU Simpanan = (Pokok+Wajib+Sukarela+Investasi) × Tarif; SHU Jasa = Setoran Jasa × Tarif",
+      data: `${list.length} anggota aktif; Total Simpanan ${rupiah(totalSimpanan)}; Total Setoran Jasa ${rupiah(totalJasa)}; Dana Anggota ${rupiah(danaAnggota)}; Tarif ${tarifLabel}`,
+      expected: "Nilai SHU Simpanan dan SHU Jasa di layar sama dengan hitungan manual untuk setiap anggota",
     },
     async () => {
       const checks = list.map((r) => {
-        const exp = totalModal > 0 ? Math.round(((r.pokok + r.wajib + r.inv) / totalModal) * danaModal) : 0;
-        return { name: r.name, exp, got: r.shuModal, ok: exp === r.shuModal };
+        const expS = Math.round((r.pokok + r.wajib + r.sukarela + r.inv) * tarif);
+        const expJ = Math.round(r.jasa * tarif);
+        return { name: r.name, expS, expJ, got: r, ok: expS === r.shuModal && expJ === r.shuJasa };
       });
       return {
-        actual: checks.map((c) => `${c.name}: layar ${rupiah(c.got)} / manual ${rupiah(c.exp)}${c.ok ? "" : " (BEDA)"}`).join("; "),
+        actual: checks
+          .map((c) => `${c.name}: Simpanan layar ${rupiah(c.got.shuModal)} / manual ${rupiah(c.expS)}, Jasa layar ${rupiah(c.got.shuJasa)} / manual ${rupiah(c.expJ)}${c.ok ? "" : " (BEDA)"}`)
+          .join("; "),
         valid: checks.length > 0 && checks.every((c) => c.ok),
       };
     },
@@ -193,23 +200,24 @@ test("FR-24/25/26 hitung SHU", async () => {
     {
       fr: "FR-26",
       fitur: F,
-      skenario: "Cek manual 1 anggota: sukarela tidak ikut basis Jasa Modal",
-      langkah: "Hitung manual SHU UJI BLACKBOX A dan bandingkan dengan layar; bandingkan juga dengan skenario seandainya sukarela ikut dihitung",
+      skenario: "Cek manual 1 anggota: sukarela ikut basis SHU Simpanan",
+      langkah: "Hitung manual SHU UJI BLACKBOX A dan bandingkan dengan layar; bandingkan juga dengan skenario seandainya sukarela tidak dihitung",
       data: a
         ? `A: Pokok ${rupiah(a.pokok)}, Wajib ${rupiah(a.wajib)}, Sukarela ${rupiah(a.sukarela)}, Investasi ${rupiah(a.inv)}, Setoran Jasa ${rupiah(a.jasa)}`
         : "A tidak ditemukan",
       expected: a
-        ? `Basis modal A = ${rupiah(a.pokok)} + ${rupiah(a.wajib)} + ${rupiah(a.inv)} = ${rupiah(a.pokok + a.wajib + a.inv)} (tanpa sukarela); SHU Jasa Modal A = ${rupiah(a.pokok + a.wajib + a.inv)} / ${rupiah(totalModal)} × ${rupiah(danaModal)} = ${rupiah(Math.round(((a.pokok + a.wajib + a.inv) / totalModal) * danaModal))}`
+        ? `Basis simpanan A = ${rupiah(a.pokok)} + ${rupiah(a.wajib)} + ${rupiah(a.sukarela)} + ${rupiah(a.inv)} = ${rupiah(a.pokok + a.wajib + a.sukarela + a.inv)}; SHU Simpanan A = ${rupiah(a.pokok + a.wajib + a.sukarela + a.inv)} × ${tarifLabel} = ${rupiah(Math.round((a.pokok + a.wajib + a.sukarela + a.inv) * tarif))}`
         : "-",
     },
     async () => {
       if (!a) return { actual: "UJI BLACKBOX A tidak tampil di SHU Cepat", valid: false };
-      const expNoSuk = Math.round(((a.pokok + a.wajib + a.inv) / totalModal) * danaModal);
-      const kotorWith = Math.round(totalWithSukarela * 0.1);
-      const expWithSuk = Math.round(((a.pokok + a.wajib + a.sukarela + a.inv) / totalWithSukarela) * Math.round((kotorWith * pct.pctJasaModal) / 100));
+      const expWithSuk = Math.round((a.pokok + a.wajib + a.sukarela + a.inv) * tarif);
+      const totalNoSuk = list.reduce((x, r) => x + r.pokok + r.wajib + r.inv, 0);
+      const tarifNoSuk = totalNoSuk + totalJasa > 0 ? danaAnggota / (totalNoSuk + totalJasa) : 0;
+      const expNoSuk = Math.round((a.pokok + a.wajib + a.inv) * tarifNoSuk);
       return {
-        actual: `Layar: SHU Jasa Modal A = ${rupiah(a.shuModal)}, SHU Jasa = ${rupiah(a.shuJasa)}, Total SHU = ${rupiah(a.shuTotal)}. Manual tanpa sukarela = ${rupiah(expNoSuk)}; seandainya sukarela ikut dihitung = ${rupiah(expWithSuk)}. Nilai layar ${a.shuModal === expNoSuk ? "cocok dengan rumus tanpa sukarela" : a.shuModal === expWithSuk ? "cocok dengan rumus DENGAN sukarela" : "tidak cocok dengan keduanya"}`,
-        valid: a.shuModal === expNoSuk && expNoSuk !== expWithSuk,
+        actual: `Layar: SHU Simpanan A = ${rupiah(a.shuModal)}, SHU Jasa = ${rupiah(a.shuJasa)}, Total SHU = ${rupiah(a.shuTotal)}. Manual dengan sukarela = ${rupiah(expWithSuk)}; seandainya sukarela tidak dihitung = ${rupiah(expNoSuk)}. Nilai layar ${a.shuModal === expWithSuk ? "cocok dengan rumus DENGAN sukarela" : a.shuModal === expNoSuk ? "cocok dengan rumus tanpa sukarela" : "tidak cocok dengan keduanya"}`,
+        valid: a.shuModal === expWithSuk && expWithSuk !== expNoSuk,
       };
     },
   );
