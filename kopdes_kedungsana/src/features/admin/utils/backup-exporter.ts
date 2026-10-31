@@ -7,6 +7,7 @@ const BACKUP_TABLES = [
   "member_monthly_savings",
   "member_investments",
   "member_service_contributions",
+  "fiscal_year_shu",
   "cooperative_settings",
 ] as const;
 

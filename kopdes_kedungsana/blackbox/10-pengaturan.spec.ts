@@ -33,12 +33,12 @@ const DEFAULTS: SettingsSnapshot = {
   activeFiscalYear: String(currentYear()),
   principalSavingAmount: "100000",
   monthlyDuesAmount: "10000",
-  pctCadangan: "40",
-  pctJasaModal: "33.32",
-  pctJasaTransaksi: "6.68",
-  pctPengurus: "5",
+  pctCadangan: "25",
+  pctDanaAnggota: "50",
+  pctPengurus: "10",
   pctKaryawan: "5",
-  pctPendidikan: "5",
+  pctPendidikan: "2.5",
+  pctPmdk: "2.5",
   pctSosial: "5",
   enableInvestasi: false,
 };
@@ -82,7 +82,7 @@ test("FR-36 modal konfirmasi & FR-35 reset default", async () => {
     async () => {
       await openSettings(page);
       await pct("Cadangan Koperasi (%)").fill(changedCad);
-      await pct("Dana Sosial & Pembangunan (%)").fill(changedSos);
+      await pct("Dana Sosial (%)").fill(changedSos);
       await page.getByRole("button", { name: "Simpan Perubahan" }).click();
       const modal = page.locator("div.fixed", { hasText: "Konfirmasi Perubahan" });
       await modal.waitFor();
@@ -111,7 +111,7 @@ test("FR-36 modal konfirmasi & FR-35 reset default", async () => {
     },
     async () => {
       await pct("Cadangan Koperasi (%)").fill(changedCad);
-      await pct("Dana Sosial & Pembangunan (%)").fill(changedSos);
+      await pct("Dana Sosial (%)").fill(changedSos);
       await saveSettingsViaModal(page);
       const msgShown = (await bodyText(page)).includes("Pengaturan berhasil disimpan ke database!");
       await openSettings(page);

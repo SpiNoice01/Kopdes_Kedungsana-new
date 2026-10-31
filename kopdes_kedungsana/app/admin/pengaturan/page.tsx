@@ -131,11 +131,11 @@ export default function PengaturanPage() {
     if (form.monthlyDuesAmount !== originalForm.monthlyDuesAmount) changes.push(`Iuran Wajib [${formatCurrency(originalForm.monthlyDuesAmount)} ➔ ${formatCurrency(form.monthlyDuesAmount)}]`);
     if (form.activeFiscalYear !== originalForm.activeFiscalYear) changes.push(`Tahun Buku [${originalForm.activeFiscalYear} ➔ ${form.activeFiscalYear}]`);
     if (form.pctCadangan !== originalForm.pctCadangan) changes.push(`Cadangan [${originalForm.pctCadangan}% ➔ ${form.pctCadangan}%]`);
-    if (form.pctJasaModal !== originalForm.pctJasaModal) changes.push(`Jasa Modal [${originalForm.pctJasaModal}% ➔ ${form.pctJasaModal}%]`);
-    if (form.pctJasaTransaksi !== originalForm.pctJasaTransaksi) changes.push(`Jasa Transaksi [${originalForm.pctJasaTransaksi}% ➔ ${form.pctJasaTransaksi}%]`);
+    if (form.pctDanaAnggota !== originalForm.pctDanaAnggota) changes.push(`Dana Anggota [${originalForm.pctDanaAnggota}% ➔ ${form.pctDanaAnggota}%]`);
     if (form.pctPengurus !== originalForm.pctPengurus) changes.push(`Pengurus [${originalForm.pctPengurus}% ➔ ${form.pctPengurus}%]`);
     if (form.pctKaryawan !== originalForm.pctKaryawan) changes.push(`Karyawan [${originalForm.pctKaryawan}% ➔ ${form.pctKaryawan}%]`);
     if (form.pctPendidikan !== originalForm.pctPendidikan) changes.push(`Pendidikan [${originalForm.pctPendidikan}% ➔ ${form.pctPendidikan}%]`);
+    if (form.pctPmdk !== originalForm.pctPmdk) changes.push(`PMDK [${originalForm.pctPmdk}% ➔ ${form.pctPmdk}%]`);
     if (form.pctSosial !== originalForm.pctSosial) changes.push(`Dana Sosial [${originalForm.pctSosial}% ➔ ${form.pctSosial}%]`);
     if (form.enableInvestasi !== originalForm.enableInvestasi) changes.push(`Fitur Investasi [${originalForm.enableInvestasi ? "Aktif" : "Nonaktif"} ➔ ${form.enableInvestasi ? "Aktif" : "Nonaktif"}]`);
     return changes;
@@ -146,8 +146,8 @@ export default function PengaturanPage() {
   // Tolerance guards against float rounding artifacts (e.g. 0.1+0.2), not a
   // real allowance for an actually-wrong total.
   const pctTotal =
-    form.pctCadangan + form.pctJasaModal + form.pctJasaTransaksi +
-    form.pctPengurus + form.pctKaryawan + form.pctPendidikan + form.pctSosial;
+    form.pctCadangan + form.pctDanaAnggota + form.pctPengurus +
+    form.pctKaryawan + form.pctPendidikan + form.pctPmdk + form.pctSosial;
   const isPctTotalValid = Math.abs(pctTotal - 100) < 0.01;
 
   const handleSave = async () => {
@@ -417,12 +417,8 @@ export default function PengaturanPage() {
             <input type="number" step="0.01" value={form.pctCadangan} onChange={(e) => handleChange("pctCadangan", Number(e.target.value))} className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-800 outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 transition" />
           </label>
           <label className="block space-y-1.5">
-            <span className="text-xs font-semibold text-slate-600 uppercase tracking-wider">Jasa Modal (%)</span>
-            <input type="number" step="0.01" value={form.pctJasaModal} onChange={(e) => handleChange("pctJasaModal", Number(e.target.value))} className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-800 outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 transition" />
-          </label>
-          <label className="block space-y-1.5">
-            <span className="text-xs font-semibold text-slate-600 uppercase tracking-wider">Jasa Transaksi (%)</span>
-            <input type="number" step="0.01" value={form.pctJasaTransaksi} onChange={(e) => handleChange("pctJasaTransaksi", Number(e.target.value))} className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-800 outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 transition" />
+            <span className="text-xs font-semibold text-slate-600 uppercase tracking-wider">Dana Anggota (%)</span>
+            <input type="number" step="0.01" value={form.pctDanaAnggota} onChange={(e) => handleChange("pctDanaAnggota", Number(e.target.value))} className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-800 outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 transition" />
           </label>
           <label className="block space-y-1.5">
             <span className="text-xs font-semibold text-slate-600 uppercase tracking-wider">Dana Pengurus & Manajemen (%)</span>
@@ -437,7 +433,11 @@ export default function PengaturanPage() {
             <input type="number" step="0.01" value={form.pctPendidikan} onChange={(e) => handleChange("pctPendidikan", Number(e.target.value))} className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-800 outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 transition" />
           </label>
           <label className="block space-y-1.5">
-            <span className="text-xs font-semibold text-slate-600 uppercase tracking-wider">Dana Sosial & Pembangunan (%)</span>
+            <span className="text-xs font-semibold text-slate-600 uppercase tracking-wider">Dana Pembangunan Daerah Kerja / PMDK (%)</span>
+            <input type="number" step="0.01" value={form.pctPmdk} onChange={(e) => handleChange("pctPmdk", Number(e.target.value))} className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-800 outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 transition" />
+          </label>
+          <label className="block space-y-1.5">
+            <span className="text-xs font-semibold text-slate-600 uppercase tracking-wider">Dana Sosial (%)</span>
             <input type="number" step="0.01" value={form.pctSosial} onChange={(e) => handleChange("pctSosial", Number(e.target.value))} className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-800 outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 transition" />
           </label>
         </div>
@@ -448,7 +448,7 @@ export default function PengaturanPage() {
         <div className="border-b border-slate-100 pb-3">
           <h3 className="text-sm font-bold text-slate-800">Fitur Investasi (Modal Penyertaan Sederhana)</h3>
           <p className="text-xs text-slate-400 mt-0.5">
-            Saat aktif, pengurus dapat mencatat investasi anggota di halaman detail anggota, dan nominalnya ikut menjadi basis perhitungan SHU Simpanan bersama Simpanan Pokok + Wajib.
+            Saat aktif, pengurus dapat mencatat investasi anggota di halaman detail anggota, dan nominalnya ikut menjadi basis perhitungan SHU Simpanan bersama Simpanan Pokok + Wajib + Sukarela.
           </p>
         </div>
 

@@ -4,8 +4,9 @@ import { useMemo, useState } from "react";
 import ExcelJS from "exceljs";
 import { addAuditLog } from "../../../src/utils/audit-logger";
 import { buildSimpananSheet, buildShuSheet, downloadExcelBuffer } from "@/src/features/admin/utils/excel-exporter";
-import { calculateShuPools, computeMemberShu } from "@/src/features/admin/utils/shu-calculator";
-import { loadMemberShuBasisRows, type MemberShuBasisRow } from "@/src/features/admin/utils/shu-basis-loader";
+import { calculateShuPools, calculateShuRate, computeMemberShu, totalShuBasis } from "@/src/features/admin/utils/shu-calculator";
+import { loadFiscalYearNetShu, loadMemberShuBasisRows, type MemberShuBasisRow } from "@/src/features/admin/utils/shu-basis-loader";
+import { shuDependencies } from "@/src/features/shu/infrastructure/shu-dependencies";
 
 type HintProps = {
   text: string;
@@ -31,6 +32,9 @@ function Hint({ text }: HintProps) {
   );
 }
 
+const formatShuRate = (rate: number) =>
+  `${(rate * 100).toLocaleString("id-ID", { maximumFractionDigits: 4 })}%`;
+
 import { useEffect } from "react";
 import { loadSettingsAsync, defaultSettings } from "@/src/actions/settings-actions";
 import type { KopdesSettings } from "@/src/features/settings/domain/settings";
@@ -44,6 +48,12 @@ export default function QuickShuPage() {
   const [isLoading, setIsLoading] = useState(true);
 
   const [settings, setSettings] = useState<KopdesSettings>(defaultSettings);
+  // null = belum ada SHU bersih yang diinput untuk tahun buku aktif.
+  const [netShu, setNetShu] = useState<number | null>(null);
+  const [netShuInput, setNetShuInput] = useState("");
+  const [netShuLoadError, setNetShuLoadError] = useState<string | null>(null);
+  const [isSavingNetShu, setIsSavingNetShu] = useState(false);
+  const [netShuMessage, setNetShuMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -51,6 +61,18 @@ export default function QuickShuPage() {
         setIsLoading(true);
         const loadedSettings = await loadSettingsAsync();
         setSettings(loadedSettings);
+
+        try {
+          const loadedNetShu = await loadFiscalYearNetShu(loadedSettings);
+          setNetShu(loadedNetShu);
+          setNetShuInput(loadedNetShu === null ? "" : String(loadedNetShu));
+        } catch (e) {
+          console.error("Failed to load fiscal year SHU", e);
+          setNetShuLoadError(
+            "Data SHU tahun buku tidak dapat dimuat. Pastikan tabel fiscal_year_shu sudah dibuat (jalankan setup_fiscal_year_shu.sql di Supabase).",
+          );
+        }
+
         const records = await loadMemberShuBasisRows(loadedSettings);
         setRawMembers(records);
       } catch (e) {
@@ -62,61 +84,67 @@ export default function QuickShuPage() {
     void fetchData();
   }, []);
 
-  // Dynamic computation basis of members
-  const totalSimpananBasis = useMemo(() => {
-    return rawMembers.reduce((sum, r) => sum + r.savingPokok + r.savingWajib + r.savingSukarela, 0);
-  }, [rawMembers]);
-
-  // Simpanan Sukarela is a liability the co-op owes back to the member, not
-  // equity — only Pokok+Wajib (+ Investasi, when present) count as "modal
-  // sendiri" and form the basis for the SHU Simpanan (Jasa Modal) split.
-  const totalModalBasis = useMemo(() => {
-    return rawMembers.reduce((sum, r) => sum + r.savingPokok + r.savingWajib + r.investmentAmount, 0);
-  }, [rawMembers]);
-
-  const totalJasaBasis = useMemo(() => {
-    return rawMembers.reduce((sum, r) => sum + r.serviceContribution, 0);
-  }, [rawMembers]);
-
-  // SHU Kotor and the Simpanan/Jasa split come from the same shared helper
-  // Spreadsheet Live uses, so both screens always agree on these figures.
-  // The pool is sized from totalModalBasis (Pokok+Wajib+Investasi), not the
-  // full savings total — Sukarela isn't equity, and Investasi money must
-  // actually grow the distributable pool, not just reshuffle shares of it.
-  const shuPools = useMemo(
-    () => calculateShuPools(totalModalBasis, settings),
-    [totalModalBasis, settings]
+  // Simpanan basis = Pokok + Wajib + Sukarela + Investasi, as in the
+  // reference RAT ("JML SIMPANAN"); Jasa basis = Setoran Jasa.
+  const { savingBasis: totalSimpananBasis, serviceBasis: totalJasaBasis } = useMemo(
+    () => totalShuBasis(rawMembers),
+    [rawMembers]
   );
-  const totalShuKotor = shuPools.totalShuKotor;
+
+  // Dana Anggota is sized from the net SHU entered for the fiscal year (from
+  // the income statement) and split at one rate across savings and service
+  // participation, via the same shared helpers Spreadsheet Live and the RAT
+  // bundle use, so every screen agrees on these figures.
+  const shuPools = useMemo(
+    () => calculateShuPools(netShu ?? 0, settings),
+    [netShu, settings]
+  );
+  const netShuAmount = shuPools.netShu;
+  const valDanaAnggota = shuPools.danaAnggota;
+  const shuRate = useMemo(
+    () => calculateShuRate(valDanaAnggota, { savingBasis: totalSimpananBasis, serviceBasis: totalJasaBasis }),
+    [valDanaAnggota, totalSimpananBasis, totalJasaBasis]
+  );
 
   const pctCadangan = settings.pctCadangan;
-  const pctJasaModal = settings.pctJasaModal;
-  const pctJasaUsaha = settings.pctJasaTransaksi;
+  const pctDanaAnggota = settings.pctDanaAnggota;
   const pctPengurus = settings.pctPengurus;
   const pctKaryawan = settings.pctKaryawan;
   const pctPendidikan = settings.pctPendidikan;
+  const pctPmdk = settings.pctPmdk;
   const pctSosial = settings.pctSosial;
 
   const totalPercentage = useMemo(() => {
-    return pctCadangan + pctJasaModal + pctJasaUsaha + pctPengurus + pctKaryawan + pctPendidikan + pctSosial;
-  }, [pctCadangan, pctJasaModal, pctJasaUsaha, pctPengurus, pctKaryawan, pctPendidikan, pctSosial]);
+    return pctCadangan + pctDanaAnggota + pctPengurus + pctKaryawan + pctPendidikan + pctPmdk + pctSosial;
+  }, [pctCadangan, pctDanaAnggota, pctPengurus, pctKaryawan, pctPendidikan, pctPmdk, pctSosial]);
+  // Same tolerance as the Pengaturan save gate, so a total that page accepts
+  // never shows up here as invalid due to float rounding (e.g. 0.1+0.2).
+  const isPctTotalValid = Math.abs(totalPercentage - 100) < 0.01;
 
   // Real-time Rupiah calculations
-  const valCadangan = useMemo(() => Math.round((totalShuKotor * pctCadangan) / 100), [totalShuKotor, pctCadangan]);
-  const valJasaModal = shuPools.danaShuSimpanan;
-  const valJasaUsaha = shuPools.danaShuJasa;
-  const valPengurus = useMemo(() => Math.round((totalShuKotor * pctPengurus) / 100), [totalShuKotor, pctPengurus]);
-  const valKaryawan = useMemo(() => Math.round((totalShuKotor * pctKaryawan) / 100), [totalShuKotor, pctKaryawan]);
-  const valPendidikan = useMemo(() => Math.round((totalShuKotor * pctPendidikan) / 100), [totalShuKotor, pctPendidikan]);
-  const valSosial = useMemo(() => Math.round((totalShuKotor * pctSosial) / 100), [totalShuKotor, pctSosial]);
+  const valCadangan = useMemo(() => Math.round((netShuAmount * pctCadangan) / 100), [netShuAmount, pctCadangan]);
+  const valPengurus = useMemo(() => Math.round((netShuAmount * pctPengurus) / 100), [netShuAmount, pctPengurus]);
+  const valKaryawan = useMemo(() => Math.round((netShuAmount * pctKaryawan) / 100), [netShuAmount, pctKaryawan]);
+  const valPendidikan = useMemo(() => Math.round((netShuAmount * pctPendidikan) / 100), [netShuAmount, pctPendidikan]);
+  const valPmdk = useMemo(() => Math.round((netShuAmount * pctPmdk) / 100), [netShuAmount, pctPmdk]);
+  const valSosial = useMemo(() => Math.round((netShuAmount * pctSosial) / 100), [netShuAmount, pctSosial]);
 
   // Compute calculated metrics for each row in real-time
   const computedRows = useMemo(() => {
     return rawMembers.map((row) => ({
       ...row,
-      ...computeMemberShu(row, totalModalBasis, totalJasaBasis, shuPools),
+      ...computeMemberShu(row, shuRate),
     }));
-  }, [shuPools, totalModalBasis, totalJasaBasis]);
+  }, [rawMembers, shuRate]);
+
+  // What actually reached members (sum of the rows), not the pos size —
+  // per-row rounding can leave a few rupiah behind, and nothing is
+  // distributed at all while there is no savings or service basis.
+  const distributedSavingShu = useMemo(() => computedRows.reduce((sum, r) => sum + r.savingShu, 0), [computedRows]);
+  const distributedServiceShu = useMemo(() => computedRows.reduce((sum, r) => sum + r.serviceShu, 0), [computedRows]);
+  const distributedTotalShu = distributedSavingShu + distributedServiceShu;
+  const undistributedShu = valDanaAnggota - distributedTotalShu;
+  const totalIuran = useMemo(() => computedRows.reduce((sum, r) => sum + r.totalSaving, 0), [computedRows]);
 
   const sortedRows = useMemo(() => {
     return [...computedRows].sort((a, b) => {
@@ -151,6 +179,44 @@ export default function QuickShuPage() {
   const location = settings.district.toUpperCase();
   const printLocation = settings.printLocation;
   const formattedDate = new Intl.DateTimeFormat('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }).format(new Date());
+
+  const handleSaveNetShu = async () => {
+    setNetShuMessage(null);
+    if (netShuInput.trim() === "") {
+      setNetShuMessage({ type: "error", text: "Isi SHU bersih tahun buku terlebih dahulu (isi 0 jika tidak ada SHU)." });
+      return;
+    }
+
+    setIsSavingNetShu(true);
+    try {
+      const result = await shuDependencies.saveFiscalYearShuUseCase.execute(
+        settings.activeFiscalYear,
+        Number(netShuInput),
+      );
+      if (!result.success) {
+        setNetShuMessage({ type: "error", text: result.message });
+        return;
+      }
+
+      const previous = netShu === null ? "belum diisi" : `Rp ${netShu.toLocaleString("id-ID")}`;
+      setNetShu(result.netShu);
+      setNetShuLoadError(null);
+      setNetShuMessage({ type: "success", text: `SHU bersih tahun buku ${year} tersimpan.` });
+      addAuditLog(
+        "UPDATE_SHU",
+        `Mengubah SHU bersih tahun buku ${year}: ${previous} ➔ Rp ${result.netShu.toLocaleString("id-ID")}.`,
+        "success",
+      );
+    } catch (e) {
+      console.error("Failed to save fiscal year SHU", e);
+      setNetShuMessage({
+        type: "error",
+        text: "Gagal menyimpan SHU bersih. Pastikan tabel fiscal_year_shu sudah dibuat (jalankan setup_fiscal_year_shu.sql di Supabase).",
+      });
+    } finally {
+      setIsSavingNetShu(false);
+    }
+  };
 
   const handleExportSHU = async () => {
     addAuditLog("EXPORT_EXCEL", `Mengekspor Laporan Pembagian SHU Koperasi format RAT ${year} ke berkas Excel (.xlsx).`, "info");
@@ -198,7 +264,24 @@ export default function QuickShuPage() {
 
   return (
     <section className="space-y-6">
-      
+      {!isLoading && (netShuLoadError || netShu === null) && (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-800 flex flex-wrap items-center justify-between gap-3">
+          <p>
+            {netShuLoadError ??
+              `SHU bersih tahun buku ${year} belum diisi, sehingga seluruh pembagian SHU masih Rp 0. Isi nilainya sesuai laporan laba-rugi koperasi.`}
+          </p>
+          {!netShuLoadError && (
+            <button
+              type="button"
+              onClick={() => setIsSimulasiOpen(true)}
+              className="rounded-xl border border-amber-300 bg-white px-3 py-1.5 text-xs font-semibold text-amber-800 hover:bg-amber-100"
+            >
+              Isi SHU Bersih
+            </button>
+          )}
+        </div>
+      )}
+
       {/* TRANSPARANSI ALOKASI AD/ART */}
       <div className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
         {/* Accordion Header */}
@@ -220,8 +303,8 @@ export default function QuickShuPage() {
           
           <div className="flex items-center gap-3">
             <div className="text-right hidden sm:block">
-              <p className="text-[10px] font-bold text-slate-400 uppercase">Total SHU Kotor</p>
-              <p className="text-sm font-extrabold text-green-700">Rp {totalShuKotor.toLocaleString("id-ID")}</p>
+              <p className="text-[10px] font-bold text-slate-400 uppercase">SHU Bersih {year}</p>
+              <p className="text-sm font-extrabold text-green-700">Rp {netShuAmount.toLocaleString("id-ID")}</p>
             </div>
             <div className={`p-1.5 rounded-full bg-slate-100 text-slate-500 transition-transform duration-300 ${isSimulasiOpen ? 'rotate-180' : ''}`}>
               <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -236,22 +319,43 @@ export default function QuickShuPage() {
           className={`transition-all duration-300 ease-in-out overflow-hidden ${isSimulasiOpen ? 'max-h-[2000px] opacity-100 border-t border-slate-100' : 'max-h-0 opacity-0'}`}
         >
           <div className="p-6 space-y-6">
-            <div className="flex flex-wrap items-center justify-between gap-4">
-              <div className="flex items-center gap-2.5">
+            <div className="space-y-2">
+              <div className="flex flex-wrap items-center gap-2.5">
                 <div className="flex items-center gap-1">
-                  <span className="text-xs font-bold text-slate-600">Total SHU Kotor Koperasi (Gross):</span>
-                  <Hint text="Jumlah seluruh keuntungan bersih koperasi (sisa hasil usaha) dalam satu tahun buku sebelum dialokasikan ke masing-masing pos." />
+                  <label htmlFor="net-shu" className="text-xs font-bold text-slate-600">SHU Bersih Tahun Buku {year}:</label>
+                  <Hint text="SHU bersih tahun buku sesuai laporan laba-rugi koperasi: pendapatan dikurangi biaya, penyusutan, dan kewajiban lain termasuk pajak. Diisi oleh pengurus/bendahara. Nilai ini dialokasikan ke 7 pos sesuai persentase AD/ART di Pengaturan." />
                 </div>
-                <div className="relative bg-slate-100 border border-slate-200 rounded-xl px-4 py-2 flex items-center gap-1.5 cursor-not-allowed">
+                <div className="flex items-center gap-1.5 rounded-xl border border-slate-300 bg-white px-3 py-1.5 focus-within:ring-2 focus-within:ring-primary/30">
                   <span className="text-xs font-bold text-slate-400">Rp</span>
-                  <span className="text-xs font-bold text-slate-700 select-all">
-                    {totalShuKotor.toLocaleString("id-ID")}
-                  </span>
-                  <span className="ml-1 text-[10px] bg-slate-200 text-slate-500 px-1.5 py-0.5 rounded font-semibold uppercase tracking-wider">
-                    Read Only
-                  </span>
+                  <input
+                    id="net-shu"
+                    type="number"
+                    min={0}
+                    step={1}
+                    inputMode="numeric"
+                    value={netShuInput}
+                    onChange={(e) => {
+                      setNetShuInput(e.target.value);
+                      setNetShuMessage(null);
+                    }}
+                    placeholder="0"
+                    className="w-36 bg-transparent text-xs font-bold text-slate-700 outline-none"
+                  />
                 </div>
+                <button
+                  type="button"
+                  onClick={handleSaveNetShu}
+                  disabled={isSavingNetShu || isLoading}
+                  className="rounded-xl bg-primary px-4 py-2 text-xs font-semibold text-white shadow-sm transition-all hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {isSavingNetShu ? "Menyimpan..." : "Simpan SHU"}
+                </button>
               </div>
+              {netShuMessage && (
+                <p className={`text-xs ${netShuMessage.type === "success" ? "text-green-700" : "text-red-600"}`}>
+                  {netShuMessage.text}
+                </p>
+              )}
             </div>
 
         <div className="grid gap-6 lg:grid-cols-12">
@@ -259,7 +363,7 @@ export default function QuickShuPage() {
           <div className="lg:col-span-5 bg-slate-50/50 p-5 rounded-2xl border border-slate-200/60 space-y-4">
             <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider border-b border-slate-200 pb-2 flex items-center justify-between">
               <span>Persentase Pos Pembagian</span>
-              <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${totalPercentage === 100 ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>
+              <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${isPctTotalValid ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>
                 Total: {totalPercentage.toFixed(2)}%
               </span>
             </h4>
@@ -277,26 +381,14 @@ export default function QuickShuPage() {
                 </div>
               </div>
 
-              {/* Jasa Modal */}
+              {/* Dana Anggota */}
               <div className="flex items-center justify-between gap-3">
                 <div className="flex items-center gap-1.5 flex-1">
-                  <label className="text-xs font-medium text-slate-600">2. Jasa Modal (Simpanan)</label>
-                  <Hint text="Porsi balas jasa yang dikembalikan kepada anggota sebanding dengan jumlah simpanan (modal) mereka di koperasi." />
+                  <label className="text-xs font-medium text-slate-600">2. Dana Anggota</label>
+                  <Hint text="Bagian SHU yang dikembalikan kepada anggota. Dibagi dengan satu tarif yang sama atas simpanan (SHU Simpanan) dan partisipasi jasa (SHU Jasa) masing-masing anggota." />
                 </div>
                 <div className="relative w-24 flex items-center justify-end pr-2 bg-slate-50 border border-slate-200 rounded-lg">
-                  <span className="text-xs font-bold text-slate-800 py-1.5">{pctJasaModal}</span>
-                  <span className="ml-1 text-xs text-slate-400 font-bold">%</span>
-                </div>
-              </div>
-
-              {/* Jasa Usaha */}
-              <div className="flex items-center justify-between gap-3">
-                <div className="flex items-center gap-1.5 flex-1">
-                  <label className="text-xs font-medium text-slate-600">3. Jasa Transaksi (Jasa)</label>
-                  <Hint text="Porsi balas jasa yang dibagikan kepada anggota sebanding dengan partisipasi aktif transaksi mereka di layanan usaha koperasi." />
-                </div>
-                <div className="relative w-24 flex items-center justify-end pr-2 bg-slate-50 border border-slate-200 rounded-lg">
-                  <span className="text-xs font-bold text-slate-800 py-1.5">{pctJasaUsaha}</span>
+                  <span className="text-xs font-bold text-slate-800 py-1.5">{pctDanaAnggota}</span>
                   <span className="ml-1 text-xs text-slate-400 font-bold">%</span>
                 </div>
               </div>
@@ -304,7 +396,7 @@ export default function QuickShuPage() {
               {/* Dana Pengurus */}
               <div className="flex items-center justify-between gap-3">
                 <div className="flex items-center gap-1.5 flex-1">
-                  <label className="text-xs font-medium text-slate-600">4. Dana Pengurus & Manajemen</label>
+                  <label className="text-xs font-medium text-slate-600">3. Dana Pengurus & Manajemen</label>
                   <Hint text="Insentif tahunan bagi jajaran pengurus dan pengawas atas dedikasi mereka memimpin dan mengelola administrasi koperasi." />
                 </div>
                 <div className="relative w-24 flex items-center justify-end pr-2 bg-slate-50 border border-slate-200 rounded-lg">
@@ -316,7 +408,7 @@ export default function QuickShuPage() {
               {/* Dana Karyawan */}
               <div className="flex items-center justify-between gap-3">
                 <div className="flex items-center gap-1.5 flex-1">
-                  <label className="text-xs font-medium text-slate-600">5. Dana Karyawan / Pegawai</label>
+                  <label className="text-xs font-medium text-slate-600">4. Dana Karyawan / Pegawai</label>
                   <Hint text="Bonus penghargaan tahunan bagi staf pengelola teknis operasional harian koperasi agar terus termotivasi." />
                 </div>
                 <div className="relative w-24 flex items-center justify-end pr-2 bg-slate-50 border border-slate-200 rounded-lg">
@@ -328,7 +420,7 @@ export default function QuickShuPage() {
               {/* Dana Pendidikan */}
               <div className="flex items-center justify-between gap-3">
                 <div className="flex items-center gap-1.5 flex-1">
-                  <label className="text-xs font-medium text-slate-600">6. Dana Pendidikan Koperasi</label>
+                  <label className="text-xs font-medium text-slate-600">5. Dana Pendidikan Koperasi</label>
                   <Hint text="Dana untuk membiayai program diklat perkoperasian dan kewirausahaan bagi seluruh komponen anggota, pengurus, maupun pengawas." />
                 </div>
                 <div className="relative w-24 flex items-center justify-end pr-2 bg-slate-50 border border-slate-200 rounded-lg">
@@ -337,11 +429,23 @@ export default function QuickShuPage() {
                 </div>
               </div>
 
+              {/* Dana PMDK */}
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-1.5 flex-1">
+                  <label className="text-xs font-medium text-slate-600">6. Dana Pembangunan Daerah Kerja (PMDK)</label>
+                  <Hint text="Dialokasikan untuk pembangunan fasilitas umum di wilayah kerja koperasi." />
+                </div>
+                <div className="relative w-24 flex items-center justify-end pr-2 bg-slate-50 border border-slate-200 rounded-lg">
+                  <span className="text-xs font-bold text-slate-800 py-1.5">{pctPmdk}</span>
+                  <span className="ml-1 text-xs text-slate-400 font-bold">%</span>
+                </div>
+              </div>
+
               {/* Dana Sosial */}
               <div className="flex items-center justify-between gap-3">
                 <div className="flex items-center gap-1.5 flex-1">
-                  <label className="text-xs font-medium text-slate-600">7. Dana Sosial & Pembangunan</label>
-                  <Hint text="Dialokasikan untuk dana kemanusiaan, sosial kemasyarakatan, serta pembangunan fasilitas umum di wilayah kerja koperasi." />
+                  <label className="text-xs font-medium text-slate-600">7. Dana Sosial</label>
+                  <Hint text="Dialokasikan untuk dana kemanusiaan dan kegiatan sosial kemasyarakatan." />
                 </div>
                 <div className="relative w-24 flex items-center justify-end pr-2 bg-slate-50 border border-slate-200 rounded-lg">
                   <span className="text-xs font-bold text-slate-800 py-1.5">{pctSosial}</span>
@@ -350,7 +454,7 @@ export default function QuickShuPage() {
               </div>
             </div>
 
-            {totalPercentage !== 100 && (
+            {!isPctTotalValid && (
               <div className="bg-red-50 text-red-600 px-3 py-2.5 rounded-xl text-[10px] font-semibold flex items-start gap-1.5 border border-red-100 leading-normal animate-pulse">
                 <svg className="h-4 w-4 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
@@ -378,20 +482,24 @@ export default function QuickShuPage() {
                 </div>
               </div>
 
-              {/* Card 2: Jasa Anggota (Jasa Modal & Usaha Combined) */}
+              {/* Card 2: Dana Anggota */}
               <div className="border border-blue-200 rounded-2xl p-4 bg-blue-50/20 flex flex-col justify-between">
                 <div>
-                  <span className="text-[10px] font-bold text-blue-500 uppercase tracking-wide">Total Porsi Anggota (RAT)</span>
-                  <p className="text-base sm:text-lg font-extrabold text-blue-700 mt-1">Rp {(valJasaModal + valJasaUsaha).toLocaleString("id-ID")}</p>
+                  <span className="text-[10px] font-bold text-blue-500 uppercase tracking-wide">Dana Anggota ({pctDanaAnggota}%)</span>
+                  <p className="text-base sm:text-lg font-extrabold text-blue-700 mt-1">Rp {valDanaAnggota.toLocaleString("id-ID")}</p>
                 </div>
                 <div className="text-[10px] text-slate-500 mt-3 space-y-1.5">
                   <div className="flex justify-between">
-                    <span>• Jasa Modal ({pctJasaModal}%):</span>
-                    <span className="font-bold text-slate-700">Rp {valJasaModal.toLocaleString("id-ID")}</span>
+                    <span>• Tarif SHU per Rp 1:</span>
+                    <span className="font-bold text-slate-700">{formatShuRate(shuRate)}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span>• Jasa Transaksi ({pctJasaUsaha}%):</span>
-                    <span className="font-bold text-slate-700">Rp {valJasaUsaha.toLocaleString("id-ID")}</span>
+                    <span>• SHU Simpanan:</span>
+                    <span className="font-bold text-slate-700">Rp {distributedSavingShu.toLocaleString("id-ID")}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>• SHU Jasa:</span>
+                    <span className="font-bold text-slate-700">Rp {distributedServiceShu.toLocaleString("id-ID")}</span>
                   </div>
                 </div>
               </div>
@@ -412,7 +520,11 @@ export default function QuickShuPage() {
                 <span className="font-bold text-slate-800">Rp {valPendidikan.toLocaleString("id-ID")}</span>
               </div>
               <div className="flex justify-between items-center border-t border-slate-200/50 pt-2.5">
-                <span className="font-medium">• Dana Sosial & Wilayah Kerja ({pctSosial}%):</span>
+                <span className="font-medium">• Dana Pembangunan Daerah Kerja / PMDK ({pctPmdk}%):</span>
+                <span className="font-bold text-slate-800">Rp {valPmdk.toLocaleString("id-ID")}</span>
+              </div>
+              <div className="flex justify-between items-center border-t border-slate-200/50 pt-2.5">
+                <span className="font-medium">• Dana Sosial ({pctSosial}%):</span>
                 <span className="font-bold text-slate-800">Rp {valSosial.toLocaleString("id-ID")}</span>
               </div>
             </div>
@@ -437,36 +549,40 @@ export default function QuickShuPage() {
         <div className="mt-4 grid gap-4 md:grid-cols-3">
           <article className="rounded-2xl border border-primary/20 bg-white p-5">
             <div className="flex items-center gap-2">
-              <p className="text-sm text-slate-500">Total Basis Simpanan (Modal)</p>
-              <Hint text="Akumulasi Simpanan Pokok + Wajib + Investasi seluruh anggota (modal sendiri) yang menjadi basis perhitungan SHU Simpanan. Simpanan Sukarela tidak dihitung karena bersifat utang koperasi kepada anggota, bukan modal." />
+              <p className="text-sm text-slate-500">Total Basis Simpanan</p>
+              <Hint text="Akumulasi Simpanan Pokok + Wajib + Sukarela + Investasi seluruh anggota aktif yang menjadi basis perhitungan SHU Simpanan (mengikuti kolom JML SIMPANAN pada Laporan RAT)." />
             </div>
             <p className="mt-2 text-xl font-semibold text-primary">
-              Rp {totalModalBasis.toLocaleString("id-ID")}
+              Rp {totalSimpananBasis.toLocaleString("id-ID")}
             </p>
-            <p className="mt-1 text-xs text-slate-500">Gap pembulatan: Rp 0</p>
+            <p className="mt-1 text-xs text-slate-500">SHU Simpanan: Rp {distributedSavingShu.toLocaleString("id-ID")}</p>
           </article>
 
           <article className="rounded-2xl border border-primary/20 bg-white p-5">
             <div className="flex items-center gap-2">
               <p className="text-sm text-slate-500">Total Basis Jasa</p>
-              <Hint text="Akumulasi basis jasa/partisipasi usaha seluruh anggota pada periode yang dipilih." />
+              <Hint text="Akumulasi Setoran Jasa (partisipasi usaha) seluruh anggota aktif yang menjadi basis perhitungan SHU Jasa." />
             </div>
             <p className="mt-2 text-xl font-semibold text-primary">
               Rp {totalJasaBasis.toLocaleString("id-ID")}
             </p>
-            <p className="mt-1 text-xs text-slate-500">Gap pembulatan: Rp 0</p>
+            <p className="mt-1 text-xs text-slate-500">
+              {totalJasaBasis > 0
+                ? `SHU Jasa: Rp ${distributedServiceShu.toLocaleString("id-ID")}`
+                : "Belum ada data partisipasi jasa — seluruh Dana Anggota dibagi lewat simpanan"}
+            </p>
           </article>
 
           <article className="rounded-2xl border border-primary/20 bg-white p-5">
             <div className="flex items-center gap-2">
               <p className="text-sm text-slate-500">Total SHU Terdistribusi</p>
-              <Hint text="Total SHU hasil distribusi ke semua anggota (gabungan SHU simpanan dan SHU jasa)." />
+              <Hint text="Total SHU yang benar-benar terbagi ke anggota (jumlah SHU simpanan + SHU jasa seluruh anggota). Selisih terhadap Dana Anggota berasal dari pembulatan per anggota." />
             </div>
             <p className="mt-2 text-xl font-semibold text-primary">
-              Rp {(valJasaModal + valJasaUsaha).toLocaleString("id-ID")}
+              Rp {distributedTotalShu.toLocaleString("id-ID")}
             </p>
             <p className="mt-1 text-xs text-slate-500">
-              Target: Rp {(valJasaModal + valJasaUsaha).toLocaleString("id-ID")} • Gap: Rp 0
+              Dana Anggota: Rp {valDanaAnggota.toLocaleString("id-ID")} • Gap pembulatan: Rp {undistributedShu.toLocaleString("id-ID")}
             </p>
           </article>
         </div>
@@ -483,18 +599,11 @@ export default function QuickShuPage() {
           </div>
 
           <div className="flex items-center gap-2 text-sm border-l border-slate-200/80 pl-4 h-6">
-            <label htmlFor="year-period" className="font-medium text-slate-600">
-              Periode Tahun:
-            </label>
-            <select
-              id="year-period"
-              className="rounded-lg border border-slate-300 px-2 py-1 text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/30 bg-white text-xs"
-              defaultValue="2024"
-            >
-              <option value="2024">2024</option>
-              <option value="2025">2025</option>
-              <option value="2026">2026</option>
-            </select>
+            <span className="font-medium text-slate-600">Tahun Buku:</span>
+            <span className="rounded-lg border border-slate-200 bg-slate-50 px-2 py-1 text-xs font-semibold text-slate-700">
+              {year}
+            </span>
+            <Hint text="Tahun buku aktif diambil dari halaman Pengaturan. Ubah di sana untuk menghitung SHU tahun lain." />
           </div>
         </div>
 
@@ -502,31 +611,31 @@ export default function QuickShuPage() {
           <div className="rounded-2xl border border-primary/20 bg-slate-50/40 p-4 text-sm flex justify-between items-center">
             <div>
               <div className="flex items-center gap-1.5">
-                <span className="font-medium text-slate-600">Total SHU Simpanan (Modal)</span>
-                <Hint text="Total dana SHU dari komponen simpanan yang siap didistribusikan." />
+                <span className="font-medium text-slate-600">Dana Anggota</span>
+                <Hint text="Bagian SHU bersih yang dibagikan kepada anggota sesuai persentase AD/ART di Pengaturan." />
               </div>
               <p className="mt-1.5 text-lg font-bold text-slate-800">
-                Rp {valJasaModal.toLocaleString("id-ID")}
+                Rp {valDanaAnggota.toLocaleString("id-ID")}
               </p>
             </div>
             <span className="px-2.5 py-1 bg-green-100 text-green-700 font-bold rounded-lg text-xs">
-              {pctJasaModal}% AD/ART
+              {pctDanaAnggota}% AD/ART
             </span>
           </div>
 
           <div className="rounded-2xl border border-primary/20 bg-slate-50/40 p-4 text-sm flex justify-between items-center">
             <div>
               <div className="flex items-center gap-1.5">
-                <span className="font-medium text-slate-600">Total SHU Jasa (Transaksi)</span>
-                <Hint text="Total dana SHU dari komponen jasa transaksi yang siap didistribusikan." />
+                <span className="font-medium text-slate-600">Tarif SHU</span>
+                <Hint text="Tarif = Dana Anggota ÷ (Total Basis Simpanan + Total Basis Jasa). SHU Simpanan anggota = simpanannya × tarif; SHU Jasa anggota = setoran jasanya × tarif." />
               </div>
               <p className="mt-1.5 text-lg font-bold text-slate-800">
-                Rp {valJasaUsaha.toLocaleString("id-ID")}
+                {formatShuRate(shuRate)}
+              </p>
+              <p className="mt-0.5 text-xs text-slate-500">
+                Rp {valDanaAnggota.toLocaleString("id-ID")} ÷ Rp {(totalSimpananBasis + totalJasaBasis).toLocaleString("id-ID")}
               </p>
             </div>
-            <span className="px-2.5 py-1 bg-green-100 text-green-700 font-bold rounded-lg text-xs">
-              {pctJasaUsaha}% AD/ART
-            </span>
           </div>
         </div>
 
@@ -601,19 +710,19 @@ export default function QuickShuPage() {
                       <div className="inline-flex items-center gap-1">Anggota<SortIndicator active={sortKey === "memberName"} direction={sortDirection} /><Hint text="Nama anggota." /></div>
                     </th>
                     <th className="px-3 py-2.5 font-bold cursor-pointer group hover:bg-slate-100 transition-colors" onClick={() => handleSort("totalSaving")}>
-                      <div className="inline-flex items-center gap-1">Total Iuran<SortIndicator active={sortKey === "totalSaving"} direction={sortDirection} /><Hint text="Jumlah simpanan." /></div>
+                      <div className="inline-flex items-center gap-1">Total Iuran<SortIndicator active={sortKey === "totalSaving"} direction={sortDirection} /><Hint text="Jumlah Simpanan Pokok + Wajib + Sukarela. Ditambah Investasi, nilai ini menjadi basis SHU Simpanan anggota." /></div>
                     </th>
                     <th className="px-3 py-2.5 font-bold cursor-pointer group hover:bg-slate-100 transition-colors" onClick={() => handleSort("investmentAmount")}>
-                      <div className="inline-flex items-center gap-1">Investasi<SortIndicator active={sortKey === "investmentAmount"} direction={sortDirection} /><Hint text="Investasi anggota tahun buku berjalan, ikut menjadi basis SHU Simpanan bersama Pokok+Wajib." /></div>
+                      <div className="inline-flex items-center gap-1">Investasi<SortIndicator active={sortKey === "investmentAmount"} direction={sortDirection} /><Hint text="Investasi anggota tahun buku berjalan, ikut menjadi basis SHU Simpanan bersama Pokok + Wajib + Sukarela." /></div>
                     </th>
                     <th className="px-3 py-2.5 font-bold cursor-pointer group hover:bg-slate-100 transition-colors" onClick={() => handleSort("serviceContribution")}>
-                      <div className="inline-flex items-center gap-1">Storan Jasa<SortIndicator active={sortKey === "serviceContribution"} direction={sortDirection} /><Hint text="Partisipasi jasa." /></div>
+                      <div className="inline-flex items-center gap-1">Setoran Jasa<SortIndicator active={sortKey === "serviceContribution"} direction={sortDirection} /><Hint text="Partisipasi jasa." /></div>
                     </th>
                     <th className="px-3 py-2.5 font-bold cursor-pointer group hover:bg-slate-100 transition-colors" onClick={() => handleSort("savingShu")}>
-                      <div className="inline-flex items-center gap-1">SHU Simpanan<SortIndicator active={sortKey === "savingShu"} direction={sortDirection} /><Hint text="SHU dari simpanan." /></div>
+                      <div className="inline-flex items-center gap-1">SHU Simpanan<SortIndicator active={sortKey === "savingShu"} direction={sortDirection} /><Hint text="(Total Iuran + Investasi) × Tarif SHU." /></div>
                     </th>
                     <th className="px-3 py-2.5 font-bold cursor-pointer group hover:bg-slate-100 transition-colors" onClick={() => handleSort("serviceShu")}>
-                      <div className="inline-flex items-center gap-1">SHU Jasa<SortIndicator active={sortKey === "serviceShu"} direction={sortDirection} /><Hint text="SHU dari jasa." /></div>
+                      <div className="inline-flex items-center gap-1">SHU Jasa<SortIndicator active={sortKey === "serviceShu"} direction={sortDirection} /><Hint text="Setoran Jasa × Tarif SHU." /></div>
                     </th>
                     <th className="px-3 py-2.5 font-bold cursor-pointer group hover:bg-slate-100 transition-colors" onClick={() => handleSort("totalShu")}>
                       <div className="inline-flex items-center gap-1">Total SHU<SortIndicator active={sortKey === "totalShu"} direction={sortDirection} /><Hint text="Total SHU dibagikan." /></div>
@@ -689,19 +798,19 @@ export default function QuickShuPage() {
                   </td>
                   {activeTab === "shu" ? (
                     <>
-                      <td className="px-3 py-2.5">Rp {totalSimpananBasis.toLocaleString("id-ID")}</td>
+                      <td className="px-3 py-2.5">Rp {totalIuran.toLocaleString("id-ID")}</td>
                       <td className="px-3 py-2.5">Rp {sortedRows.reduce((a, b) => a + b.investmentAmount, 0).toLocaleString("id-ID")}</td>
                       <td className="px-3 py-2.5">Rp {totalJasaBasis.toLocaleString("id-ID")}</td>
-                      <td className="px-3 py-2.5 text-slate-600">Rp {valJasaModal.toLocaleString("id-ID")}</td>
-                      <td className="px-3 py-2.5 text-slate-600">Rp {valJasaUsaha.toLocaleString("id-ID")}</td>
-                      <td className="px-3 py-2.5 text-primary">Rp {(valJasaModal + valJasaUsaha).toLocaleString("id-ID")}</td>
+                      <td className="px-3 py-2.5 text-slate-600">Rp {distributedSavingShu.toLocaleString("id-ID")}</td>
+                      <td className="px-3 py-2.5 text-slate-600">Rp {distributedServiceShu.toLocaleString("id-ID")}</td>
+                      <td className="px-3 py-2.5 text-primary">Rp {distributedTotalShu.toLocaleString("id-ID")}</td>
                     </>
                   ) : (
                     <>
                       <td className="px-3 py-2.5 text-right">Rp {sortedRows.reduce((a, b) => a + b.savingPokok, 0).toLocaleString("id-ID")}</td>
                       <td className="px-3 py-2.5 text-right">Rp {sortedRows.reduce((a, b) => a + b.savingWajib, 0).toLocaleString("id-ID")}</td>
                       <td className="px-3 py-2.5 text-right">Rp {sortedRows.reduce((a, b) => a + b.savingSukarela, 0).toLocaleString("id-ID")}</td>
-                      <td className="px-3 py-2.5 text-right text-primary bg-primary/5">Rp {totalSimpananBasis.toLocaleString("id-ID")}</td>
+                      <td className="px-3 py-2.5 text-right text-primary bg-primary/5">Rp {totalIuran.toLocaleString("id-ID")}</td>
                     </>
                   )}
                 </tr>
