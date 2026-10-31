@@ -65,17 +65,51 @@ export const calculateShuRate = (danaAnggota: number, totals: ShuBasisTotals): n
 };
 
 /**
- * Single source of truth for a member's SHU split, shared by every screen
+ * Single source of truth for every member's SHU split, shared by every screen
  * that renders a Daftar SHU (Quick SHU, Spreadsheet Live, RAT bundle export)
- * so the formula can't silently drift between them.
+ * so the formula can't silently drift between them. Returns one result per
+ * row, in the same order.
+ *
+ * Each member is entitled to basis × tarif, which is rarely a whole rupiah.
+ * Rounding each value on its own lets the total drift a few rupiah from Dana
+ * Anggota, so this uses the largest remainder method instead: every SHU
+ * Simpanan and SHU Jasa value is floored, then the leftover rupiah go one each
+ * to the values with the largest fractional part. The total then equals Dana
+ * Anggota exactly, and each value is still within Rp 1 of basis × tarif.
  */
-export const computeMemberShu = (
-  row: MemberShuBasisRow,
-  shuRate: number
-): MemberShuResult => {
-  const totalSaving = row.savingPokok + row.savingWajib + row.savingSukarela;
-  const savingShu = Math.round(memberSavingBasis(row) * shuRate);
-  const serviceShu = Math.round(row.serviceContribution * shuRate);
+export const distributeMemberShu = (
+  rows: MemberShuBasisRow[],
+  danaAnggota: number
+): MemberShuResult[] => {
+  const totals = totalShuBasis(rows);
+  const basis = totals.savingBasis + totals.serviceBasis;
 
-  return { totalSaving, savingShu, serviceShu, totalShu: savingShu + serviceShu };
+  // Slot 2i = SHU Simpanan of row i, slot 2i + 1 = its SHU Jasa.
+  const exact = rows.flatMap((row) =>
+    basis > 0
+      ? [(memberSavingBasis(row) * danaAnggota) / basis, (row.serviceContribution * danaAnggota) / basis]
+      : [0, 0]
+  );
+  const amounts = exact.map(Math.floor);
+
+  let leftover = (basis > 0 ? danaAnggota : 0) - amounts.reduce((sum, a) => sum + a, 0);
+  const byRemainder = exact
+    .map((value, slot) => ({ slot, remainder: value - amounts[slot] }))
+    .sort((a, b) => b.remainder - a.remainder || a.slot - b.slot);
+  for (const { slot } of byRemainder) {
+    if (leftover <= 0) break;
+    amounts[slot] += 1;
+    leftover -= 1;
+  }
+
+  return rows.map((row, i) => {
+    const savingShu = amounts[2 * i];
+    const serviceShu = amounts[2 * i + 1];
+    return {
+      totalSaving: row.savingPokok + row.savingWajib + row.savingSukarela,
+      savingShu,
+      serviceShu,
+      totalShu: savingShu + serviceShu,
+    };
+  });
 };

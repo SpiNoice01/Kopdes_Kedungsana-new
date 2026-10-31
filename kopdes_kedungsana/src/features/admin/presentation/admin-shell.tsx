@@ -6,7 +6,9 @@ import { usePathname } from "next/navigation";
 import { ReactNode, useEffect, useMemo, useState } from "react";
 import SpreadsheetModal from "./spreadsheet-modal";
 import { BackupPromptModal } from "./backup-prompt-modal";
+import { SESSION_EXPIRED_EVENT, SessionExpiredModal } from "./session-expired-modal";
 import { addAuditLog } from "../../../utils/audit-logger";
+import { supabase } from "../../../utils/supabase-client";
 import { checkIfBackupNeeded, type BackupCheckResult } from "../utils/backup-guard";
 
 type AdminShellProps = {
@@ -29,7 +31,38 @@ export function AdminShell({ children }: AdminShellProps) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isSpreadsheetOpen, setIsSpreadsheetOpen] = useState(false);
   const [backupPrompt, setBackupPrompt] = useState<BackupCheckResult | null>(null);
+  const [isSessionExpired, setIsSessionExpired] = useState(false);
   const pathname = usePathname();
+
+  // The middleware only checks the admin cookie, so the panel can open after
+  // the Supabase session is gone; RLS then silently hides data and rejects
+  // writes. Block the whole panel until the admin logs in again.
+  useEffect(() => {
+    const checkSession = async () => {
+      const { data } = await supabase.auth.getSession();
+      if (!data.session) setIsSessionExpired(true);
+    };
+    void checkSession();
+  }, [pathname]);
+
+  useEffect(() => {
+    const markExpired = () => setIsSessionExpired(true);
+    const recheckOnReturn = async () => {
+      if (document.visibilityState !== "visible") return;
+      const { data } = await supabase.auth.getSession();
+      if (!data.session) markExpired();
+    };
+    const { data: listener } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === "SIGNED_OUT" || !session) markExpired();
+    });
+    window.addEventListener(SESSION_EXPIRED_EVENT, markExpired);
+    document.addEventListener("visibilitychange", recheckOnReturn);
+    return () => {
+      listener.subscription.unsubscribe();
+      window.removeEventListener(SESSION_EXPIRED_EVENT, markExpired);
+      document.removeEventListener("visibilitychange", recheckOnReturn);
+    };
+  }, []);
 
   const currentPageTitle = useMemo(() => {
     if (pathname.startsWith("/admin/spreadsheet")) {
@@ -236,6 +269,8 @@ export function AdminShell({ children }: AdminShellProps) {
         identity={backupPrompt?.identity ?? ""}
         onDone={() => setBackupPrompt(null)}
       />
+
+      <SessionExpiredModal isOpen={isSessionExpired} />
     </div>
   );
 }

@@ -2,7 +2,7 @@
 
 import { buildSimpananSheet, buildShuSheet, downloadExcelBuffer } from "@/src/features/admin/utils/excel-exporter";
 import type { ExcelExportRow } from "@/src/features/admin/utils/excel-exporter";
-import { calculateShuPools, calculateShuRate, computeMemberShu, totalShuBasis } from "@/src/features/admin/utils/shu-calculator";
+import { calculateShuPools, distributeMemberShu } from "@/src/features/admin/utils/shu-calculator";
 import { loadFiscalYearNetShu } from "@/src/features/admin/utils/shu-basis-loader";
 import ExcelJS from "exceljs";
 import { useMemo, useState } from "react";
@@ -184,17 +184,13 @@ export default function SpreadsheetModal({ isOpen, onClose }: { isOpen: boolean;
   // Dana Anggota comes from the net SHU entered for the fiscal year in Quick
   // SHU, and is split at one rate via the same shared helpers Quick SHU and
   // the RAT bundle export use.
-  const shuRate = useMemo(
-    () => calculateShuRate(calculateShuPools(netShu, settings).danaAnggota, totalShuBasis(rows)),
-    [netShu, settings, rows]
-  );
-
   const computedRows: ComputedMemberRow[] = useMemo(() => {
-    return rows.map((row) => ({
+    const shuResults = distributeMemberShu(rows, calculateShuPools(netShu, settings).danaAnggota);
+    return rows.map((row, i) => ({
       ...row,
-      ...computeMemberShu(row, shuRate),
+      ...shuResults[i],
     }));
-  }, [rows, shuRate]);
+  }, [rows, netShu, settings]);
 
   const filteredRows = useMemo(() => {
     if (!searchQuery.trim()) return computedRows;

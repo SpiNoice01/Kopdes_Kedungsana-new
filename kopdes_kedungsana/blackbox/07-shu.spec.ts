@@ -124,7 +124,7 @@ test("FR-24/25/26 hitung SHU", async () => {
   const totalJasa = list.reduce((a, r) => a + r.jasa, 0);
   // Prasyarat: SHU bersih tahun buku aktif sudah diisi di SHU Cepat (dari laporan laba-rugi).
   const netShuRaw = await page.locator("#net-shu").inputValue();
-  const netShu = Number(netShuRaw || 0);
+  const netShu = Number(netShuRaw.replace(/\D/g, "") || 0);
   const danaAnggota = Math.round((netShu * pct.pctDanaAnggota) / 100);
   const tarif = totalSimpanan + totalJasa > 0 ? danaAnggota / (totalSimpanan + totalJasa) : 0;
   const tarifLabel = `${(tarif * 100).toFixed(4)}%`;
