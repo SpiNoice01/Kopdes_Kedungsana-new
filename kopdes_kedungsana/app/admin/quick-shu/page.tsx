@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import ExcelJS from "exceljs";
 import { addAuditLog } from "../../../src/utils/audit-logger";
 import { buildSimpananSheet, buildShuSheet, downloadExcelBuffer } from "@/src/features/admin/utils/excel-exporter";
-import { calculateShuPools, calculateShuRate, computeMemberShu, totalShuBasis } from "@/src/features/admin/utils/shu-calculator";
+import { calculateShuPools, calculateShuRate, distributeMemberShu, totalShuBasis } from "@/src/features/admin/utils/shu-calculator";
 import { loadFiscalYearNetShu, loadMemberShuBasisRows, type MemberShuBasisRow } from "@/src/features/admin/utils/shu-basis-loader";
 import { shuDependencies } from "@/src/features/shu/infrastructure/shu-dependencies";
 
@@ -36,6 +36,8 @@ const formatShuRate = (rate: number) =>
   `${(rate * 100).toLocaleString("id-ID", { maximumFractionDigits: 4 })}%`;
 
 import { useEffect } from "react";
+import { supabase } from "@/src/utils/supabase-client";
+import { notifySessionExpired } from "@/src/features/admin/presentation/session-expired-modal";
 import { loadSettingsAsync, defaultSettings } from "@/src/actions/settings-actions";
 import type { KopdesSettings } from "@/src/features/settings/domain/settings";
 
@@ -131,15 +133,16 @@ export default function QuickShuPage() {
 
   // Compute calculated metrics for each row in real-time
   const computedRows = useMemo(() => {
-    return rawMembers.map((row) => ({
+    const shuResults = distributeMemberShu(rawMembers, valDanaAnggota);
+    return rawMembers.map((row, i) => ({
       ...row,
-      ...computeMemberShu(row, shuRate),
+      ...shuResults[i],
     }));
-  }, [rawMembers, shuRate]);
+  }, [rawMembers, valDanaAnggota]);
 
   // What actually reached members (sum of the rows), not the pos size —
-  // per-row rounding can leave a few rupiah behind, and nothing is
-  // distributed at all while there is no savings or service basis.
+  // equal to Dana Anggota thanks to the largest remainder rounding, except
+  // when there is no savings or service basis to distribute over.
   const distributedSavingShu = useMemo(() => computedRows.reduce((sum, r) => sum + r.savingShu, 0), [computedRows]);
   const distributedServiceShu = useMemo(() => computedRows.reduce((sum, r) => sum + r.serviceShu, 0), [computedRows]);
   const distributedTotalShu = distributedSavingShu + distributedServiceShu;
@@ -189,6 +192,12 @@ export default function QuickShuPage() {
 
     setIsSavingNetShu(true);
     try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (!sessionData.session) {
+        notifySessionExpired();
+        return;
+      }
+
       const result = await shuDependencies.saveFiscalYearShuUseCase.execute(
         settings.activeFiscalYear,
         Number(netShuInput),
@@ -209,6 +218,11 @@ export default function QuickShuPage() {
       );
     } catch (e) {
       console.error("Failed to save fiscal year SHU", e);
+      // 42501 = RLS rejected the write: the session token is no longer valid.
+      if ((e as { code?: string } | null)?.code === "42501") {
+        notifySessionExpired();
+        return;
+      }
       setNetShuMessage({
         type: "error",
         text: "Gagal menyimpan SHU bersih. Pastikan tabel fiscal_year_shu sudah dibuat (jalankan setup_fiscal_year_shu.sql di Supabase).",
@@ -329,13 +343,13 @@ export default function QuickShuPage() {
                   <span className="text-xs font-bold text-slate-400">Rp</span>
                   <input
                     id="net-shu"
-                    type="number"
-                    min={0}
-                    step={1}
+                    type="text"
                     inputMode="numeric"
-                    value={netShuInput}
+                    maxLength={19}
+                    value={netShuInput === "" ? "" : Number(netShuInput).toLocaleString("id-ID")}
                     onChange={(e) => {
-                      setNetShuInput(e.target.value);
+                      // Simpan hanya digit; titik ribuan ditambahkan saat tampil.
+                      setNetShuInput(e.target.value.replace(/\D/g, "").replace(/^0+(?=\d)/, ""));
                       setNetShuMessage(null);
                     }}
                     placeholder="0"
@@ -576,13 +590,16 @@ export default function QuickShuPage() {
           <article className="rounded-2xl border border-primary/20 bg-white p-5">
             <div className="flex items-center gap-2">
               <p className="text-sm text-slate-500">Total SHU Terdistribusi</p>
-              <Hint text="Total SHU yang benar-benar terbagi ke anggota (jumlah SHU simpanan + SHU jasa seluruh anggota). Selisih terhadap Dana Anggota berasal dari pembulatan per anggota." />
+              <Hint text="Total SHU yang benar-benar terbagi ke anggota (jumlah SHU simpanan + SHU jasa seluruh anggota). SHU per anggota dibulatkan ke rupiah utuh dengan metode sisa terbesar: sisa rupiah dari pembulatan diberikan satu per satu ke anggota dengan pecahan terbesar, sehingga totalnya tepat sama dengan Dana Anggota." />
             </div>
             <p className="mt-2 text-xl font-semibold text-primary">
               Rp {distributedTotalShu.toLocaleString("id-ID")}
             </p>
             <p className="mt-1 text-xs text-slate-500">
-              Dana Anggota: Rp {valDanaAnggota.toLocaleString("id-ID")} • Gap pembulatan: Rp {undistributedShu.toLocaleString("id-ID")}
+              Dana Anggota: Rp {valDanaAnggota.toLocaleString("id-ID")} •{" "}
+              {undistributedShu === 0
+                ? "Terbagi habis"
+                : `Belum terbagi: Rp ${undistributedShu.toLocaleString("id-ID")} (belum ada basis simpanan/jasa)`}
             </p>
           </article>
         </div>

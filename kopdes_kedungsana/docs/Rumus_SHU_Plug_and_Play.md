@@ -121,6 +121,14 @@ Total SHU    = SHU Simpanan + SHU Jasa
 | Ikit Mastika | 1.040.000 | 710.000 | **77.839** | **53.140** | **130.979** |
 | Oman Nurohman | 829.000 | 0 | **62.047** | **0** | **62.047** |
 
+**Pembulatan (metode sisa terbesar).** Hasil `basis × tarif` jarang bulat, jadi tiap nilai SHU dibulatkan ke rupiah utuh. Kalau tiap nilai dibulatkan sendiri-sendiri, totalnya bisa meleset beberapa rupiah dari Dana Anggota. Sistem karena itu:
+
+1. membulatkan **ke bawah** semua nilai SHU Simpanan dan SHU Jasa,
+2. menghitung sisa rupiah = Dana Anggota − jumlah hasil pembulatan,
+3. memberikan sisa itu **Rp 1 per nilai** kepada nilai dengan pecahan terbesar.
+
+Hasilnya, total SHU terbagi **selalu tepat sama** dengan Dana Anggota, dan tiap nilai paling jauh berbeda Rp 1 dari hasil hitung eksak. Contoh: Dana Anggota Rp 1.000.000 dibagi rata ke 3 anggota → 333.333,33 masing-masing → dibulatkan ke bawah 333.333 × 3 = 999.999 → sisa Rp 1 diberikan ke satu anggota → 333.334 + 333.333 + 333.333 = **1.000.000**. Pada data RAT 2024 metode ini menghasilkan angka yang sama persis dengan pembulatan biasa, karena di sana totalnya kebetulan sudah pas.
+
 ```mermaid
 flowchart LR
     DA["Dana Anggota<br/>Rp 4.733.000"] --> T["Tarif 7,4845%"]
@@ -171,7 +179,7 @@ flowchart TD
 
 ## 5. Validasi terhadap RAT 2024
 
-Fungsi perhitungan sistem (`calculateShuPools`, `totalShuBasis`, `calculateShuRate`, `computeMemberShu`) dijalankan dengan data 74 anggota RAT 2024 (simpanan dan setoran jasa dari laporan, SHU bersih Rp 9.466.000, Dana Anggota 50%), lalu dibandingkan dengan kolom SHU Simpanan dan SHU Jasa pada laporan.
+Fungsi perhitungan sistem (`calculateShuPools`, `totalShuBasis`, `calculateShuRate`, `distributeMemberShu`) dijalankan dengan data 74 anggota RAT 2024 (simpanan dan setoran jasa dari laporan, SHU bersih Rp 9.466.000, Dana Anggota 50%), lalu dibandingkan dengan kolom SHU Simpanan dan SHU Jasa pada laporan.
 
 | Hasil | Jumlah nilai (dari 148) |
 |---|---|
@@ -220,6 +228,6 @@ Kolom "dugaan penyebab" adalah analisis dari angka, **belum dikonfirmasi bendaha
 | 7 persentase pos (default) | [settings-actions.ts](../src/actions/settings-actions.ts), input di [pengaturan/page.tsx](../app/admin/pengaturan/page.tsx) |
 | Langkah 2: Dana Anggota | `calculateShuPools` di [shu-calculator.ts](../src/features/admin/utils/shu-calculator.ts) |
 | Langkah 3: Tarif SHU | `totalShuBasis`, `calculateShuRate` di [shu-calculator.ts](../src/features/admin/utils/shu-calculator.ts) |
-| Langkah 4: SHU per anggota | `computeMemberShu` di [shu-calculator.ts](../src/features/admin/utils/shu-calculator.ts) |
+| Langkah 4: SHU per anggota & pembulatan sisa terbesar | `distributeMemberShu` di [shu-calculator.ts](../src/features/admin/utils/shu-calculator.ts) |
 | Siapa yang ikut dihitung | `loadMemberShuBasisRows` di [shu-basis-loader.ts](../src/features/admin/utils/shu-basis-loader.ts) |
 | Dipakai juga oleh | Spreadsheet Live ([spreadsheet-modal.tsx](../src/features/admin/presentation/spreadsheet-modal.tsx)), Bundel RAT & backup ([rat-bundle-exporter.ts](../src/features/admin/utils/rat-bundle-exporter.ts)) |
