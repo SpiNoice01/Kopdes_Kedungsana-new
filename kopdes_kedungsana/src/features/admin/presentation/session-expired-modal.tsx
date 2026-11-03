@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "../../../utils/supabase-client";
-import { clearAuthCookie } from "@/src/actions/auth-actions";
 
 // Pages that hit an RLS rejection (Postgres 42501) dispatch this so the shell
 // can block the admin panel, since a rejected write means the token is dead.
@@ -28,7 +27,6 @@ export function SessionExpiredModal({ isOpen }: SessionExpiredModalProps) {
     try {
       // Drop the stale local session too, so the login page starts clean.
       await supabase.auth.signOut({ scope: "local" });
-      await clearAuthCookie();
     } catch (error) {
       console.error("Gagal membersihkan sesi lama", error);
     } finally {

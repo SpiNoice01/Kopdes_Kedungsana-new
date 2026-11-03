@@ -5,7 +5,6 @@ import Image from "next/image";
 import { useEffect, useState, useMemo } from "react";
 import { loadSettingsAsync } from "@/src/actions/settings-actions";
 import type { KopdesSettings } from "@/src/features/settings/domain/settings";
-import { memberDependencies } from "@/src/features/member/infrastructure/member-dependencies";
 import type { Member } from "@/src/features/member/domain/member";
 import { searchMemberByNik } from "@/src/actions/nik-search-actions";
 import type { MemberMonthlySaving } from "@/src/features/member/domain/member-monthly-saving";
@@ -70,17 +69,10 @@ export default function CekSimpananPage() {
         return;
       }
 
-      const matchedMember = result.member;
-
-      const [memberSavings, memberInvestments] = await Promise.all([
-        memberDependencies.getMemberMonthlySavingsUseCase.execute(matchedMember.id),
-        memberDependencies.getMemberInvestmentsUseCase.execute(matchedMember.id),
-      ]);
-
       setSearchResult({
-        member: matchedMember,
-        savings: memberSavings,
-        investments: memberInvestments,
+        member: result.member,
+        savings: result.savings,
+        investments: result.investments,
       });
     } catch (err) {
       setSearchError("Terjadi kesalahan sistem saat mencari data Anda.");

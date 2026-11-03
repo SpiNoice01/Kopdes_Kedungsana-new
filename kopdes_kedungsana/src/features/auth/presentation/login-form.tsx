@@ -3,7 +3,6 @@
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import { authDependencies } from "../infrastructure/auth-dependencies";
-import { setAuthCookie } from "@/src/actions/auth-actions";
 import { checkLoginRateLimit } from "@/src/actions/login-attempt-actions";
 
 type LoginState = {
@@ -28,7 +27,18 @@ export function LoginForm() {
     setIsLoading(true);
     setLoginState(initialState);
 
-    const rateLimit = await checkLoginRateLimit();
+    let rateLimit;
+    try {
+      rateLimit = await checkLoginRateLimit();
+    } catch (error) {
+      console.error("Gagal memeriksa batas percobaan login", error);
+      setLoginState({
+        message: "Terjadi kesalahan sistem. Silakan coba lagi.",
+        isError: true,
+      });
+      setIsLoading(false);
+      return;
+    }
     if (!rateLimit.allowed) {
       setLoginState({
         message: "Terlalu banyak percobaan login. Coba lagi dalam beberapa menit.",
@@ -53,7 +63,6 @@ export function LoginForm() {
       message: `Login berhasil. Selamat datang, ${result.user.name}.`,
       isError: false,
     });
-    await setAuthCookie();
     router.push("/admin/overview");
     setIsLoading(false);
   };

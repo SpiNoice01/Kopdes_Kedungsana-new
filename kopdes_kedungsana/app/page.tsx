@@ -5,7 +5,7 @@ import Image from "next/image";
 import { useEffect, useState } from "react";
 import { loadSettingsAsync } from "@/src/actions/settings-actions";
 import type { KopdesSettings } from "@/src/features/settings/domain/settings";
-import { memberDependencies } from "@/src/features/member/infrastructure/member-dependencies";
+import { getPublicCooperativeStats } from "@/src/actions/public-stats-actions";
 import { CooperativeGrowthChart } from "./components/public-portal/charts";
 import { CooperativeTransparency } from "./components/public-portal/transparency";
 import { regulationsList } from "./components/public-portal/landing-data";
@@ -39,7 +39,7 @@ export default function PublicHomePage() {
       }
       
       try {
-        const stats = await memberDependencies.getCooperativeStatsUseCase.execute();
+        const stats = await getPublicCooperativeStats();
         setGlobalStats(stats);
       } catch (e) {
         console.error("Failed to load global stats", e);
