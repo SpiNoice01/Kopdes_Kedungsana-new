@@ -1,10 +1,7 @@
 "use server";
 
 import { headers } from "next/headers";
-import { createClient } from "@supabase/supabase-js";
-
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
+import { createAdminClient } from "@/src/utils/supabase-admin";
 
 const RATE_LIMIT_MAX_ATTEMPTS = 5;
 const RATE_LIMIT_WINDOW_MINUTES = 5;
@@ -30,7 +27,7 @@ export type LoginRateLimitResult = { allowed: true } | { allowed: false };
  */
 export async function checkLoginRateLimit(): Promise<LoginRateLimitResult> {
   const ip = await resolveClientIp();
-  const supabase = createClient(supabaseUrl, supabaseAnonKey);
+  const supabase = createAdminClient();
 
   const windowStart = new Date(Date.now() - RATE_LIMIT_WINDOW_MINUTES * 60 * 1000).toISOString();
   const { count, error: countError } = await supabase

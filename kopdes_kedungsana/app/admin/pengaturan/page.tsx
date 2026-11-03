@@ -6,7 +6,7 @@ import { addAuditLog } from "@/src/utils/audit-logger";
 import { settingsDependencies } from "@/src/features/settings/infrastructure/settings-dependencies";
 import { formatCurrency } from "@/src/utils/formatters";
 import { getLastCommitDate } from "@/src/actions/get-build-info";
-import { clearAuthCookie } from "@/src/actions/auth-actions";
+import { supabase } from "@/src/utils/supabase-client";
 
 import { loadSettingsAsync, saveSettingsAsync, defaultSettings } from "@/src/actions/settings-actions";
 import type { KopdesSettings } from "@/src/features/settings/domain/settings";
@@ -23,8 +23,10 @@ export default function PengaturanPage() {
   const [lastUpdate, setLastUpdate] = useState("Loading...");
 
   const handleLogout = async () => {
-    addAuditLog("LOGOUT", "Admin melakukan logout secara manual dari sistem.", "info");
-    await clearAuthCookie();
+    // The log needs the session's access token, so it must finish before
+    // signOut() invalidates that session.
+    await addAuditLog("LOGOUT", "Admin melakukan logout secara manual dari sistem.", "info");
+    await supabase.auth.signOut({ scope: "local" });
     router.push("/");
   };
 

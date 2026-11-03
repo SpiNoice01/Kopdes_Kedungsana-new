@@ -1,20 +1,42 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
+import { createServerClient } from "@supabase/ssr";
 
-export function middleware(request: NextRequest) {
-  // Check if trying to access the admin panel
-  if (request.nextUrl.pathname.startsWith("/admin")) {
-    const authCookie = request.cookies.get("kopdes_admin_session");
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
 
-    // If cookie doesn't exist, redirect to login page
-    if (!authCookie || authCookie.value !== "authenticated") {
-      const loginUrl = new URL("/login", request.url);
-      return NextResponse.redirect(loginUrl);
-    }
+export async function middleware(request: NextRequest) {
+  let response = NextResponse.next({ request });
+
+  const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
+    cookies: {
+      getAll() {
+        return request.cookies.getAll();
+      },
+      setAll(cookiesToSet) {
+        // A refreshed token has to reach both the rest of this request and
+        // the browser, otherwise the next request sends the stale one again.
+        cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
+        response = NextResponse.next({ request });
+        cookiesToSet.forEach(({ name, value, options }) =>
+          response.cookies.set(name, value, options),
+        );
+      },
+    },
+  });
+
+  // getUser() asks Supabase Auth to verify the token, unlike getSession()
+  // which only decodes whatever the cookie says and can be forged.
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    const loginUrl = new URL("/login", request.url);
+    return NextResponse.redirect(loginUrl);
   }
 
-  // Allow request to continue
-  return NextResponse.next();
+  return response;
 }
 
 export const config = {

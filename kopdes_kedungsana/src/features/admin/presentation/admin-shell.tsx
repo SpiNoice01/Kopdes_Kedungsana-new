@@ -34,9 +34,9 @@ export function AdminShell({ children }: AdminShellProps) {
   const [isSessionExpired, setIsSessionExpired] = useState(false);
   const pathname = usePathname();
 
-  // The middleware only checks the admin cookie, so the panel can open after
-  // the Supabase session is gone; RLS then silently hides data and rejects
-  // writes. Block the whole panel until the admin logs in again.
+  // The middleware verifies the session on every request, but a session can
+  // still expire while a page stays open; RLS then silently hides data and
+  // rejects writes. Block the whole panel until the admin logs in again.
   useEffect(() => {
     const checkSession = async () => {
       const { data } = await supabase.auth.getSession();

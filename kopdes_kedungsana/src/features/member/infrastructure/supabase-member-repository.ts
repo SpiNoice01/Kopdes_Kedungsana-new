@@ -3,11 +3,16 @@ import { Member } from "../domain/member";
 import { MemberMonthlySaving } from "../domain/member-monthly-saving";
 import { MemberServiceContribution } from "../domain/member-service-contribution";
 import { MemberInvestment } from "../domain/member-investment";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { supabase } from "@/src/utils/supabase-client";
 
 export class SupabaseMemberRepository implements MemberRepository {
+  // Admin pages use the browser session client; the public portal's Server
+  // Actions pass the service-role client (see supabase-admin.ts).
+  constructor(private readonly client: SupabaseClient = supabase) {}
+
   async getAll(): Promise<Member[]> {
-    const { data, error } = await supabase
+    const { data, error } = await this.client
       .from("members")
       .select("*")
       .order("created_at", { ascending: false });
@@ -21,7 +26,7 @@ export class SupabaseMemberRepository implements MemberRepository {
   }
 
   async findById(id: string): Promise<Member | null> {
-    const { data, error } = await supabase
+    const { data, error } = await this.client
       .from("members")
       .select("*")
       .eq("id", id)
@@ -32,7 +37,7 @@ export class SupabaseMemberRepository implements MemberRepository {
   }
 
   async findByNik(nik: string): Promise<Member | null> {
-    const { data, error } = await supabase
+    const { data, error } = await this.client
       .from("members")
       .select("*")
       .eq("nik", nik)
@@ -43,7 +48,7 @@ export class SupabaseMemberRepository implements MemberRepository {
   }
 
   async add(member: Member): Promise<void> {
-    const { error } = await supabase.from("members").insert([
+    const { error } = await this.client.from("members").insert([
       {
         id: member.id,
         nik: member.nik,
@@ -72,7 +77,7 @@ export class SupabaseMemberRepository implements MemberRepository {
   async getMonthlySavingsByMemberId(
     memberId: string,
   ): Promise<MemberMonthlySaving[]> {
-    const { data, error } = await supabase
+    const { data, error } = await this.client
       .from("member_monthly_savings")
       .select("*")
       .eq("member_id", memberId)
@@ -87,7 +92,7 @@ export class SupabaseMemberRepository implements MemberRepository {
   }
 
   async addMonthlySaving(saving: MemberMonthlySaving): Promise<void> {
-    const { error } = await supabase.from("member_monthly_savings").insert([
+    const { error } = await this.client.from("member_monthly_savings").insert([
       {
         id: saving.id,
         member_id: saving.memberId,
@@ -108,7 +113,7 @@ export class SupabaseMemberRepository implements MemberRepository {
   async getServiceContributionsByMemberId(
     memberId: string,
   ): Promise<MemberServiceContribution[]> {
-    const { data, error } = await supabase
+    const { data, error } = await this.client
       .from("member_service_contributions")
       .select("*")
       .eq("member_id", memberId)
@@ -123,7 +128,7 @@ export class SupabaseMemberRepository implements MemberRepository {
   }
 
   async addServiceContribution(contribution: MemberServiceContribution): Promise<void> {
-    const { error } = await supabase.from("member_service_contributions").insert([
+    const { error } = await this.client.from("member_service_contributions").insert([
       {
         id: contribution.id,
         member_id: contribution.memberId,
@@ -140,7 +145,7 @@ export class SupabaseMemberRepository implements MemberRepository {
   }
 
   async getInvestmentsByMemberId(memberId: string): Promise<MemberInvestment[]> {
-    const { data, error } = await supabase
+    const { data, error } = await this.client
       .from("member_investments")
       .select("*")
       .eq("member_id", memberId)
@@ -155,7 +160,7 @@ export class SupabaseMemberRepository implements MemberRepository {
   }
 
   async addInvestment(investment: MemberInvestment): Promise<void> {
-    const { error } = await supabase.from("member_investments").insert([
+    const { error } = await this.client.from("member_investments").insert([
       {
         id: investment.id,
         member_id: investment.memberId,
@@ -172,7 +177,7 @@ export class SupabaseMemberRepository implements MemberRepository {
   }
 
   async updatePhoto(id: string, photoUrl: string): Promise<void> {
-    const { error } = await supabase
+    const { error } = await this.client
       .from("members")
       .update({ photo_url: photoUrl })
       .eq("id", id);
@@ -184,7 +189,7 @@ export class SupabaseMemberRepository implements MemberRepository {
   }
 
   async updateStatus(id: string, status: "aktif" | "nonaktif"): Promise<void> {
-    const { error } = await supabase
+    const { error } = await this.client
       .from("members")
       .update({ status: status })
       .eq("id", id);
@@ -212,7 +217,7 @@ export class SupabaseMemberRepository implements MemberRepository {
 
     if (Object.keys(dbUpdates).length === 0) return;
 
-    const { error } = await supabase
+    const { error } = await this.client
       .from("members")
       .update(dbUpdates)
       .eq("id", id);
