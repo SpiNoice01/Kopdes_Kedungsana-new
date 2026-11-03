@@ -17,3 +17,11 @@ export type Member = {
   maritalStatus?: string;
   occupation?: string;
 };
+
+// The only member fields the public Cek Simpanan portal displays. Anything
+// else (birth date, phone, religion, ...) is personal data that must not
+// leave the server for an unauthenticated visitor.
+export type PublicMemberProfile = Pick<
+  Member,
+  "nik" | "name" | "photoUrl" | "address" | "joinDate" | "status"
+>;
