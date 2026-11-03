@@ -5,7 +5,7 @@ import Image from "next/image";
 import { useEffect, useState, useMemo } from "react";
 import { loadSettingsAsync } from "@/src/actions/settings-actions";
 import type { KopdesSettings } from "@/src/features/settings/domain/settings";
-import type { Member } from "@/src/features/member/domain/member";
+import type { PublicMemberProfile } from "@/src/features/member/domain/member";
 import { searchMemberByNik } from "@/src/actions/nik-search-actions";
 import type { MemberMonthlySaving } from "@/src/features/member/domain/member-monthly-saving";
 import type { MemberInvestment } from "@/src/features/member/domain/member-investment";
@@ -26,7 +26,7 @@ export default function CekSimpananPage() {
   const [nikQuery, setNikQuery] = useState("");
   const [isSearching, setIsSearching] = useState(false);
   const [searchResult, setSearchResult] = useState<{
-    member: Member;
+    member: PublicMemberProfile;
     savings: MemberMonthlySaving[];
     investments: MemberInvestment[];
   } | null>(null);

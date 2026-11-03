@@ -1,11 +1,11 @@
 "use client";
 
 import Image from "next/image";
-import type { Member } from "@/src/features/member/domain/member";
+import type { PublicMemberProfile } from "@/src/features/member/domain/member";
 import type { MemberMonthlySaving } from "@/src/features/member/domain/member-monthly-saving";
 
 interface MemberProfileCardProps {
-  member: Member;
+  member: PublicMemberProfile;
 }
 
 export function MemberProfileCard({ member }: MemberProfileCardProps) {
