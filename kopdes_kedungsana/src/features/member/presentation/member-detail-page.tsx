@@ -9,6 +9,7 @@ import { StatusBadge } from "@/src/shared/widgets/status-badge";
 import type { Member } from "../domain/member";
 import type { MemberMonthlySaving } from "../domain/member-monthly-saving";
 import type { MemberInvestment } from "../domain/member-investment";
+import type { MemberServiceContribution } from "../domain/member-service-contribution";
 import { memberDependencies } from "../infrastructure/member-dependencies";
 import { loadSettingsAsync } from "@/src/actions/settings-actions";
 import type { KopdesSettings } from "@/src/features/settings/domain/settings";
@@ -108,6 +109,7 @@ export function MemberDetailPage({ memberId }: MemberDetailPageProps) {
     [],
   );
   const [investments, setInvestments] = useState<MemberInvestment[]>([]);
+  const [serviceContributions, setServiceContributions] = useState<MemberServiceContribution[]>([]);
   const [settings, setSettings] = useState<KopdesSettings | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -126,6 +128,15 @@ export function MemberDetailPage({ memberId }: MemberDetailPageProps) {
   });
   const [isSavingInvestment, setIsSavingInvestment] = useState(false);
   const [isArrearsOpen, setIsArrearsOpen] = useState(false);
+  const [serviceForm, setServiceForm] = useState<InvestmentFormState>({
+    period: new Date().getFullYear().toString(),
+    amount: "",
+  });
+  const [isSavingService, setIsSavingService] = useState(false);
+  const [serviceFeedback, setServiceFeedback] = useState<FeedbackState>({
+    message: "",
+    isError: false,
+  });
   const [investmentFeedback, setInvestmentFeedback] = useState<FeedbackState>({
     message: "",
     isError: false,
@@ -191,17 +202,19 @@ export function MemberDetailPage({ memberId }: MemberDetailPageProps) {
   useEffect(() => {
     const loadMemberDetail = async () => {
       try {
-        const [memberResult, savingsResult, settingsResult, investmentsResult] = await Promise.all([
+        const [memberResult, savingsResult, settingsResult, investmentsResult, servicesResult] = await Promise.all([
           memberDependencies.getMemberByIdUseCase.execute(memberId),
           memberDependencies.getMemberMonthlySavingsUseCase.execute(memberId),
           loadSettingsAsync(),
           memberDependencies.getMemberInvestmentsUseCase.execute(memberId),
+          memberDependencies.getMemberServiceContributionsUseCase.execute(memberId),
         ]);
 
         setMember(memberResult);
         setMonthlySavings(savingsResult);
         setSettings(settingsResult);
         setInvestments(investmentsResult);
+        setServiceContributions(servicesResult);
       } catch (e) {
         console.error("Failed to fetch member details or settings", e);
       } finally {
@@ -284,6 +297,42 @@ export function MemberDetailPage({ memberId }: MemberDetailPageProps) {
       isError: false,
     });
     setIsSavingInvestment(false);
+  };
+
+  const handleSubmitServiceContribution = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setIsSavingService(true);
+    setServiceFeedback({ message: "", isError: false });
+
+    const amount = parsePositiveNumber(serviceForm.amount);
+
+    const result = await memberDependencies.addMemberServiceContributionUseCase.execute({
+      memberId,
+      period: serviceForm.period,
+      amount,
+    });
+
+    if (!result.success) {
+      setServiceFeedback({ message: result.message, isError: true });
+      setIsSavingService(false);
+      return;
+    }
+
+    const latestContributions =
+      await memberDependencies.getMemberServiceContributionsUseCase.execute(memberId);
+
+    setServiceContributions(latestContributions);
+    addAuditLog(
+      "SAVING_INPUT",
+      `Partisipasi jasa transaksi tahun buku ${result.contribution.period} sebesar ${formatCurrency(result.contribution.amount)} dicatat untuk anggota [${member?.name || "Tidak Diketahui"}] dengan ID ${memberId}.`,
+      "success",
+    );
+    setServiceForm((previous) => ({ ...previous, amount: "" }));
+    setServiceFeedback({
+      message: `Partisipasi jasa tahun buku ${result.contribution.period} berhasil disimpan.`,
+      isError: false,
+    });
+    setIsSavingService(false);
   };
 
   const handlePrincipalProofChange = (event: ChangeEvent<HTMLInputElement>) => {
@@ -1061,6 +1110,97 @@ export function MemberDetailPage({ memberId }: MemberDetailPageProps) {
             </div>
           </SectionCard>
         )}
+
+        {/* Partisipasi Jasa Usaha Anggota (Gold Plating) */}
+        <SectionCard
+          title="Partisipasi Jasa Usaha Anggota"
+          description="Pencatatan akumulasi partisipasi jasa usaha/transaksi anggota per tahun buku sebagai basis perhitungan SHU Jasa."
+          collapsible
+          defaultCollapsed
+        >
+          <div className="space-y-4">
+            <form onSubmit={handleSubmitServiceContribution} className="grid gap-3 md:grid-cols-3">
+              <label className="space-y-2 text-sm">
+                <span className="font-medium text-slate-700">Tahun Buku</span>
+                <select
+                  value={serviceForm.period}
+                  onChange={(event) =>
+                    setServiceForm((previous) => ({ ...previous, period: event.target.value }))
+                  }
+                  className="w-full rounded-xl border border-slate-300 px-3 py-2 outline-none focus:border-primary"
+                >
+                  {Array.from({ length: 6 }, (_, i) => new Date().getFullYear() - i).map((y) => (
+                    <option key={y} value={y.toString()}>{y}</option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="space-y-2 text-sm">
+                <span className="font-medium text-slate-700">Nominal Partisipasi Jasa</span>
+                <div className="relative">
+                  <span className="absolute left-3 top-2.5 text-slate-500 font-semibold">Rp</span>
+                  <input
+                    type="text"
+                    value={serviceForm.amount}
+                    onChange={(event) =>
+                      setServiceForm((previous) => ({
+                        ...previous,
+                        amount: formatInputCurrency(event.target.value),
+                      }))
+                    }
+                    placeholder="350.000"
+                    className="w-full rounded-xl border border-slate-300 pl-9 pr-3 py-2 outline-none focus:border-primary"
+                  />
+                </div>
+              </label>
+
+              <div className="flex items-end">
+                <button
+                  type="submit"
+                  disabled={isSavingService}
+                  className="inline-flex rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60"
+                >
+                  {isSavingService ? "Menyimpan..." : "Simpan Jasa"}
+                </button>
+              </div>
+
+              {serviceFeedback.message ? (
+                <p
+                  className={`md:col-span-3 text-sm ${serviceFeedback.isError ? "text-red-600" : "text-primary"}`}
+                >
+                  {serviceFeedback.message}
+                </p>
+              ) : null}
+            </form>
+
+            {serviceContributions.length ? (
+              <div className="overflow-x-auto rounded-xl border border-slate-200">
+                <table className="min-w-full divide-y divide-slate-200 text-sm">
+                  <thead className="bg-slate-50 text-left text-slate-600">
+                    <tr>
+                      <th className="px-3 py-2 font-medium">Tahun Buku</th>
+                      <th className="px-3 py-2 font-medium">Nominal Jasa</th>
+                      <th className="px-3 py-2 font-medium">Tanggal Input</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 bg-white text-slate-700">
+                    {serviceContributions.map((contrib) => (
+                      <tr key={contrib.id}>
+                        <td className="px-3 py-2">{contrib.period}</td>
+                        <td className="px-3 py-2 font-semibold text-primary">{formatCurrency(contrib.amount)}</td>
+                        <td className="px-3 py-2">{formatDate(contrib.inputDate)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <p className="text-sm text-slate-500">
+                Belum ada data partisipasi jasa usaha tercatat untuk anggota ini.
+              </p>
+            )}
+          </div>
+        </SectionCard>
 
         {/* Status Management Action Card */}
         <div className={`rounded-3xl border p-5 shadow-sm ${

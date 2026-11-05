@@ -11,7 +11,7 @@ type AddMemberServiceContributionResult =
   | { success: true; contribution: MemberServiceContribution }
   | { success: false; message: string };
 
-const isValidPeriod = (value: string): boolean => /^\d{4}-\d{2}$/.test(value);
+const isValidPeriod = (value: string): boolean => /^\d{4}(-\d{2})?$/.test(value);
 
 export class AddMemberServiceContributionUseCase {
   constructor(private readonly memberRepository: MemberRepository) {}
