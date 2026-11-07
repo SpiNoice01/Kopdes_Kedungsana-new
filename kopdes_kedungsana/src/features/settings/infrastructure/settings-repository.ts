@@ -32,12 +32,7 @@ export class SettingsRepository {
       monthlyDuesAmount: Number(data.monthly_dues_amount),
       activeFiscalYear: data.active_fiscal_year,
       pctCadangan: Number(data.pct_cadangan),
-      // Before setup_shu_dana_anggota.sql runs, fall back to the old two
-      // member-facing percentages so the 7 pos still total 100%.
-      pctDanaAnggota:
-        data.pct_dana_anggota != null
-          ? Number(data.pct_dana_anggota)
-          : Number(data.pct_jasa_modal ?? 0) + Number(data.pct_jasa_transaksi ?? 0),
+      pctDanaAnggota: Number(data.pct_dana_anggota),
       pctPengurus: Number(data.pct_pengurus),
       pctKaryawan: Number(data.pct_karyawan),
       pctPendidikan: Number(data.pct_pendidikan),
