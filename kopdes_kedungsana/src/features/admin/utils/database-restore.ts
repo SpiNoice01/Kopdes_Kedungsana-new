@@ -19,6 +19,13 @@ const RESTORE_TABLES = [
 const TRUNCATION_MARKER = "...[DIPOTONG,";
 const MAX_SAFE_RESTORE_TEXT_LENGTH = 30_000;
 
+// Columns that older backup files still carry but that were dropped from the
+// schema (setup_drop_legacy_jasa_columns.sql). Writing them back would make
+// the whole restore fail with "column not found", so they are skipped.
+const RETIRED_COLUMNS: Partial<Record<(typeof RESTORE_TABLES)[number], ReadonlySet<string>>> = {
+  cooperative_settings: new Set(["pct_jasa_modal", "pct_jasa_transaksi"]),
+};
+
 export type ParsedRestoreTable = {
   table: (typeof RESTORE_TABLES)[number];
   rows: Record<string, unknown>[];
@@ -65,6 +72,7 @@ export const parseBackupWorkbook = async (file: File): Promise<ParsedRestoreData
     }
 
     const rows: Record<string, unknown>[] = [];
+    const retired = RETIRED_COLUMNS[tableName];
 
     for (let rowNumber = 2; rowNumber <= ws.rowCount; rowNumber++) {
       const row = ws.getRow(rowNumber);
@@ -75,7 +83,7 @@ export const parseBackupWorkbook = async (file: File): Promise<ParsedRestoreData
       let skippedTruncatedField = false;
 
       headers.forEach((header, idx) => {
-        if (!header) return;
+        if (!header || retired?.has(header)) return;
         const value = cellToValue(row.getCell(idx + 1).value);
 
         if (typeof value === "string" && (value.includes(TRUNCATION_MARKER) || value.length > MAX_SAFE_RESTORE_TEXT_LENGTH)) {

@@ -82,10 +82,6 @@ CREATE TABLE IF NOT EXISTS public.cooperative_settings (
     pct_pendidikan numeric NOT NULL DEFAULT 2.5,
     pct_pmdk numeric NOT NULL DEFAULT 2.5,
     pct_sosial numeric NOT NULL DEFAULT 5,
-    -- Kolom lama, tidak dibaca aplikasi lagi; tetap ada agar restore dari
-    -- berkas backup produksi lama tidak gagal.
-    pct_jasa_modal numeric DEFAULT 0,
-    pct_jasa_transaksi numeric DEFAULT 0,
     enable_investasi boolean NOT NULL DEFAULT false,
     updated_at timestamptz DEFAULT now()
 );
