@@ -177,8 +177,9 @@ CREATE TABLE IF NOT EXISTS public.nik_search_attempts (
 -- ============================================================
 -- Index
 -- ============================================================
--- Dibuat hanya kalau belum ada index dengan kolom yang sama (database lama
--- bisa punya index serupa dengan nama lain).
+-- Dibuat hanya kalau belum ada index yang diawali kolom yang sama (database
+-- lama bisa punya index serupa dengan nama lain, mis. (member_id) saja atau
+-- (member_id, period)); keduanya sama-sama melayani pencarian per anggota.
 CREATE FUNCTION pg_temp.ensure_index(tbl text, cols text, idx_name text)
 RETURNS void
 LANGUAGE plpgsql
@@ -188,7 +189,7 @@ BEGIN
     SELECT 1 FROM pg_indexes
     WHERE schemaname = 'public'
       AND tablename = tbl
-      AND indexdef LIKE '%USING btree (' || cols || ')'
+      AND indexdef LIKE '%USING btree (' || split_part(cols, ',', 1) || '%'
   ) THEN
     EXECUTE format('CREATE INDEX %I ON public.%I (%s)', idx_name, tbl, cols);
   END IF;
