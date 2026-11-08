@@ -3,7 +3,7 @@
 import Image from "next/image";
 import type { PublicMemberProfile } from "@/src/features/member/domain/member";
 import type { MemberMonthlySaving } from "@/src/features/member/domain/member-monthly-saving";
-import { formatDate } from "@/src/utils/formatters";
+import { formatDate, formatPeriod } from "@/src/utils/formatters";
 
 interface MemberProfileCardProps {
   member: PublicMemberProfile;
@@ -21,7 +21,7 @@ export function MemberProfileCard({ member }: MemberProfileCardProps) {
             className="object-cover"
           />
         ) : (
-          <div className="absolute inset-0 flex items-center justify-center bg-primary-soft text-3xl font-extrabold text-primary font-mono">
+          <div className="absolute inset-0 flex items-center justify-center bg-primary-soft text-3xl font-extrabold text-primary">
             {member.name.slice(0, 1).toUpperCase()}
           </div>
         )}
@@ -39,20 +39,20 @@ export function MemberProfileCard({ member }: MemberProfileCardProps) {
           </span>
         </div>
 
-        <div className="grid gap-2 text-sm text-slate-600 sm:grid-cols-2 max-w-xl">
-          <div>
-            <span className="text-slate-400 block text-xs uppercase tracking-wide">NIK</span>
-            <span className="font-semibold text-slate-800">{member.nik}</span>
+        <dl className="grid gap-x-8 gap-y-3 text-sm sm:grid-cols-2 max-w-xl">
+          <div className="space-y-0.5">
+            <dt className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">NIK</dt>
+            <dd className="font-semibold text-slate-800 tabular-nums">{member.nik}</dd>
           </div>
-          <div>
-            <span className="text-slate-400 block text-xs uppercase tracking-wide">Tanggal Bergabung</span>
-            <span className="font-semibold text-slate-800">{member.joinDate}</span>
+          <div className="space-y-0.5">
+            <dt className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Tanggal Bergabung</dt>
+            <dd className="font-semibold text-slate-800">{formatDate(member.joinDate)}</dd>
           </div>
-          <div className="sm:col-span-2">
-            <span className="text-slate-400 block text-xs uppercase tracking-wide">Alamat</span>
-            <span className="font-semibold text-slate-800">{member.address}</span>
+          <div className="space-y-0.5 sm:col-span-2">
+            <dt className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Alamat</dt>
+            <dd className="font-semibold text-slate-800">{member.address?.trim() ? member.address : "-"}</dd>
           </div>
-        </div>
+        </dl>
       </div>
     </div>
   );
@@ -75,37 +75,28 @@ export function FinancialSummaryGrid({
   investmentAmount = 0,
   formatCurrency,
 }: FinancialSummaryGridProps) {
+  const cards = [
+    { label: "Simpanan Pokok", value: principalAmount },
+    { label: "Simpanan Wajib", value: totalRequired },
+    { label: "Simpanan Sukarela", value: totalVoluntary },
+    ...(investmentAmount > 0 ? [{ label: "Investasi", value: investmentAmount }] : []),
+  ];
+  // 4 or 5 cards incl. the total: keep them on one row on desktop instead of wrapping one card alone
+  const desktopCols = cards.length + 1 === 5 ? "lg:grid-cols-5" : "lg:grid-cols-4";
+
   return (
-    <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-4">
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 text-center">
-        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide block">Simpanan Pokok</span>
-        <span className="text-lg font-extrabold text-slate-800 block mt-1">
-          {formatCurrency(principalAmount)}
-        </span>
-      </div>
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 text-center">
-        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide block">Simpanan Wajib</span>
-        <span className="text-lg font-extrabold text-slate-800 block mt-1">
-          {formatCurrency(totalRequired)}
-        </span>
-      </div>
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 text-center">
-        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide block">Simpanan Sukarela</span>
-        <span className="text-lg font-extrabold text-slate-800 block mt-1">
-          {formatCurrency(totalVoluntary)}
-        </span>
-      </div>
-      {investmentAmount > 0 && (
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 text-center">
-          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide block">Investasi</span>
-          <span className="text-lg font-extrabold text-slate-800 block mt-1">
-            {formatCurrency(investmentAmount)}
+    <div className={`grid grid-cols-2 gap-3 sm:gap-4 ${desktopCols}`}>
+      {cards.map((card) => (
+        <div key={card.label} className="bg-white rounded-2xl border border-slate-200 shadow-sm px-4 py-4 text-center">
+          <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider block">{card.label}</span>
+          <span className="text-base sm:text-lg font-extrabold text-slate-800 block mt-1.5 tabular-nums">
+            {formatCurrency(card.value)}
           </span>
         </div>
-      )}
-      <div className="bg-primary rounded-2xl border border-primary-hover shadow-sm p-4 text-center text-primary-foreground">
-        <span className="text-[10px] font-bold text-primary-soft uppercase tracking-wide block">Total Akumulasi</span>
-        <span className="text-lg font-black block mt-1">
+      ))}
+      <div className="col-span-2 lg:col-span-1 bg-primary rounded-2xl shadow-sm px-4 py-4 text-center text-primary-foreground">
+        <span className="text-[11px] font-semibold text-primary-foreground/80 uppercase tracking-wider block">Total Akumulasi</span>
+        <span className="text-lg font-black block mt-1.5 tabular-nums">
           {formatCurrency(totalAccumulated)}
         </span>
       </div>
@@ -143,15 +134,15 @@ export function ArrearsBanner({
             <div>
               <h4 className="text-sm font-bold text-danger">Terdapat Tunggakan Simpanan Wajib</h4>
               <p className="text-xs text-danger/90 mt-1 leading-relaxed">
-                Iuran wajib per bulan ditetapkan {formatCurrency(monthlyDuesAmount)}. <br />
-                Kewajiban sejak terdaftar: {monthsElapsed} bulan ({formatCurrency(target)}). <br />
-                Telah terbayar: {formatCurrency(paid)}.
+                Iuran wajib {formatCurrency(monthlyDuesAmount)} per bulan × {monthsElapsed} bulan = {formatCurrency(target)}.
+                <br />
+                Sudah terbayar {formatCurrency(paid)}.
               </p>
             </div>
           </div>
           <div className="text-left sm:text-right bg-danger/10 rounded-2xl px-5 py-3 border border-danger/20 flex-shrink-0 self-start sm:self-auto">
-            <span className="text-[10px] font-bold text-danger block uppercase tracking-wide">Total Tunggakan</span>
-            <span className="text-xl font-black text-danger">{formatCurrency(arrears)}</span>
+            <span className="text-[11px] font-semibold text-danger block uppercase tracking-wider">Total Tunggakan</span>
+            <span className="text-xl font-black text-danger tabular-nums">{formatCurrency(arrears)}</span>
           </div>
         </div>
       ) : (
@@ -165,12 +156,12 @@ export function ArrearsBanner({
             <div>
               <h4 className="text-sm font-bold text-success">Status Iuran Wajib Lunas</h4>
               <p className="text-xs text-success/90 mt-1 leading-relaxed">
-                Status simpanan wajib Anda aman dan lunas. Seluruh kewajiban pembayaran bulanan hingga periode ini telah diselesaikan. Terima kasih atas partisipasi aktif Anda.
+                Seluruh iuran wajib hingga bulan ini sudah terbayar. Terima kasih atas partisipasi aktif Anda.
               </p>
             </div>
           </div>
           <div className="text-left sm:text-right bg-success/10 rounded-2xl px-5 py-3 border border-success/20 flex-shrink-0 self-start sm:self-auto">
-            <span className="text-[10px] font-bold text-success block uppercase tracking-wide">Total Tunggakan</span>
+            <span className="text-[11px] font-semibold text-success block uppercase tracking-wider">Total Tunggakan</span>
             <span className="text-xl font-black text-success">Rp 0</span>
           </div>
         </div>
@@ -187,28 +178,30 @@ interface SavingsHistoryTableProps {
 export function SavingsHistoryTable({ savings, formatCurrency }: SavingsHistoryTableProps) {
   return (
     <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6 space-y-4">
-      <h4 className="text-sm font-bold text-slate-800 uppercase tracking-wide block border-b border-slate-100 pb-3">Riwayat Simpanan Bulanan</h4>
+      <h4 className="text-sm font-bold text-slate-800">Riwayat Simpanan</h4>
       
       {savings.length ? (
         <div className="overflow-x-auto rounded-2xl border border-slate-200">
           <table className="min-w-full divide-y divide-slate-200 text-sm">
-            <thead className="bg-slate-50 text-left text-slate-600">
+            <thead className="bg-slate-50 text-[11px] uppercase tracking-wider text-slate-500">
               <tr>
-                <th className="px-4 py-3 font-semibold">Periode</th>
-                <th className="px-4 py-3 font-semibold">Simpanan Wajib</th>
-                <th className="px-4 py-3 font-semibold">Simpanan Sukarela</th>
-                <th className="px-4 py-3 font-semibold">Total</th>
-                <th className="px-4 py-3 font-semibold">Tanggal Input</th>
+                <th className="px-4 py-3 text-left font-semibold">Periode</th>
+                <th className="px-4 py-3 text-right font-semibold">Wajib / Pokok</th>
+                <th className="px-4 py-3 text-right font-semibold">Sukarela</th>
+                <th className="px-4 py-3 text-right font-semibold">Total</th>
+                <th className="px-4 py-3 text-left font-semibold">Tanggal Input</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 bg-white text-slate-700">
               {savings.map((saving) => (
                 <tr key={saving.id}>
-                  <td className="px-4 py-3 font-medium">{saving.period}</td>
-                  <td className="px-4 py-3">{formatCurrency(saving.requiredSaving)}</td>
-                  <td className="px-4 py-3">{formatCurrency(saving.voluntarySaving)}</td>
-                  <td className="px-4 py-3 font-bold text-primary">{formatCurrency(saving.totalSaving)}</td>
-                  <td className="px-4 py-3 text-slate-500">{formatDate(saving.inputDate)}</td>
+                  <td className="px-4 py-3 font-medium whitespace-nowrap">
+                    {saving.period === "POKOK" ? "Simpanan Pokok" : formatPeriod(saving.period)}
+                  </td>
+                  <td className="px-4 py-3 text-right tabular-nums whitespace-nowrap">{formatCurrency(saving.requiredSaving)}</td>
+                  <td className="px-4 py-3 text-right tabular-nums whitespace-nowrap">{formatCurrency(saving.voluntarySaving)}</td>
+                  <td className="px-4 py-3 text-right font-bold text-primary tabular-nums whitespace-nowrap">{formatCurrency(saving.totalSaving)}</td>
+                  <td className="px-4 py-3 text-slate-500 whitespace-nowrap">{formatDate(saving.inputDate)}</td>
                 </tr>
               ))}
             </tbody>

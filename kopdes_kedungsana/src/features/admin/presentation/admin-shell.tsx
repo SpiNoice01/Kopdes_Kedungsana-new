@@ -28,7 +28,9 @@ const navigationItems: NavigationItem[] = [
 ];
 
 export function AdminShell({ children }: AdminShellProps) {
+  // Desktop (lg+): collapse to an icon rail. Mobile: off-canvas drawer.
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
   const [isSpreadsheetOpen, setIsSpreadsheetOpen] = useState(false);
   const [backupPrompt, setBackupPrompt] = useState<{
     identity: string;
@@ -111,17 +113,48 @@ export function AdminShell({ children }: AdminShellProps) {
 
   const isSettingsPage = pathname.startsWith("/admin/pengaturan");
 
+  // Close the mobile drawer after navigating, and on Escape.
+  useEffect(() => {
+    setIsMobileNavOpen(false);
+  }, [pathname]);
+  useEffect(() => {
+    if (!isMobileNavOpen) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setIsMobileNavOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [isMobileNavOpen]);
+
+  // Labels are always shown in the mobile drawer; on desktop they follow the collapse toggle.
+  const labelClass = isSidebarOpen ? "block" : "block lg:hidden";
+
   return (
     <div className="h-screen w-screen overflow-hidden bg-primary-soft text-slate-900 flex flex-col print:h-auto print:w-auto print:overflow-visible print:block print:bg-white">
       <div className="flex flex-1 h-full overflow-hidden print:overflow-visible print:block">
+        {/* Mobile drawer backdrop */}
+        {isMobileNavOpen && (
+          <div
+            aria-hidden="true"
+            onClick={() => setIsMobileNavOpen(false)}
+            className="fixed inset-0 z-40 bg-slate-900/40 backdrop-blur-[1px] lg:hidden print:hidden"
+          />
+        )}
         <aside
-          className={`h-full border-r border-primary bg-primary px-3 py-4 text-primary-foreground transition-all duration-200 flex flex-col justify-between flex-shrink-0 print:hidden ${
-            isSidebarOpen ? "w-64" : "w-20"
-          }`}
+          id="admin-sidebar"
+          className={`fixed inset-y-0 left-0 z-50 w-64 overflow-y-auto border-r border-primary bg-primary px-3 py-4 text-primary-foreground transition-all duration-200 flex flex-col justify-between flex-shrink-0 print:hidden lg:static lg:z-auto lg:h-full lg:translate-x-0 ${
+            isMobileNavOpen ? "translate-x-0 shadow-2xl" : "-translate-x-full"
+          } ${isSidebarOpen ? "lg:w-64" : "lg:w-20"}`}
         >
           <div>
-            <div className={`flex gap-2 px-2 ${isSidebarOpen ? "flex-row items-center justify-between" : "flex-col items-center"}`}>
-              <div className="flex items-center gap-2.5">
+            <div className={`flex gap-2 px-2 flex-row items-center justify-between ${isSidebarOpen ? "" : "lg:flex-col lg:items-center lg:justify-start"}`}>
+              {/* Logo → halaman publik (sesi admin tetap aktif) */}
+              <Link
+                href="/"
+                title="Ke halaman utama publik"
+                aria-label="Ke halaman utama publik"
+                className="flex items-center gap-2.5 rounded-xl transition-opacity hover:opacity-85 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/60"
+              >
                 <div className="relative h-10 w-10 overflow-hidden rounded-xl flex-shrink-0">
                   <Image
                     src="/logo/KDMP.jpg"
@@ -130,20 +163,29 @@ export function AdminShell({ children }: AdminShellProps) {
                     className="object-cover"
                   />
                 </div>
-                {isSidebarOpen && (
+                {/* Brand text: always in the mobile drawer, follows the collapse toggle on desktop */}
+                {(isSidebarOpen || isMobileNavOpen) && (
                   <div>
                     <p className="font-bold text-sm leading-tight tracking-wide text-white">KDMP</p>
                     <p className="text-[10px] text-white/70 font-medium leading-none">Kedungsana</p>
                   </div>
                 )}
-              </div>
+              </Link>
               <button
                 type="button"
                 onClick={() => setIsSidebarOpen((previous) => !previous)}
-                className="rounded-lg border border-white/30 px-2 py-1 text-xs hover:bg-white/10 transition-colors"
+                className="hidden lg:inline-block rounded-lg border border-white/30 px-2 py-1 text-xs hover:bg-white/10 transition-colors"
                 aria-label="Toggle side panel"
               >
                 {isSidebarOpen ? "Tutup" : "Buka"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsMobileNavOpen(false)}
+                className="lg:hidden rounded-lg border border-white/30 px-2 py-1 text-xs hover:bg-white/10 transition-colors"
+                aria-label="Tutup menu"
+              >
+                Tutup
               </button>
             </div>
 
@@ -165,7 +207,7 @@ export function AdminShell({ children }: AdminShellProps) {
                       {item.label.slice(0, 1)}
                     </span>
                     <span
-                      className={`ml-3 ${isSidebarOpen ? "block" : "hidden"}`}
+                      className={`ml-3 ${labelClass}`}
                     >
                       {item.label}
                     </span>
@@ -191,7 +233,7 @@ export function AdminShell({ children }: AdminShellProps) {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                 </svg>
               </span>
-              <span className={`ml-3 ${isSidebarOpen ? "block" : "hidden"}`}>
+              <span className={`ml-3 ${labelClass}`}>
                 Pengaturan
               </span>
             </Link>
@@ -210,7 +252,7 @@ export function AdminShell({ children }: AdminShellProps) {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
                 </svg>
               </span>
-              <span className={`ml-3 ${isSidebarOpen ? "block" : "hidden"}`}>
+              <span className={`ml-3 ${labelClass}`}>
                 Log Aktivitas
               </span>
             </Link>
@@ -218,9 +260,22 @@ export function AdminShell({ children }: AdminShellProps) {
         </aside>
 
         <div className="flex flex-1 flex-col h-full overflow-hidden print:overflow-visible print:block">
-          <header className="border-b border-slate-200 bg-white px-4 py-3 sm:px-6 flex items-center justify-between print:hidden">
-            <div>
-              <h1 className="text-lg font-semibold text-primary flex items-center gap-2">
+          <header className="border-b border-slate-200 bg-white px-4 py-3 sm:px-6 flex items-center justify-between gap-3 print:hidden">
+            <div className="flex items-center gap-3 min-w-0">
+              <button
+                type="button"
+                onClick={() => setIsMobileNavOpen(true)}
+                aria-label="Buka menu"
+                aria-controls="admin-sidebar"
+                aria-expanded={isMobileNavOpen}
+                className="lg:hidden inline-flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50"
+              >
+                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                </svg>
+              </button>
+            <div className="min-w-0">
+              <h1 className="text-base sm:text-lg font-semibold text-primary flex items-center gap-2 truncate">
                 {currentPageTitle}
                 {currentPageTitle === "Quick SHU" && (
                   <span className="group relative inline-flex items-center">
@@ -233,7 +288,7 @@ export function AdminShell({ children }: AdminShellProps) {
                     </button>
                     <span
                       role="tooltip"
-                      className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 w-72 -translate-x-1/2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-700 opacity-0 shadow-sm transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100"
+                      className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 w-72 max-w-[calc(100vw-2rem)] -translate-x-1/2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-700 opacity-0 shadow-sm transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100"
                     >
                       <span className="font-semibold">Rumus SHU:</span>
                       <br />
@@ -248,40 +303,43 @@ export function AdminShell({ children }: AdminShellProps) {
                   </span>
                 )}
               </h1>
-              <p className="text-sm text-slate-500">
+              <p className="hidden sm:block text-sm text-slate-500">
                 Sistem pencatatan koperasi desa
               </p>
             </div>
+            </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-shrink-0">
               {/* Appbar manual backup trigger (Pengaturan page only) */}
               {isSettingsPage && (
                 <button
                   type="button"
                   onClick={() => void openManualBackup()}
-                  className="inline-flex items-center gap-2 rounded-xl border border-primary/30 bg-white px-4 py-2 text-sm font-semibold text-primary shadow-sm transition-all hover:bg-primary/5 cursor-pointer"
+                  aria-label="Backup Data"
+                  className="inline-flex items-center gap-2 rounded-xl border border-primary/30 bg-white px-2.5 sm:px-4 py-2 text-sm font-semibold text-primary shadow-sm transition-all hover:bg-primary/5 cursor-pointer"
                 >
                   <svg className="h-4.5 w-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3" />
                   </svg>
-                  <span>Backup Data</span>
+                  <span className="hidden sm:inline">Backup Data</span>
                 </button>
               )}
 
               {/* Appbar Spreadsheet View Trigger Button */}
               <button
                 onClick={() => setIsSpreadsheetOpen(true)}
-                className="inline-flex items-center gap-2 rounded-xl bg-green-700 hover:bg-green-800 text-white px-4.5 py-2 text-sm font-semibold shadow-sm transition-all hover:shadow-md cursor-pointer border-none outline-none"
+                aria-label="Spreadsheet View"
+                className="inline-flex items-center gap-2 rounded-xl bg-green-700 hover:bg-green-800 text-white px-2.5 sm:px-4.5 py-2 text-sm font-semibold shadow-sm transition-all hover:shadow-md cursor-pointer border-none outline-none"
               >
                 <svg className="h-4.5 w-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                 </svg>
-                <span>Spreadsheet View</span>
+                <span className="hidden sm:inline">Spreadsheet View</span>
               </button>
             </div>
           </header>
 
-          <main className="flex-1 p-4 sm:p-6 overflow-y-auto bg-primary-soft print:p-0 print:overflow-visible print:bg-white print:block">{children}</main>
+          <main className="flex-1 p-4 sm:p-6 overflow-y-auto overflow-x-hidden bg-primary-soft print:p-0 print:overflow-visible print:bg-white print:block">{children}</main>
         </div>
       </div>
 

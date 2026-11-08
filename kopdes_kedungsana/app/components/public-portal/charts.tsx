@@ -137,11 +137,22 @@ interface MemberSavingsBarChartProps {
   savings: MemberMonthlySaving[];
 }
 
+const SHORT_MONTHS = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"];
+/** "2024-12" -> "Des 2024" for the x-axis. */
+const shortPeriodLabel = (period: string): string => {
+  const [year, month] = period.split("-");
+  const name = SHORT_MONTHS[Number(month) - 1];
+  return name ? `${name} ${year}` : period;
+};
+
 export function MemberSavingsBarChart({ savings }: MemberSavingsBarChartProps) {
-  if (!savings.length) return null;
-  
-  const lastSavings = [...savings].reverse().slice(0, 6).reverse();
-  
+  // Only monthly deposits belong on "Setoran Iuran per Periode"; the one-off
+  // Simpanan Pokok row is not a period and sorted after "YYYY-MM" anyway.
+  const monthly = savings.filter((s) => s.period !== "POKOK");
+  if (!monthly.length) return null;
+
+  const lastSavings = [...monthly].reverse().slice(0, 6).reverse();
+
   const width = 500;
   const height = 160;
   const paddingX = 40;
@@ -239,7 +250,7 @@ export function MemberSavingsBarChart({ savings }: MemberSavingsBarChartProps) {
                   textAnchor="middle"
                   className="text-[8px] fill-slate-500 font-bold"
                 >
-                  {s.period}
+                  {shortPeriodLabel(s.period)}
                 </text>
                 {/* Total label above bar */}
                 <text

@@ -1,7 +1,5 @@
 "use client";
 
-import Link from "next/link";
-import Image from "next/image";
 import { useEffect, useState, useMemo } from "react";
 import { defaultSettings, loadSettingsAsync } from "@/src/actions/settings-actions";
 import type { KopdesSettings } from "@/src/features/settings/domain/settings";
@@ -19,6 +17,8 @@ import {
   ArrearsBanner,
   SavingsHistoryTable,
 } from "../components/public-portal/member-dashboard";
+import { CheckSavingsSteps } from "../components/public-portal/check-savings-steps";
+import { PublicHeader } from "../components/public-portal/public-header";
 
 import { formatCurrency } from "@/src/utils/formatters";
 
@@ -119,43 +119,14 @@ export default function CekSimpananPage() {
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 flex flex-col font-sans">
-      {/* Header */}
-      <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-slate-200/80 shadow-[0_2px_15px_-3px_rgba(0,0,0,0.02),0_10px_20px_-2px_rgba(0,0,0,0.01)]">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-3 hover:opacity-90 transition group">
-            <div className="relative h-10 w-10 overflow-hidden rounded-2xl flex-shrink-0 ring-2 ring-primary/10 shadow-xs transition group-hover:scale-105 group-hover:ring-primary/20 duration-300">
-              <Image
-                src="/logo/KDMP.jpg"
-                alt="Logo KDMP"
-                fill
-                className="object-cover"
-              />
-            </div>
-            <div>
-              <h1 className="font-extrabold text-sm leading-tight text-slate-800 sm:text-base tracking-tight">
-                Kopdes Kedungsana
-              </h1>
-              <p className="text-[10px] text-slate-500 font-semibold sm:text-xs">Layanan Portal Mandiri</p>
-            </div>
-          </Link>
-          <Link
-            href="/"
-            className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-600 hover:text-primary transition-all bg-slate-100 hover:bg-slate-200/80 px-4 py-2.5 rounded-2xl border border-slate-200/40 hover:-translate-y-0.5 active:translate-y-0 active:scale-95 duration-200"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-            </svg>
-            <span>Kembali ke Beranda</span>
-          </Link>
-        </div>
-      </header>
+      {/* Header (shared with the other public pages) */}
+      <PublicHeader />
 
       {/* Main Content */}
       <main className="flex-1 max-w-4xl mx-auto w-full px-4 py-8 sm:py-12 space-y-8">
         
         {/* Hero Section */}
         <section className="text-center space-y-3 max-w-2xl mx-auto">
-          <span className="text-xs font-extrabold text-primary bg-primary-soft px-3 py-1 rounded-full uppercase tracking-wider">Layanan Anggota</span>
           <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight leading-tight">
             Pemeriksaan Saldo &amp; Tunggakan
           </h2>
@@ -163,6 +134,9 @@ export default function CekSimpananPage() {
             Ketikkan 16 digit NIK Anda pada form di bawah untuk melihat rincian tabungan simpanan wajib, pokok, dan sukarela secara real-time.
           </p>
         </section>
+
+        {/* 3 Langkah Cek Simpanan (dipindah dari halaman utama) */}
+        <CheckSavingsSteps />
 
         {/* NIK Search Form Card */}
         <section className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6 sm:p-8 max-w-xl mx-auto">
@@ -236,7 +210,7 @@ export default function CekSimpananPage() {
               formatCurrency={formatCurrency}
             />
 
-            {/* Arrears Dues Info */}
+            {/* Arrears Info */}
             <ArrearsBanner
               arrears={calculatedStats.arrears}
               monthlyDuesAmount={settings?.monthlyDuesAmount ?? 0}
