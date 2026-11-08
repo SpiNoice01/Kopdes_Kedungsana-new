@@ -7,13 +7,13 @@ export const defaultSettings: KopdesSettings = {
   legalNumber: "AHU-0012903.AH.01.26",
   district: "KABUPATEN CIREBON",
   printLocation: "Cirebon",
-  chairmanName: "NENI MULYANI",
-  secretaryName: "NENI MULYANI",
-  treasurerName: "Hj. DJEDJEH ZAKIAH",
+  chairmanName: "ASEP SARIFUDIN",
+  secretaryName: "ARYANTO",
+  treasurerName: "MINTI SARI",
   principalSavingAmount: 100_000,
   monthlyDuesAmount: 10_000,
   activeFiscalYear: new Date().getFullYear(),
-  // Pembagian SHU per AD pada Laporan RAT 2024 (acuan klien).
+  // Pembagian SHU sesuai persentase AD yang ditetapkan klien.
   pctCadangan: 25,
   pctDanaAnggota: 50,
   pctPengurus: 10,

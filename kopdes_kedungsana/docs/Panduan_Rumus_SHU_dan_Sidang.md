@@ -78,7 +78,7 @@ Perkalian desimal $\text{Basis} \times \text{Tarif}$ menghasilkan pecahan sen. J
 |---|---|---|
 | **Simpanan Pokok** | Uang pendaftaran pertama kali saat resmi menjadi anggota. | Rp 100.000 (tidak bisa diambil selama aktif). |
 | **Simpanan Wajib** | Iuran rutin bulanan anggota. | Rp 10.000 / bulan. |
-| **Simpanan Sukarela** | Tabungan sukarela fleksibel anggota dengan jumlah bebas. | Diikutsertakan dalam basis perhitungan mengikuti acuan Laporan RAT 2024. |
+| **Simpanan Sukarela** | Tabungan sukarela fleksibel anggota dengan jumlah bebas. | Diikutsertakan dalam basis perhitungan mengikuti laporan RAT acuan dari klien. |
 | **Investasi Anggota** | Penyertaan modal tambahan anggota untuk tahun buku berjalan. | Fitur pelengkap jika koperasi membutuhkan suntikan modal tahunan. |
 | **Partisipasi / Setoran Jasa** | Akumulasi kontribusi transaksi anggota terhadap unit usaha (belanja toko/jasa pinjaman). | Menjadi dasar pembagian SHU Jasa. |
 
@@ -138,7 +138,7 @@ $$\text{Tarif SHU} = \frac{\text{Rp } 5.000.000}{\text{Rp } 100.000.000} = 0,05 
 ### ❓ Pertanyaan 2: *"Kenapa memakai 1 tarif tunggal (Dana Anggota 50%), bukan memisah kaku persentase Jasa Modal vs Jasa Usaha di AD/ART?"*
 > **🎯 Jawaban Anda:**
 > *"Pendekatan Tarif Tunggal ini didasarkan pada dua alasan kuat:*
-> 1. ***Mengikuti Bukti Empiris Koperasi Acuan (RAT 2024)**: Anggaran Dasar koperasi acuan menetapkan satu pos untuk anggota yaitu **Dana Anggota sebesar 50%**, dan membaginya dengan rumus tarif $\frac{\text{Dana Anggota}}{\text{Total Simpanan} + \text{Total Jasa}}$. Rumus ini telah kami validasi dan terbukti cocok 100% dengan total pembagian pada laporan resmi RAT.*
+> 1. ***Mengikuti Bukti Empiris Laporan RAT Acuan**: Anggaran Dasar koperasi acuan menetapkan satu pos untuk anggota yaitu **Dana Anggota sebesar 50%**, dan membaginya dengan rumus tarif $\frac{\text{Dana Anggota}}{\text{Total Simpanan} + \text{Total Jasa}}$. Rumus ini telah kami validasi dan terbukti cocok 100% dengan total pembagian pada laporan resmi RAT.*
 > 2. ***Mencegah Dana Tertahan (Dana Menganggur)**: Jika dipisah persentase kaku (misal Jasa Modal 35% dan Jasa Transaksi 15%), pada kondisi koperasi yang baru menjalankan unit simpanan (transaksi jasa = 0), dana 15% tersebut akan macet dan tidak bisa dibagikan kepada anggota. Dengan tarif tunggal, alokasi dana beradaptasi dinamis: jika jasa bernilai 0, 100% Dana Anggota dinikmati penyimpan modal secara adil."*
 
 ---

@@ -37,8 +37,8 @@ export interface MemberShuResult {
 
 /**
  * A member's SHU Simpanan basis: every savings type plus Investasi. Sukarela
- * is included because that is how the client's reference RAT (Laporan RAT
- * 2024, "JML SIMPANAN" column) computes it.
+ * is included because that is how the RAT report format the client uses as
+ * reference computes it ("JML SIMPANAN" column).
  */
 export const memberSavingBasis = (row: MemberShuBasisRow): number =>
   row.savingPokok + row.savingWajib + row.savingSukarela + row.investmentAmount;

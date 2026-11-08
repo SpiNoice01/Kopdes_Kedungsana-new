@@ -1,6 +1,6 @@
 -- Ganti pos "Jasa Modal" + "Jasa Transaksi" (dua persentase tetap) menjadi
 -- satu pos "Dana Anggota", dan tambah pos PMDK (Pembangunan Daerah Kerja),
--- mengikuti pembagian SHU pada Laporan RAT 2024 yang dijadikan acuan klien:
+-- mengikuti pembagian SHU yang ditetapkan klien:
 --   Cadangan 25% | Dana Anggota 50% | Pengurus 10% | Karyawan 5% |
 --   Pendidikan 2,5% | PMDK 2,5% | Sosial 5%
 --
