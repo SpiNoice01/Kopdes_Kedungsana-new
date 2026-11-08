@@ -38,6 +38,10 @@
 
   --font-sans: var(--font-geist-sans), Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   --font-mono: var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  /* Dokumen cetak resmi (Laporan Tahunan/RAT, Berita Acara). Dikunci ke
+     Times New Roman supaya sama di semua perangkat; bawaan Tailwind jatuh
+     ke Georgia di Windows, yang angkanya old-style (naik-turun). */
+  --font-serif: "Times New Roman", Times, "Liberation Serif", serif;
 }
 
 body {

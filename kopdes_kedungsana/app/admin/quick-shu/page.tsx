@@ -7,6 +7,7 @@ import { buildSimpananSheet, buildShuSheet, downloadExcelBuffer } from "@/src/fe
 import { calculateShuPools, calculateShuRate, distributeMemberShu, totalShuBasis } from "@/src/features/shu/domain/shu-calculator";
 import type { MemberShuBasisRow } from "@/src/features/shu/application/get-shu-basis-rows-use-case";
 import { shuDependencies } from "@/src/features/shu/infrastructure/shu-dependencies";
+import { ExportReportModal } from "@/src/features/admin/presentation/export-report-modal";
 
 type HintProps = {
   text: string;
@@ -46,6 +47,7 @@ export default function QuickShuPage() {
   const [sortKey, setSortKey] = useState<keyof MemberShuBasisRow | "totalSaving" | "savingShu" | "serviceShu" | "totalShu">("memberName");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
   const [isSimulasiOpen, setIsSimulasiOpen] = useState(false);
+  const [isExportModalOpen, setIsExportModalOpen] = useState(false);
   const [rawMembers, setRawMembers] = useState<MemberShuBasisRow[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -657,48 +659,40 @@ export default function QuickShuPage() {
 
         <div>
           <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-200 pb-4 mb-4">
-            <div className="flex gap-3">
-              <button
-                onClick={() => setActiveTab("shu")}
-                className={`px-4 py-2 text-xs sm:text-sm font-semibold rounded-xl transition-all ${
-                  activeTab === "shu"
-                    ? "bg-primary text-white shadow-md scale-102"
-                    : "text-slate-500 hover:bg-slate-100"
-                }`}
-              >
-                Daftar SHU
-              </button>
-              <button
-                onClick={() => setActiveTab("simpanan")}
-                className={`px-4 py-2 text-xs sm:text-sm font-semibold rounded-xl transition-all ${
-                  activeTab === "simpanan"
-                    ? "bg-primary text-white shadow-md scale-102"
-                    : "text-slate-500 hover:bg-slate-100"
-                }`}
-              >
-                Daftar Simpanan
-              </button>
+            {/* Segmented control: both tabs sit in one track so the inactive one still reads as clickable */}
+            <div className="inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-slate-100 p-1">
+              {([
+                { key: "shu", label: "Daftar SHU" },
+                { key: "simpanan", label: "Daftar Simpanan" },
+              ] as const).map((tab) => {
+                const isActive = activeTab === tab.key;
+                return (
+                  <button
+                    key={tab.key}
+                    type="button"
+                    aria-pressed={isActive}
+                    onClick={() => setActiveTab(tab.key)}
+                    className={`px-4 py-1.5 text-xs sm:text-sm font-semibold rounded-lg transition-all cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 ${
+                      isActive
+                        ? "bg-primary text-white shadow-sm"
+                        : "text-slate-600 hover:bg-white hover:text-slate-900 hover:shadow-sm"
+                    }`}
+                  >
+                    {tab.label}
+                  </button>
+                );
+              })}
             </div>
             <div className="flex items-center gap-2">
               <button
                 type="button"
-                onClick={activeTab === "shu" ? handleExportSHU : handleExportSimpanan}
+                onClick={() => setIsExportModalOpen(true)}
                 className="inline-flex items-center gap-2 rounded-xl bg-green-700 hover:bg-green-800 px-4 py-2 text-xs sm:text-sm font-semibold text-white shadow-sm transition-all hover:shadow-md focus:outline-none focus:ring-2 focus:ring-green-300"
               >
                 <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                 </svg>
-                Export Format RAT {year}
-              </button>
-              <button
-                type="button"
-                onClick={handleExportBundleRat}
-                className="inline-flex items-center gap-2 rounded-xl border border-green-700 text-green-700 hover:bg-green-50 px-4 py-2 text-xs sm:text-sm font-semibold shadow-sm transition-all focus:outline-none focus:ring-2 focus:ring-green-300"
-              >
-                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 13h6m-6 4h6m2 5H7a2 2 0 01-2-2V4a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V20a2 2 0 01-2 2z" />
-                </svg>
-                Ekspor Semua Laporan (Bundel RAT)
+                Ekspor Laporan RAT {year}
               </button>
             </div>
           </div>
@@ -835,6 +829,15 @@ export default function QuickShuPage() {
           </div>
         </div>
       </div>
+
+      {/* Same export choices as Spreadsheet Live — independent of the active tab */}
+      <ExportReportModal
+        isOpen={isExportModalOpen}
+        onClose={() => setIsExportModalOpen(false)}
+        onExportAll={handleExportBundleRat}
+        onExportSimpanan={handleExportSimpanan}
+        onExportShu={handleExportSHU}
+      />
     </section>
   );
 }

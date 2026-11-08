@@ -87,13 +87,14 @@ test("FR-27/28/29 laporan tahunan", async () => {
       fr: "FR-28",
       fitur: F,
       skenario: "Ekspor Excel cara 1: dari Laporan Tahunan",
-      langkah: `Di Laporan Tahunan (Tahun ${year}), klik 'Ekspor Excel', buka berkas yang terunduh`,
+      langkah: `Di Laporan Tahunan (Tahun ${year}), klik 'Cetak Laporan Tahunan', pilih 'Ekspor Excel (.xlsx)', buka berkas yang terunduh`,
       data: `Tahun ${year}`,
       expected: `Berkas laporan_simpanan_kopdes_kedungsana_${year}.xlsx terunduh dan memuat data UJI BLACKBOX A`,
     },
     async () => {
       await openLaporan(year);
-      const f = await download(page.getByRole("button", { name: "Ekspor Excel" }), "laporanTahunan");
+      await page.getByRole("button", { name: "Cetak Laporan Tahunan" }).click();
+      const f = await download(page.getByRole("dialog").getByRole("button", { name: /Ekspor Excel/ }), "laporanTahunan");
       return { actual: describeFile(f, A.name), valid: f.name === `laporan_simpanan_kopdes_kedungsana_${year}.xlsx` && f.sheets.some((s) => s.text.includes(A.name)) };
     },
   );
@@ -104,13 +105,14 @@ test("FR-27/28/29 laporan tahunan", async () => {
       fr: "FR-29",
       fitur: F,
       skenario: "Cetak laporan RAT/rekap tahunan",
-      langkah: `Di Laporan Tahunan (Tahun ${year}), klik 'Cetak Laporan'`,
+      langkah: `Di Laporan Tahunan (Tahun ${year}), klik 'Cetak Laporan Tahunan', pilih 'Cetak / Simpan PDF'`,
       data: `Tahun ${year}`,
       expected: "Perintah cetak browser dipanggil; tampilan cetak memuat kop koperasi, judul laporan, tahun buku, dan tabel anggota",
     },
     async () => {
       const before = await printCalls(page);
-      await page.getByRole("button", { name: "Cetak Laporan" }).click();
+      await page.getByRole("button", { name: "Cetak Laporan Tahunan" }).click();
+      await page.getByRole("dialog").getByRole("button", { name: "Cetak / Simpan PDF" }).click();
       const calls = (await printCalls(page)) - before;
       await page.emulateMedia({ media: "print" });
       const printText = (await page.locator("body").innerText()).replace(/\s+/g, " ");
@@ -131,14 +133,14 @@ test("FR-27/28/29 laporan tahunan", async () => {
     {
       fr: "FR-28",
       fitur: F,
-      skenario: "Ekspor Excel cara 2a: Export Format RAT tab Daftar SHU",
-      langkah: `Buka SHU Cepat, tab 'Daftar SHU', klik 'Export Format RAT ${year}'`,
+      skenario: "Ekspor Excel cara 2a: Ekspor Laporan RAT, pilih Laporan SHU Saja",
+      langkah: `Buka SHU Cepat, klik 'Ekspor Laporan RAT ${year}', pilih 'Ekspor Laporan SHU Saja'`,
       data: `Tahun buku aktif ${year}`,
       expected: `Berkas LAPORAN_SHU_${year}.xlsx terunduh dan memuat UJI BLACKBOX A`,
     },
     async () => {
-      await page.getByRole("button", { name: "Daftar SHU" }).click();
-      const f = await download(page.getByRole("button", { name: `Export Format RAT ${year}` }), "rafShu");
+      await page.getByRole("button", { name: `Ekspor Laporan RAT ${year}` }).click();
+      const f = await download(page.getByRole("dialog").getByRole("button", { name: /Ekspor Laporan SHU Saja/ }), "rafShu");
       return { actual: describeFile(f, A.name), valid: f.name === `LAPORAN_SHU_${year}.xlsx` && f.sheets.some((s) => s.text.includes(A.name)) };
     },
   );
@@ -148,14 +150,14 @@ test("FR-27/28/29 laporan tahunan", async () => {
     {
       fr: "FR-28",
       fitur: F,
-      skenario: "Ekspor Excel cara 2b: Export Format RAT tab Daftar Simpanan",
-      langkah: `Di SHU Cepat, pindah ke tab 'Daftar Simpanan', klik 'Export Format RAT ${year}'`,
+      skenario: "Ekspor Excel cara 2b: Ekspor Laporan RAT, pilih Laporan Simpanan Saja",
+      langkah: `Di SHU Cepat, klik 'Ekspor Laporan RAT ${year}', pilih 'Ekspor Laporan Simpanan Saja'`,
       data: `Tahun buku aktif ${year}`,
       expected: `Berkas DAFTAR_SIMPANAN_${year}.xlsx terunduh dan memuat UJI BLACKBOX A`,
     },
     async () => {
-      await page.getByRole("button", { name: "Daftar Simpanan" }).click();
-      const f = await download(page.getByRole("button", { name: `Export Format RAT ${year}` }), "ratSimpanan");
+      await page.getByRole("button", { name: `Ekspor Laporan RAT ${year}` }).click();
+      const f = await download(page.getByRole("dialog").getByRole("button", { name: /Ekspor Laporan Simpanan Saja/ }), "ratSimpanan");
       return { actual: describeFile(f, A.name), valid: f.name === `DAFTAR_SIMPANAN_${year}.xlsx` && f.sheets.some((s) => s.text.includes(A.name)) };
     },
   );
@@ -166,12 +168,13 @@ test("FR-27/28/29 laporan tahunan", async () => {
       fr: "FR-28",
       fitur: F,
       skenario: "Ekspor Excel cara 3: Bundel RAT (Simpanan + SHU)",
-      langkah: "Di SHU Cepat, klik 'Ekspor Semua Laporan (Bundel RAT)'",
+      langkah: `Di SHU Cepat, klik 'Ekspor Laporan RAT ${year}', pilih 'Ekspor Semua Laporan (Bundel RAT)'`,
       data: `Tahun buku aktif ${year}`,
       expected: `Berkas BUNDEL_RAT_${year}.xlsx terunduh berisi 2 sheet (Simpanan dan SHU) yang memuat UJI BLACKBOX A`,
     },
     async () => {
-      const f = await download(page.getByRole("button", { name: "Ekspor Semua Laporan (Bundel RAT)" }), "bundelRat");
+      await page.getByRole("button", { name: `Ekspor Laporan RAT ${year}` }).click();
+      const f = await download(page.getByRole("dialog").getByRole("button", { name: "Ekspor Semua Laporan (Bundel RAT)" }), "bundelRat");
       return { actual: describeFile(f, A.name), valid: f.name === `BUNDEL_RAT_${year}.xlsx` && f.sheets.length === 2 && f.sheets.every((s) => s.text.includes(A.name)) };
     },
   );
@@ -233,14 +236,14 @@ test("FR-30/45 spreadsheet", async () => {
         fr: "FR-45",
         fitur: F,
         skenario: `Ekspor spreadsheet: ${label}`,
-        langkah: `Di Spreadsheet View, klik 'Export Sheet (.xls)', pilih '${label}'`,
+        langkah: `Di Spreadsheet View, klik 'Export Sheet (.xlsx)', pilih '${label}'`,
         data: `Tahun buku aktif ${year}`,
         expected: `Berkas ${expectedName} terunduh (${expectedSheets} sheet) dan memuat UJI BLACKBOX A`,
       },
       async () => {
         await sheet.getByPlaceholder("Cari anggota...").fill("");
-        await sheet.getByRole("button", { name: "Export Sheet (.xls)" }).click();
-        const dialog = page.locator("div.fixed", { hasText: "Ekspor Laporan (.xls)" }).last();
+        await sheet.getByRole("button", { name: "Export Sheet (.xlsx)" }).click();
+        const dialog = page.locator("div.fixed", { hasText: "Ekspor Laporan (.xlsx)" }).last();
         await dialog.waitFor();
         const f = await download(dialog.getByRole("button", { name: new RegExp(label.replace(/[()]/g, "\\$&")) }), key);
         return {

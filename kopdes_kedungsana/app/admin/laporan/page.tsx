@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { flushSync } from "react-dom";
 import { memberDependencies } from "@/src/features/member/infrastructure/member-dependencies";
 import { addAuditLog } from "@/src/features/audit-log/infrastructure/audit-logger";
 import ExcelJS from "exceljs";
@@ -36,6 +37,8 @@ export default function LaporanPage() {
   const [settings, setSettings] = useState<KopdesSettings>(unloadedSettings);
   // Tahun bergabung paling awal di antara anggota; batas bawah pilihan tahun buku.
   const [earliestYear, setEarliestYear] = useState(currentYear);
+  // Popup "Cetak Laporan Tahunan": pilih cetak/PDF atau ekspor Excel.
+  const [isOutputModalOpen, setIsOutputModalOpen] = useState(false);
 
   // Build the selectable year range (down to the earliest member join year)
   const yearOptions = useMemo(() => {
@@ -113,6 +116,18 @@ export default function LaporanPage() {
       "success"
     );
     window.print();
+  };
+
+  // Tutup popup dulu (sinkron) supaya tidak tertinggal di layar saat dialog
+  // cetak browser terbuka; tata letak cetak sendiri sudah print:hidden-aman.
+  const handleChoosePrint = () => {
+    flushSync(() => setIsOutputModalOpen(false));
+    handlePrint();
+  };
+
+  const handleChooseExcel = () => {
+    setIsOutputModalOpen(false);
+    void handleExportExcel();
   };
 
   const handleExportExcel = async () => {
@@ -325,22 +340,13 @@ export default function LaporanPage() {
             </div>
             <div className="flex items-center gap-2">
               <button
-                onClick={handleExportExcel}
-                className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-700 px-3 py-1.5 text-xs font-semibold hover:bg-emerald-100 transition cursor-pointer"
-              >
-                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                </svg>
-                Ekspor Excel
-              </button>
-              <button
-                onClick={handlePrint}
+                onClick={() => setIsOutputModalOpen(true)}
                 className="inline-flex items-center gap-1.5 rounded-xl bg-primary text-primary-foreground px-3 py-1.5 text-xs font-semibold hover:opacity-90 transition cursor-pointer"
               >
                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
                 </svg>
-                Cetak Laporan
+                Cetak Laporan Tahunan
               </button>
             </div>
           </div>
@@ -404,6 +410,85 @@ export default function LaporanPage() {
             </div>
           )}
         </div>
+
+        {/* OUTPUT OPTIONS MODAL: cetak/PDF atau ekspor Excel */}
+        {isOutputModalOpen && (
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-[60] p-4">
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="laporan-output-title"
+              className="bg-white rounded-3xl max-w-md w-full shadow-2xl border border-slate-100 overflow-hidden animate-in fade-in zoom-in duration-200"
+            >
+              <div className="bg-primary text-primary-foreground px-6 py-5 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                  </svg>
+                  <h3 id="laporan-output-title" className="font-bold text-base">Cetak Laporan Tahunan {selectedYear}</h3>
+                </div>
+                <button
+                  onClick={() => setIsOutputModalOpen(false)}
+                  aria-label="Tutup"
+                  className="opacity-80 hover:opacity-100 hover:bg-white/10 p-1 rounded-lg transition"
+                >
+                  <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+
+              <div className="p-6 space-y-4">
+                <p className="text-slate-500 text-xs sm:text-sm">Pilih format laporan yang ingin Anda keluarkan:</p>
+
+                {/* Option 1: Print / PDF */}
+                <button
+                  onClick={handleChoosePrint}
+                  className="w-full text-left p-4 rounded-2xl border border-slate-200 hover:border-primary hover:bg-primary-soft/40 transition-all flex items-start gap-3.5 group"
+                >
+                  <div className="bg-primary-soft text-primary p-2 rounded-xl group-hover:scale-105 transition-transform mt-0.5">
+                    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                    </svg>
+                  </div>
+                  <div className="flex-1">
+                    <h4 className="font-bold text-slate-800 text-sm group-hover:text-primary transition-colors">Cetak / Simpan PDF</h4>
+                    <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">
+                      Membuka jendela cetak browser. Pilih printer, atau pilih &quot;Simpan sebagai PDF&quot; untuk mendapatkan file PDF.
+                    </p>
+                  </div>
+                </button>
+
+                {/* Option 2: Excel */}
+                <button
+                  onClick={handleChooseExcel}
+                  className="w-full text-left p-4 rounded-2xl border border-slate-200 hover:border-green-600 hover:bg-green-50/30 transition-all flex items-start gap-3.5 group"
+                >
+                  <div className="bg-green-100 text-green-700 p-2 rounded-xl group-hover:scale-105 transition-transform mt-0.5">
+                    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                    </svg>
+                  </div>
+                  <div className="flex-1">
+                    <h4 className="font-bold text-slate-800 text-sm group-hover:text-green-700 transition-colors">Ekspor Excel (.xlsx)</h4>
+                    <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">
+                      Mengunduh rekap yang sama sebagai file spreadsheet, lengkap dengan kop dan tanda tangan.
+                    </p>
+                  </div>
+                </button>
+              </div>
+
+              <div className="bg-slate-50 px-6 py-4 flex justify-end">
+                <button
+                  onClick={() => setIsOutputModalOpen(false)}
+                  className="px-4 py-2 border border-slate-200 rounded-xl hover:bg-slate-100 text-xs sm:text-sm font-semibold text-slate-700 transition"
+                >
+                  Batal
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </section>
 
       {/* ============================================================ */}
