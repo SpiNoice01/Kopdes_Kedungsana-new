@@ -2,7 +2,7 @@
 --
 -- Sebelum menjalankan:
 --   1. SUPABASE_SECRET_KEY (Secret key sb_secret_...) sudah diisi di environment server (.env.local
---      dan Vercel). Portal Cek Simpanan, statistik landing page, dan rate limit
+--      dan Environment di dashboard Render). Portal Cek Simpanan, statistik landing page, dan rate limit
 --      login/NIK sekarang membaca lewat Server Action dengan service role
 --      (src/utils/supabase-admin.ts), bukan dengan anon key.
 --   2. Kode versi baru sudah ter-deploy. Kode baru tetap jalan dengan policy
