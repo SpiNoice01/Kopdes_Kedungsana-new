@@ -4,6 +4,7 @@ import { useEffect, useState, useMemo } from "react";
 import { memberDependencies } from "@/src/features/member/infrastructure/member-dependencies";
 import type { Member } from "@/src/features/member/domain/member";
 import type { MemberMonthlySaving } from "@/src/features/member/domain/member-monthly-saving";
+import { InfoHint } from "@/src/features/admin/presentation/info-hint";
 
 const formatCurrency = (value: number): string =>
   new Intl.NumberFormat("id-ID", {
@@ -127,7 +128,7 @@ export default function OverviewPage() {
         label: "Sangat Prima",
         colorClass: "text-emerald-600 bg-emerald-50 border-emerald-200",
         gaugeColor: "#10b981",
-        description: "Kepatuhan simpanan anggota sangat tinggi. Arus kas dalam kondisi sangat sehat dan optimal untuk diputar sebagai modal pembagian SHU RAT."
+        description: "Hampir semua anggota lancar membayar iuran. Arus kas dalam kondisi sangat sehat dan optimal untuk diputar sebagai modal pembagian SHU RAT."
       };
     } else if (healthScore >= 70) {
       return {
@@ -204,8 +205,11 @@ export default function OverviewPage() {
         </div>
 
         {/* Card 2: Total Accumulated Savings */}
-        <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm relative overflow-hidden group">
-          <div className="absolute right-0 top-0 translate-x-4 -translate-y-4 w-24 h-24 bg-emerald-500/5 rounded-full transition-transform group-hover:scale-110"></div>
+        <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm relative group">
+          {/* Lingkaran dekoratif dipotong di wrapper sendiri, bukan di kartu, supaya tooltip InfoHint tidak ikut terpotong. */}
+          <div className="absolute inset-0 overflow-hidden rounded-3xl pointer-events-none">
+            <div className="absolute right-0 top-0 translate-x-4 -translate-y-4 w-24 h-24 bg-emerald-500/5 rounded-full transition-transform group-hover:scale-110"></div>
+          </div>
           <div className="flex items-center gap-3">
             <div className="bg-emerald-50 text-emerald-600 p-3 rounded-2xl">
               <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -224,7 +228,12 @@ export default function OverviewPage() {
             </div>
           </div>
           <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs">
-            <span className="text-slate-400">Total Simpanan (P+W+S)</span>
+            <span className="text-slate-400 inline-flex items-center gap-1.5">
+              Total Simpanan
+              <InfoHint label="Lihat komponen Total Simpanan">
+                <span className="font-semibold">Total Simpanan = Pokok + Wajib + Sukarela</span>
+              </InfoHint>
+            </span>
             <span className="text-blue-600 font-semibold bg-blue-50 px-2 py-0.5 rounded-full text-[10px]">Likuid</span>
           </div>
         </div>
@@ -400,7 +409,7 @@ export default function OverviewPage() {
           </div>
           
           <div className="text-[10px] text-slate-400 border-t border-slate-100 pt-3 text-center sm:text-left">
-            * Simpanan Pokok bersumber dari iuran awal pendaftaran anggota (Rp 100k flat).
+            * Simpanan Pokok dijumlahkan dari setoran pokok (iuran awal pendaftaran) yang tercatat untuk setiap anggota aktif.
           </div>
         </div>
 
@@ -408,7 +417,7 @@ export default function OverviewPage() {
         <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm flex flex-col justify-between">
           <div>
             <h3 className="text-base font-bold text-slate-800">Indeks Kesehatan Koperasi</h3>
-            <p className="text-xs text-slate-400 mt-0.5">Analisis rasio kepatuhan iuran wajib anggota secara real-time.</p>
+            <p className="text-xs text-slate-400 mt-0.5">Persentase anggota yang iuran wajibnya lancar, berdasarkan data terkini.</p>
           </div>
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-6 my-5">
@@ -437,7 +446,6 @@ export default function OverviewPage() {
                   </svg>
                   <div className="absolute flex flex-col items-center justify-center">
                     <span className="text-2xl font-black text-slate-800 font-mono leading-none">{healthScore}%</span>
-                    <span className="text-[9px] uppercase font-extrabold text-slate-400 mt-1">Kepatuhan</span>
                   </div>
                 </>
               )}

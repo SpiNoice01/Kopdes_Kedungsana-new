@@ -11,6 +11,7 @@ import { CooperativeTransparency } from "./components/public-portal/transparency
 import { regulationsList } from "./components/public-portal/landing-data";
 
 import { formatCurrency } from "@/src/utils/formatters";
+import type { MonthlyTrendPoint } from "@/src/features/member/application/get-cooperative-stats-use-case";
 
 interface GlobalStatsData {
   totalMembers: number;
@@ -19,6 +20,7 @@ interface GlobalStatsData {
   sumWajib: number;
   sumSukarela: number;
   arrearsCount: number;
+  monthlyTrend: MonthlyTrendPoint[];
 }
 
 
@@ -92,11 +94,11 @@ export default function PublicHomePage() {
     },
     {
       q: "Berapa nominal simpanan wajib setiap bulannya?",
-      a: `Nominal iuran wajib bulanan yang ditetapkan saat ini adalah ${formatCurrency(settings?.monthlyDuesAmount ?? 10000)} per perbulan. Anggota diharapkan tertib membayar setiap bulannya untuk kelancaran usaha bersama.`,
+      a: `Nominal iuran wajib bulanan yang ditetapkan saat ini adalah ${formatCurrency(settings?.monthlyDuesAmount ?? defaultSettings.monthlyDuesAmount)} per bulan. Anggota diharapkan tertib membayar setiap bulannya untuk kelancaran usaha bersama.`,
     },
     {
       q: "Bagaimana cara menyetor simpanan atau membayar tunggakan?",
-      a: "Pembayaran simpanan dapat dilakukan secara langsung melalui kasir pengurus di kantor koperasi, atau melalui transfer bank/e-wallet resmi koperasi yang tertera di menu administrasi pengurus.",
+      a: "Pembayaran simpanan dilakukan secara langsung kepada pengurus di kantor koperasi. Setelah diterima, pengurus akan mencatat setoran Anda ke dalam sistem sehingga saldonya dapat dicek melalui menu Cek Simpanan.",
     },
   ];
 
@@ -195,10 +197,10 @@ export default function PublicHomePage() {
             {/* Right Photo Column */}
             <div className="lg:col-span-5 relative">
               <div 
-                className="w-full aspect-[16/9] bg-cover bg-center rounded-xl shadow-2xl" 
-                role="img" 
-                aria-label="Foto Kegiatan Koperasi" 
-                style={{ backgroundImage: 'url("https://storage.googleapis.com/kopdes-merah-putih/banner_file/88iUb7ujejV99Lsw_1763496169.jpg")' }}
+                className="w-full aspect-[2/1] bg-cover bg-center rounded-xl shadow-2xl"
+                role="img"
+                aria-label="Spanduk Kantor Koperasi Desa Merah Putih Kedungsana"
+                style={{ backgroundImage: 'url("/Image/kopdes_kedungsana.jpg")' }}
               ></div>
             </div>
           </div>
@@ -211,7 +213,7 @@ export default function PublicHomePage() {
               
               <div className="space-y-8">
                 <div className="text-center space-y-2">
-                  <h3 className="text-xl font-bold text-slate-900">Perkembangan Real-Time Koperasi</h3>
+                  <h3 className="text-xl font-bold text-slate-900">Perkembangan Koperasi</h3>
                   <p className="text-xs text-slate-500">Akumulasi modal dan jumlah kemitraan warga yang terhimpun hingga hari ini.</p>
                 </div>
 
@@ -236,7 +238,7 @@ export default function PublicHomePage() {
                   </div>
                 </div>
 
-                <CooperativeGrowthChart totalSavings={globalStats.totalSavings} />
+                <CooperativeGrowthChart trend={globalStats.monthlyTrend} />
               </div>
 
               {/* Transparency Panel Section */}

@@ -26,7 +26,7 @@ interface ComputedMemberRow extends ExcelExportRow {
 
 import { useEffect } from "react";
 import { memberDependencies } from "../../member/infrastructure/member-dependencies";
-import { loadSettingsAsync, defaultSettings } from "@/src/actions/settings-actions";
+import { loadSettingsAsync, unloadedSettings } from "@/src/actions/settings-actions";
 import type { KopdesSettings } from "@/src/features/settings/domain/settings";
 
 const formatRelativeDate = (dateStr: string): string => {
@@ -76,7 +76,7 @@ export default function SpreadsheetModal({ isOpen, onClose }: { isOpen: boolean;
   const [searchQuery, setSearchQuery] = useState("");
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [settings, setSettings] = useState<KopdesSettings>(defaultSettings);
+  const [settings, setSettings] = useState<KopdesSettings>(unloadedSettings);
   const [netShu, setNetShu] = useState(0);
 
   useEffect(() => {

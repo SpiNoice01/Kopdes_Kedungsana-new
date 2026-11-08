@@ -1,5 +1,6 @@
 import ExcelJS from "exceljs";
 import type { KopdesSettings } from "@/src/features/settings/domain/settings";
+import { formatSignatoryName } from "@/src/utils/formatters";
 
 export interface ExcelExportRow {
   memberName: string;
@@ -151,15 +152,15 @@ export const buildSimpananSheet = (
   ws.getCell(`F${currentRow}`).alignment = { horizontal: "center" };
 
   currentRow += 5;
-  ws.getCell(`B${currentRow}`).value = settings.chairmanName;
+  ws.getCell(`B${currentRow}`).value = formatSignatoryName(settings.chairmanName);
   ws.getCell(`B${currentRow}`).font = { bold: true };
   ws.getCell(`B${currentRow}`).alignment = { horizontal: "center" };
   
-  ws.getCell(`D${currentRow}`).value = settings.secretaryName;
+  ws.getCell(`D${currentRow}`).value = formatSignatoryName(settings.secretaryName);
   ws.getCell(`D${currentRow}`).font = { bold: true };
   ws.getCell(`D${currentRow}`).alignment = { horizontal: "center" };
   
-  ws.getCell(`F${currentRow}`).value = settings.treasurerName;
+  ws.getCell(`F${currentRow}`).value = formatSignatoryName(settings.treasurerName);
   ws.getCell(`F${currentRow}`).font = { bold: true };
   ws.getCell(`F${currentRow}`).alignment = { horizontal: "center" };
 };
@@ -290,15 +291,15 @@ export const buildShuSheet = (
   ws.getCell(`F${currentRow}`).alignment = { horizontal: "center" };
 
   currentRow += 5;
-  ws.getCell(`B${currentRow}`).value = settings.chairmanName;
+  ws.getCell(`B${currentRow}`).value = formatSignatoryName(settings.chairmanName);
   ws.getCell(`B${currentRow}`).font = { bold: true };
   ws.getCell(`B${currentRow}`).alignment = { horizontal: "center" };
   
-  ws.getCell(`D${currentRow}`).value = settings.secretaryName;
+  ws.getCell(`D${currentRow}`).value = formatSignatoryName(settings.secretaryName);
   ws.getCell(`D${currentRow}`).font = { bold: true };
   ws.getCell(`D${currentRow}`).alignment = { horizontal: "center" };
   
-  ws.getCell(`F${currentRow}`).value = settings.treasurerName;
+  ws.getCell(`F${currentRow}`).value = formatSignatoryName(settings.treasurerName);
   ws.getCell(`F${currentRow}`).font = { bold: true };
   ws.getCell(`F${currentRow}`).alignment = { horizontal: "center" };
 };

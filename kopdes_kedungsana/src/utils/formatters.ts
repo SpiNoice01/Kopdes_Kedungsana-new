@@ -5,6 +5,11 @@ export const formatCurrency = (value: number): string =>
     maximumFractionDigits: 0,
   }).format(value);
 
+// Nama penanda tangan laporan; kalau belum diisi di Pengaturan, tampilkan
+// penanda yang jelas, bukan nama cadangan.
+export const formatSignatoryName = (name: string | null | undefined): string =>
+  name?.trim() ? name : "(belum diisi)";
+
 // "2026-10" -> "Oktober 2026"
 export const formatPeriod = (period: string): string => {
   const [year, month] = period.split("-").map(Number);

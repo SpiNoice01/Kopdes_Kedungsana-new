@@ -25,9 +25,12 @@ export class SettingsRepository {
       legalNumber: data.legal_number,
       district: data.district || "KABUPATEN CIREBON",
       printLocation: data.print_location || "Cirebon",
-      chairmanName: data.chairman_name || "ASEP SARIFUDIN",
-      secretaryName: data.secretary_name || "ARYANTO",
-      treasurerName: data.treasurer_name || "MINTI SARI",
+      // Nama pengurus sengaja tidak diberi nilai cadangan: kalau kosong di
+      // database, laporan menampilkan "(belum diisi)" alih-alih nama orang
+      // yang mungkin sudah tidak menjabat.
+      chairmanName: data.chairman_name ?? "",
+      secretaryName: data.secretary_name ?? "",
+      treasurerName: data.treasurer_name ?? "",
       principalSavingAmount: Number(data.principal_saving_amount),
       monthlyDuesAmount: Number(data.monthly_dues_amount),
       activeFiscalYear: data.active_fiscal_year,

@@ -1,28 +1,32 @@
 "use client";
 
 import type { MemberMonthlySaving } from "@/src/features/member/domain/member-monthly-saving";
+import type { MonthlyTrendPoint } from "@/src/features/member/application/get-cooperative-stats-use-case";
 
 interface CooperativeGrowthChartProps {
-  totalSavings: number;
+  trend: MonthlyTrendPoint[];
 }
 
-export function CooperativeGrowthChart({ totalSavings }: CooperativeGrowthChartProps) {
-  const months = ["Des", "Jan", "Feb", "Mar", "Apr", "Mei"];
-  const factors = [0.45, 0.58, 0.68, 0.79, 0.9, 1.0];
-  const data = factors.map(f => totalSavings * f);
-  
+export function CooperativeGrowthChart({ trend }: CooperativeGrowthChartProps) {
+  if (!trend.length) return null;
+
+  const months = trend.map(t => t.label);
+  const data = trend.map(t => t.value);
+  const lastMonth = trend[trend.length - 1].month;
+  const asOfLabel = `${months[months.length - 1]} ${lastMonth.slice(0, 4)}`;
+
   const width = 500;
   const height = 160;
   const paddingX = 40;
   const paddingY = 20;
-  
+
   const chartWidth = width - paddingX * 2;
   const chartHeight = height - paddingY * 2;
-  
-  const maxVal = totalSavings || 100000;
-  
+
+  const maxVal = Math.max(...data) || 100000;
+
   const points = data.map((val, i) => {
-    const x = paddingX + (i / (data.length - 1)) * chartWidth;
+    const x = paddingX + (i / Math.max(1, data.length - 1)) * chartWidth;
     const y = height - paddingY - (val / maxVal) * chartHeight;
     return { x, y, val };
   });
@@ -40,7 +44,7 @@ export function CooperativeGrowthChart({ totalSavings }: CooperativeGrowthChartP
           <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Tren Pertumbuhan Dana Koperasi</h4>
           <p className="text-sm sm:text-base font-extrabold text-slate-800 mt-1">Akumulasi Saldo Simpanan (6 Bulan Terakhir)</p>
         </div>
-        <span className="text-[10px] font-bold text-primary bg-primary-soft px-2 py-1 rounded-md">Update Real-Time</span>
+        <span className="text-[10px] font-bold text-primary bg-primary-soft px-2 py-1 rounded-md">Data per {asOfLabel}</span>
       </div>
       
       <div className="relative w-full overflow-hidden">

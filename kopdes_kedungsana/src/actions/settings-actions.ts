@@ -24,13 +24,26 @@ export const defaultSettings: KopdesSettings = {
   enableInvestasi: false,
 };
 
+/**
+ * Dipakai saat pengaturan belum/gagal dimuat dari database. Sama dengan
+ * defaultSettings, kecuali nama pengurus dikosongkan: nama orang tidak boleh
+ * tercetak di laporan hanya karena database gagal dibaca. (defaultSettings
+ * sendiri tetap utuh untuk tombol "Reset ke Default" di Pengaturan.)
+ */
+export const unloadedSettings: KopdesSettings = {
+  ...defaultSettings,
+  chairmanName: "",
+  secretaryName: "",
+  treasurerName: "",
+};
+
 export async function loadSettingsAsync(): Promise<KopdesSettings> {
   try {
     const settings = await settingsDependencies.getSettingsUseCase.execute();
     return settings as KopdesSettings;
   } catch (error) {
     console.error("Failed to load settings from Supabase", error);
-    return defaultSettings;
+    return unloadedSettings;
   }
 }
 

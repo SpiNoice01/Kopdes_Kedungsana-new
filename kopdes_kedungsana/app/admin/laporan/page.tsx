@@ -6,8 +6,9 @@ import { addAuditLog } from "@/src/utils/audit-logger";
 import ExcelJS from "exceljs";
 import type { Member } from "@/src/features/member/domain/member";
 import type { MemberMonthlySaving } from "@/src/features/member/domain/member-monthly-saving";
-import { loadSettingsAsync, defaultSettings } from "@/src/actions/settings-actions";
+import { loadSettingsAsync, unloadedSettings } from "@/src/actions/settings-actions";
 import type { KopdesSettings } from "@/src/features/settings/domain/settings";
+import { formatSignatoryName } from "@/src/utils/formatters";
 
 const formatCurrency = (value: number): string =>
   new Intl.NumberFormat("id-ID", {
@@ -31,17 +32,24 @@ export default function LaporanPage() {
   const [selectedYear, setSelectedYear] = useState(currentYear);
   const [summaries, setSummaries] = useState<MemberAnnualSummary[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [settings, setSettings] = useState<KopdesSettings>(defaultSettings);
+  const [settings, setSettings] = useState<KopdesSettings>(unloadedSettings);
+  // Tahun bergabung paling awal di antara anggota; batas bawah pilihan tahun buku.
+  const [earliestYear, setEarliestYear] = useState(currentYear);
 
-  // Build the selectable year range (down to 2025)
+  // Build the selectable year range (down to the earliest member join year)
   const yearOptions = useMemo(() => {
-    const minYear = 2025;
     const years = [];
-    for (let y = currentYear; y >= minYear; y--) {
+    for (let y = currentYear; y >= earliestYear; y--) {
       years.push(y);
     }
     return years;
-  }, [currentYear]);
+  }, [currentYear, earliestYear]);
+
+  const missingSignatories = [
+    !settings.chairmanName?.trim() && "Ketua",
+    !settings.secretaryName?.trim() && "Sekretaris",
+    !settings.treasurerName?.trim() && "Bendahara",
+  ].filter(Boolean) as string[];
 
   useEffect(() => {
     const loadReport = async () => {
@@ -52,6 +60,10 @@ export default function LaporanPage() {
           loadSettingsAsync()
         ]);
         setSettings(fetchedSettings);
+        const joinYears = members
+          .map((m) => new Date(m.joinDate).getFullYear())
+          .filter((y) => Number.isFinite(y));
+        if (joinYears.length) setEarliestYear(Math.min(currentYear, ...joinYears));
         const activeMembers = members.filter((m) => m.status === "aktif");
 
         const results: MemberAnnualSummary[] = [];
@@ -240,15 +252,15 @@ export default function LaporanPage() {
     ws.getCell(`F${currentRow}`).alignment = { horizontal: "center" };
 
     currentRow += 5;
-    ws.getCell(`B${currentRow}`).value = settings.chairmanName;
+    ws.getCell(`B${currentRow}`).value = formatSignatoryName(settings.chairmanName);
     ws.getCell(`B${currentRow}`).font = { bold: true };
     ws.getCell(`B${currentRow}`).alignment = { horizontal: "center" };
     
-    ws.getCell(`D${currentRow}`).value = settings.secretaryName;
+    ws.getCell(`D${currentRow}`).value = formatSignatoryName(settings.secretaryName);
     ws.getCell(`D${currentRow}`).font = { bold: true };
     ws.getCell(`D${currentRow}`).alignment = { horizontal: "center" };
     
-    ws.getCell(`F${currentRow}`).value = settings.treasurerName;
+    ws.getCell(`F${currentRow}`).value = formatSignatoryName(settings.treasurerName);
     ws.getCell(`F${currentRow}`).font = { bold: true };
     ws.getCell(`F${currentRow}`).alignment = { horizontal: "center" };
 
@@ -299,6 +311,13 @@ export default function LaporanPage() {
             </select>
           </div>
         </div>
+
+        {!isLoading && missingSignatories.length > 0 && (
+          <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-800">
+            Nama {missingSignatories.join(", ")} belum diisi di menu Pengaturan (atau pengaturan gagal dimuat).
+            Kolom tanda tangan pada laporan akan tertulis &quot;(belum diisi)&quot;.
+          </div>
+        )}
 
         {/* Grand Total Summary Cards */}
         <div className={`grid grid-cols-2 gap-4 ${!isLoading && grandTotal.investasi > 0 ? "md:grid-cols-5" : "md:grid-cols-4"}`}>
@@ -471,7 +490,7 @@ export default function LaporanPage() {
 
         {/* Signature Section */}
         <p className="text-[10px] text-slate-500 italic mb-8">
-          * Laporan ini disusun berdasarkan data simpanan anggota yang tercatat dalam sistem informasi {settings.cooperativeName}. Simpanan Pokok sebesar Rp 100.000 dihitung flat per anggota aktif.
+          * Laporan ini disusun berdasarkan data simpanan anggota yang tercatat dalam sistem informasi {settings.cooperativeName}. Simpanan Pokok dijumlahkan dari setoran pokok yang tercatat untuk setiap anggota aktif (ketentuan saat ini {formatCurrency(settings.principalSavingAmount)} per anggota).
         </p>
 
         <div className="flex justify-between text-center text-xs mt-16">
@@ -479,19 +498,19 @@ export default function LaporanPage() {
             <p className="text-slate-600">Dibuat oleh,</p>
             <p className="text-slate-600">Sekretaris Koperasi</p>
             <div className="h-16"></div>
-            <p className="font-bold text-slate-900 border-t border-slate-400 pt-1 inline-block min-w-[100px]">{settings.secretaryName}</p>
+            <p className="font-bold text-slate-900 border-t border-slate-400 pt-1 inline-block min-w-[100px]">{formatSignatoryName(settings.secretaryName)}</p>
           </div>
           <div className="w-1/3">
             <p className="text-slate-600">Mengetahui,</p>
             <p className="text-slate-600">Bendahara Koperasi</p>
             <div className="h-16"></div>
-            <p className="font-bold text-slate-900 border-t border-slate-400 pt-1 inline-block min-w-[100px]">{settings.treasurerName}</p>
+            <p className="font-bold text-slate-900 border-t border-slate-400 pt-1 inline-block min-w-[100px]">{formatSignatoryName(settings.treasurerName)}</p>
           </div>
           <div className="w-1/3">
             <p className="text-slate-600">Menyetujui,</p>
             <p className="text-slate-600">Ketua Koperasi</p>
             <div className="h-16"></div>
-            <p className="font-bold text-slate-900 border-t border-slate-400 pt-1 inline-block min-w-[100px]">{settings.chairmanName}</p>
+            <p className="font-bold text-slate-900 border-t border-slate-400 pt-1 inline-block min-w-[100px]">{formatSignatoryName(settings.chairmanName)}</p>
           </div>
         </div>
       </div>

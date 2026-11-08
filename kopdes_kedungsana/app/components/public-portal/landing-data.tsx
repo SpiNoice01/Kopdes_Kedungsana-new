@@ -92,18 +92,3 @@ export const formatCurrency = (value: number): string =>
     currency: "IDR",
     maximumFractionDigits: 0,
   }).format(value);
-
-export const faqsData = [
-  {
-    q: "Bagaimana jika NIK saya tidak ditemukan?",
-    a: "Pastikan NIK yang Anda masukkan sudah benar. Jika NIK benar namun data tidak muncul, kemungkinan keanggotaan Anda belum diinput oleh pengurus atau status pendaftaran Anda belum aktif. Silakan hubungi pengurus di kantor koperasi untuk konfirmasi.",
-  },
-  {
-    q: "Berapa nominal simpanan wajib setiap bulannya?",
-    a: "Nominal iuran wajib bulanan yang ditetapkan saat ini adalah Rp 10.000 per bulan. Anggota diharapkan tertib membayar setiap bulannya untuk kelancaran usaha bersama.",
-  },
-  {
-    q: "Bagaimana cara menyetor simpanan atau membayar tunggakan?",
-    a: "Pembayaran simpanan dapat dilakukan secara langsung melalui kasir pengurus di kantor koperasi, atau melalui transfer bank/e-wallet resmi koperasi yang tertera di menu administrasi pengurus.",
-  },
-];
