@@ -946,7 +946,9 @@ export function MemberDetailPage({ memberId }: MemberDetailPageProps) {
               </p>
               {monthlySavings.length > 0 && (
                 <button
-                  onClick={() => setActivePrintJob({ type: "mutasi", data: monthlySavings })}
+                  // Simpanan Pokok is shown once in the document header; keeping the
+                  // POKOK row here would also fold it into the Simp. Wajib column total.
+                  onClick={() => setActivePrintJob({ type: "mutasi", data: monthlySavings.filter((s) => s.period !== "POKOK") })}
                   className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-700 hover:opacity-80 transition bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-xl cursor-pointer"
                 >
                   <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1527,16 +1529,16 @@ export function MemberDetailPage({ memberId }: MemberDetailPageProps) {
                       <td className="border border-slate-300 px-2 py-0.5 text-right">{formatCurrency(s.requiredSaving)}</td>
                       <td className="border border-slate-300 px-2 py-0.5 text-right">{formatCurrency(s.voluntarySaving)}</td>
                       <td className="border border-slate-300 px-2 py-0.5 text-right font-bold">{formatCurrency(s.totalSaving)}</td>
-                      <td className="border border-slate-300 px-2 py-0.5 text-center">{s.inputDate}</td>
+                      <td className="border border-slate-300 px-2 py-0.5 text-center">{formatDate(s.inputDate)}</td>
                     </tr>
                   ))}
                 </tbody>
                 <tfoot>
                   <tr className="bg-slate-200 border-2 border-slate-500 font-extrabold">
                     <td colSpan={2} className="border border-slate-500 px-2 py-1 uppercase">Grand Total</td>
-                    <td className="border border-slate-500 px-2 py-1 text-right">{formatCurrency(monthlySavings.reduce((s, r) => s + r.requiredSaving, 0))}</td>
-                    <td className="border border-slate-500 px-2 py-1 text-right">{formatCurrency(monthlySavings.reduce((s, r) => s + r.voluntarySaving, 0))}</td>
-                    <td className="border border-slate-500 px-2 py-1 text-right">{formatCurrency(totalRecap)}</td>
+                    <td className="border border-slate-500 px-2 py-1 text-right">{formatCurrency((activePrintJob.data as MemberMonthlySaving[]).reduce((s, r) => s + r.requiredSaving, 0))}</td>
+                    <td className="border border-slate-500 px-2 py-1 text-right">{formatCurrency((activePrintJob.data as MemberMonthlySaving[]).reduce((s, r) => s + r.voluntarySaving, 0))}</td>
+                    <td className="border border-slate-500 px-2 py-1 text-right">{formatCurrency((activePrintJob.data as MemberMonthlySaving[]).reduce((s, r) => s + r.totalSaving, 0))}</td>
                     <td className="border border-slate-500 px-2 py-1"></td>
                   </tr>
                 </tfoot>
@@ -1780,7 +1782,7 @@ export function MemberDetailPage({ memberId }: MemberDetailPageProps) {
                             <td className="border border-slate-200 px-2 py-0.5 text-right">{formatCurrency(s.requiredSaving)}</td>
                             <td className="border border-slate-200 px-2 py-0.5 text-right">{formatCurrency(s.voluntarySaving)}</td>
                             <td className="border border-slate-200 px-2 py-0.5 text-right font-bold">{formatCurrency(s.totalSaving)}</td>
-                            <td className="border border-slate-200 px-2 py-0.5 text-center">{s.inputDate}</td>
+                            <td className="border border-slate-200 px-2 py-0.5 text-center">{formatDate(s.inputDate)}</td>
                           </tr>
                         ))}
                       </tbody>

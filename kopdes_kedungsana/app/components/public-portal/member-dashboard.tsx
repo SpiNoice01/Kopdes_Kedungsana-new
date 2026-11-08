@@ -3,6 +3,7 @@
 import Image from "next/image";
 import type { PublicMemberProfile } from "@/src/features/member/domain/member";
 import type { MemberMonthlySaving } from "@/src/features/member/domain/member-monthly-saving";
+import { formatDate } from "@/src/utils/formatters";
 
 interface MemberProfileCardProps {
   member: PublicMemberProfile;
@@ -207,7 +208,7 @@ export function SavingsHistoryTable({ savings, formatCurrency }: SavingsHistoryT
                   <td className="px-4 py-3">{formatCurrency(saving.requiredSaving)}</td>
                   <td className="px-4 py-3">{formatCurrency(saving.voluntarySaving)}</td>
                   <td className="px-4 py-3 font-bold text-primary">{formatCurrency(saving.totalSaving)}</td>
-                  <td className="px-4 py-3 text-slate-500">{saving.inputDate}</td>
+                  <td className="px-4 py-3 text-slate-500">{formatDate(saving.inputDate)}</td>
                 </tr>
               ))}
             </tbody>
