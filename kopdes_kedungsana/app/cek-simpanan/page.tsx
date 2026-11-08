@@ -3,7 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { useEffect, useState, useMemo } from "react";
-import { loadSettingsAsync } from "@/src/actions/settings-actions";
+import { defaultSettings, loadSettingsAsync } from "@/src/actions/settings-actions";
 import type { KopdesSettings } from "@/src/features/settings/domain/settings";
 import type { PublicMemberProfile } from "@/src/features/member/domain/member";
 import { searchMemberByNik } from "@/src/actions/nik-search-actions";
@@ -122,9 +122,9 @@ export default function CekSimpananPage() {
     };
   }, [searchResult, settings]);
 
-  const activeCooperativeName = settings?.cooperativeName || "Koperasi Desa Kedungsana";
-  const activeCooperativeAddress = settings?.address || "RT 01/RW 03, Kecamatan Plumbon, Kabupaten Cirebon";
-  const activeCooperativeLegal = settings?.legalNumber || "AHU-0012903.AH.01.26";
+  const activeCooperativeName = settings?.cooperativeName || defaultSettings.cooperativeName;
+  const activeCooperativeAddress = settings?.address || defaultSettings.address;
+  const activeCooperativeLegal = settings?.legalNumber || defaultSettings.legalNumber;
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 flex flex-col font-sans">
@@ -275,7 +275,7 @@ export default function CekSimpananPage() {
           <p>{activeCooperativeAddress}</p>
           <p>Badan Hukum: <span className="font-mono text-[10px] bg-slate-100 px-1.5 py-0.5 rounded">{activeCooperativeLegal}</span></p>
           <p className="pt-2 text-[10px] border-t border-slate-100 max-w-xs mx-auto">
-            &copy; {new Date().getFullYear()} Koperasi Desa Kedungsana. Hak Cipta Dilindungi Undang-Undang.
+            &copy; {new Date().getFullYear()} {activeCooperativeName}. Hak Cipta Dilindungi Undang-Undang.
           </p>
         </div>
       </footer>

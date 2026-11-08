@@ -11,7 +11,7 @@ import type { MemberMonthlySaving } from "../domain/member-monthly-saving";
 import type { MemberInvestment } from "../domain/member-investment";
 import type { MemberServiceContribution } from "../domain/member-service-contribution";
 import { memberDependencies } from "../infrastructure/member-dependencies";
-import { loadSettingsAsync } from "@/src/actions/settings-actions";
+import { defaultSettings, loadSettingsAsync } from "@/src/actions/settings-actions";
 import type { KopdesSettings } from "@/src/features/settings/domain/settings";
 import { formatCurrency, formatDate, formatPeriod } from "@/src/utils/formatters";
 import { calculateArrears } from "../domain/member-services";
@@ -190,6 +190,11 @@ export function MemberDetailPage({ memberId }: MemberDetailPageProps) {
     }
     return calculateArrears(member, monthlySavings, settings);
   }, [member, monthlySavings, settings]);
+
+  // Identitas kop surat dokumen cetak, diambil dari Pengaturan.
+  const coopName = settings?.cooperativeName || defaultSettings.cooperativeName;
+  const coopAddress = settings?.address || defaultSettings.address;
+  const coopLegal = settings?.legalNumber || defaultSettings.legalNumber;
 
   useEffect(() => {
     return () => {
@@ -1467,8 +1472,8 @@ export function MemberDetailPage({ memberId }: MemberDetailPageProps) {
             /* Kwitansi Print Layout */
             <div className="max-w-2xl mx-auto border-2 border-slate-300 p-8 space-y-6 font-mono text-xs">
               <div className="text-center border-b-2 border-slate-300 pb-4">
-                <h2 className="font-bold text-base uppercase text-slate-905">KOPERASI DESA KEDUNGSANA</h2>
-                <p className="text-[10px] text-slate-500 mt-0.5">Kopdes Kedungsana RT 01/RW 03, Kec. Plumbon, Cirebon</p>
+                <h2 className="font-bold text-base uppercase text-slate-905">{coopName}</h2>
+                <p className="text-[10px] text-slate-500 mt-0.5">{coopAddress}</p>
                 <h3 className="text-sm font-bold text-slate-800 mt-4 tracking-wider">BUKTI KWITANSI SETORAN SIMPANAN</h3>
                 <p className="text-[10px] text-slate-400 font-mono mt-1">No. KOPDES/REC/{activePrintJob.data.period.replace("-", "")}/{member.id.toUpperCase()}</p>
               </div>
@@ -1498,8 +1503,8 @@ export function MemberDetailPage({ memberId }: MemberDetailPageProps) {
             /* Buku Mutasi Print Layout */
             <div className="max-w-3xl mx-auto font-mono text-xs space-y-4 p-4">
               <div className="text-center border-b-4 border-double border-slate-500 pb-4">
-                <h2 className="font-bold text-base uppercase">KOPERASI DESA KEDUNGSANA</h2>
-                <p className="text-[10px] text-slate-500">RT 01/RW 03, Kec. Plumbon, Cirebon — Badan Hukum No: AHU-0012903.AH.01.26</p>
+                <h2 className="font-bold text-base uppercase">{coopName}</h2>
+                <p className="text-[10px] text-slate-500">{coopAddress} — Badan Hukum No: {coopLegal}</p>
                 <h3 className="text-sm font-bold mt-3 uppercase tracking-wider">BUKU MUTASI SIMPANAN ANGGOTA</h3>
                 <p className="text-[10px] text-slate-400 mt-0.5">Dicetak: {new Date().toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })}</p>
               </div>
@@ -1603,8 +1608,8 @@ export function MemberDetailPage({ memberId }: MemberDetailPageProps) {
             /* Liquidation Print Layout */
             <div className="max-w-2xl mx-auto border-4 border-double border-slate-400 p-10 space-y-6 font-serif text-xs">
               <div className="text-center border-b-4 border-double border-slate-400 pb-4">
-                <h2 className="font-bold text-lg uppercase text-slate-900">KOPERASI DESA (KOPDES) KEDUNGSANA</h2>
-                <p className="text-[10px] text-slate-500 mt-0.5">Badan Hukum No: AHU-0012903.AH.01.26 | RT 01/RW 03 Cirebon</p>
+                <h2 className="font-bold text-lg uppercase text-slate-900">{coopName}</h2>
+                <p className="text-[10px] text-slate-500 mt-0.5">Badan Hukum No: {coopLegal} | {coopAddress}</p>
                 <h3 className="text-sm font-bold text-slate-800 mt-6 tracking-widest uppercase">BERITA ACARA PENGUNDURAN DIRI & LIKUIDASI DANA ANGGOTA</h3>
                 <p className="text-[10px] text-slate-400 font-mono mt-1">No. BA/KELUAR/{new Date().getFullYear()}/{member.id.toUpperCase()}</p>
               </div>
@@ -1621,7 +1626,7 @@ export function MemberDetailPage({ memberId }: MemberDetailPageProps) {
               </div>
 
               <p className="leading-relaxed">
-                Sesuai dengan ketentuan Anggaran Dasar dan Anggaran Rumah Tangga (AD/ART) Koperasi Kedungsana, telah dilakukan audit dan perhitungan atas seluruh hak simpanan anggota dengan hasil rincian sebagai berikut:
+                Sesuai dengan ketentuan Anggaran Dasar dan Anggaran Rumah Tangga (AD/ART) {coopName}, telah dilakukan audit dan perhitungan atas seluruh hak simpanan anggota dengan hasil rincian sebagai berikut:
               </p>
 
               <div className="border-2 border-slate-400 p-4 bg-slate-50 font-mono text-[11px] space-y-2">
@@ -1685,8 +1690,8 @@ export function MemberDetailPage({ memberId }: MemberDetailPageProps) {
                 /* Receipt Preview Panel */
                 <div className="border-2 border-dashed border-slate-300 rounded-2xl p-6 bg-slate-50/50 font-mono text-xs text-slate-700 space-y-4">
                   <div className="text-center border-b border-slate-200 pb-3">
-                    <h4 className="font-bold text-sm uppercase text-slate-800">KOPERASI DESA KEDUNGSANA</h4>
-                    <p className="text-[10px] text-slate-500 mt-0.5">Kopdes Kedungsana RT 01/RW 03, Cirebon</p>
+                    <h4 className="font-bold text-sm uppercase text-slate-800">{coopName}</h4>
+                    <p className="text-[10px] text-slate-500 mt-0.5">{coopAddress}</p>
                     <p className="text-xs font-bold text-primary mt-2">KWITANSI SETORAN SIMPANAN</p>
                     <p className="text-[10px] text-slate-400">No. KOPDES/REC/{activePrintJob.data.period.replace("-", "")}/{member.id.toUpperCase()}</p>
                   </div>
@@ -1748,8 +1753,8 @@ export function MemberDetailPage({ memberId }: MemberDetailPageProps) {
                 /* Buku Mutasi Preview Panel */
                 <div className="border-2 border-dashed border-slate-300 rounded-2xl p-6 bg-slate-50/50 font-mono text-xs text-slate-700 space-y-4">
                   <div className="text-center border-b-2 border-double border-slate-400 pb-3">
-                    <h4 className="font-bold text-sm uppercase text-slate-800">KOPERASI DESA KEDUNGSANA</h4>
-                    <p className="text-[10px] text-slate-500 mt-0.5">RT 01/RW 03, Kec. Plumbon, Cirebon</p>
+                    <h4 className="font-bold text-sm uppercase text-slate-800">{coopName}</h4>
+                    <p className="text-[10px] text-slate-500 mt-0.5">{coopAddress} — Badan Hukum No: {coopLegal}</p>
                     <p className="text-xs font-bold text-primary mt-2 uppercase tracking-wider">BUKU MUTASI SIMPANAN ANGGOTA</p>
                     <p className="text-[10px] text-slate-400">Dicetak: {new Date().toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })}</p>
                   </div>
@@ -1815,8 +1820,8 @@ export function MemberDetailPage({ memberId }: MemberDetailPageProps) {
                 /* Liquidation Preview Panel */
                 <div className="border-2 border-dashed border-slate-300 rounded-2xl p-6 bg-slate-50/50 font-serif text-xs text-slate-700 space-y-4">
                   <div className="text-center border-b-2 border-double border-slate-400 pb-3">
-                    <h4 className="font-bold text-sm uppercase text-slate-800">KOPERASI DESA (KOPDES) KEDUNGSANA</h4>
-                    <p className="text-[10px] text-slate-500 mt-0.5">Badan Hukum No: AHU-0012903.AH.01.26 | RT 01/RW 03 Cirebon</p>
+                    <h4 className="font-bold text-sm uppercase text-slate-800">{coopName}</h4>
+                    <p className="text-[10px] text-slate-500 mt-0.5">Badan Hukum No: {coopLegal} | {coopAddress}</p>
                     <p className="text-xs font-bold text-slate-800 mt-3 uppercase tracking-wider">BERITA ACARA PENGUNDURAN DIRI & LIKUIDASI DANA ANGGOTA</p>
                     <p className="text-[10px] text-slate-400 font-mono">No. BA/KELUAR/{new Date().getFullYear()}/{member.id.toUpperCase()}</p>
                   </div>
@@ -1832,7 +1837,7 @@ export function MemberDetailPage({ memberId }: MemberDetailPageProps) {
                   </div>
 
                   <p className="leading-relaxed">
-                    Sesuai dengan AD/ART Koperasi Kedungsana, telah dihitung hak pengembalian dana simpanan dengan rincian sebagai berikut:
+                    Sesuai dengan AD/ART {coopName}, telah dihitung hak pengembalian dana simpanan dengan rincian sebagai berikut:
                   </p>
 
                   <div className="border border-slate-300 rounded-lg p-3 bg-white font-mono text-[11px] space-y-1.5">

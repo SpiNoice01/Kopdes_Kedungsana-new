@@ -22,9 +22,9 @@ test.beforeAll(async ({ browser }) => {
 
 // Nilai bawaan aplikasi (defaultSettings di src/actions/settings-actions.ts) dalam bentuk nilai form.
 const DEFAULTS: SettingsSnapshot = {
-  cooperativeName: "Koperasi Desa Kedungsana",
-  address: "RT 01/RW 03, Kecamatan Plumbon, Kabupaten Cirebon",
-  legalNumber: "AHU-0012903.AH.01.26",
+  cooperativeName: "Koperasi Desa Merah Putih Kedungsana",
+  address: "Jl. Pangeran Kisana No. 01, Desa Kedungsana, Kec. Plumbon, Kab. Cirebon, Jawa Barat 45155",
+  legalNumber: "AHU-0021490.AH.01.29.TAHUN 2025",
   district: "KABUPATEN CIREBON",
   printLocation: "Cirebon",
   chairmanName: "ASEP SARIFUDIN",
