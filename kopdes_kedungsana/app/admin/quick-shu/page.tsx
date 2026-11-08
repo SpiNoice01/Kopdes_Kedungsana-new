@@ -8,6 +8,7 @@ import { calculateShuPools, calculateShuRate, distributeMemberShu, totalShuBasis
 import type { MemberShuBasisRow } from "@/src/features/shu/application/get-shu-basis-rows-use-case";
 import { shuDependencies } from "@/src/features/shu/infrastructure/shu-dependencies";
 import { ExportReportModal } from "@/src/features/admin/presentation/export-report-modal";
+import { SortIndicator } from "@/src/shared/widgets/sort-indicator";
 
 type HintProps = {
   text: string;
@@ -257,25 +258,6 @@ export default function QuickShuPage() {
     const buffer = await wb.xlsx.writeBuffer();
     downloadExcelBuffer(buffer as ExcelJS.Buffer, `BUNDEL_RAT_${year}.xlsx`);
   };
-
-  const SortIndicator = ({ active, direction }: { active: boolean; direction: "asc" | "desc" }) => (
-    <span className="flex flex-col ml-2 opacity-30 group-hover:opacity-100 transition-opacity">
-      <svg
-        className={`w-3 h-3 ${active && direction === "asc" ? "text-primary opacity-100 scale-110" : "text-slate-400"}`}
-        fill="currentColor"
-        viewBox="0 0 24 24"
-      >
-        <path d="M12 4l-8 8h16z" />
-      </svg>
-      <svg
-        className={`w-3 h-3 -mt-1.5 ${active && direction === "desc" ? "text-primary opacity-100 scale-110" : "text-slate-400"}`}
-        fill="currentColor"
-        viewBox="0 0 24 24"
-      >
-        <path d="M12 20l8-8H4z" />
-      </svg>
-    </span>
-  );
 
   return (
     <section className="space-y-6">

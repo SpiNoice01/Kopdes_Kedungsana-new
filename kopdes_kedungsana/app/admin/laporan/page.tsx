@@ -11,6 +11,10 @@ import { summarizeAnnualSavings } from "@/src/features/member/domain/member-serv
 import { loadSettingsAsync, unloadedSettings } from "@/src/actions/settings-actions";
 import type { KopdesSettings } from "@/src/features/settings/domain/settings";
 import { formatSignatoryName } from "@/src/utils/formatters";
+import { SortIndicator, type SortDirection } from "@/src/shared/widgets/sort-indicator";
+
+// Kolom yang bisa diurutkan (klik header), sama seperti tabel Quick SHU.
+type SortKey = "name" | "nik" | "pokok" | "wajib" | "sukarela" | "investasi" | "total";
 
 const formatCurrency = (value: number): string =>
   new Intl.NumberFormat("id-ID", {
@@ -39,6 +43,9 @@ export default function LaporanPage() {
   const [earliestYear, setEarliestYear] = useState(currentYear);
   // Popup "Cetak Laporan Tahunan": pilih cetak/PDF atau ekspor Excel.
   const [isOutputModalOpen, setIsOutputModalOpen] = useState(false);
+  // Default: total simpanan tertinggi dulu (urutan laporan sejak awal).
+  const [sortKey, setSortKey] = useState<SortKey>("total");
+  const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
 
   // Build the selectable year range (down to the earliest member join year)
   const yearOptions = useMemo(() => {
@@ -109,6 +116,29 @@ export default function LaporanPage() {
     total: summaries.reduce((s, r) => s + r.total, 0),
   }), [summaries]);
 
+  // Urutan di layar juga dipakai untuk cetak dan ekspor Excel, seperti Quick SHU.
+  const sortedSummaries = useMemo(() => {
+    const valueOf = (row: MemberAnnualSummary): string | number =>
+      sortKey === "name" ? row.member.name : sortKey === "nik" ? row.member.nik : row[sortKey];
+    return [...summaries].sort((a, b) => {
+      const valA = valueOf(a);
+      const valB = valueOf(b);
+      if (typeof valA === "string" && typeof valB === "string") {
+        return sortDirection === "asc" ? valA.localeCompare(valB, "id") : valB.localeCompare(valA, "id");
+      }
+      return sortDirection === "asc" ? Number(valA) - Number(valB) : Number(valB) - Number(valA);
+    });
+  }, [summaries, sortKey, sortDirection]);
+
+  const handleSort = (key: SortKey) => {
+    if (sortKey === key) {
+      setSortDirection(sortDirection === "asc" ? "desc" : "asc");
+    } else {
+      setSortKey(key);
+      setSortDirection("asc");
+    }
+  };
+
   const handlePrint = () => {
     addAuditLog(
       "LAPORAN_PRINT",
@@ -177,7 +207,7 @@ export default function LaporanPage() {
     }
 
     let currentRow = 6;
-    summaries.forEach((row, idx) => {
+    sortedSummaries.forEach((row, idx) => {
       const dataRow = ws.getRow(currentRow);
       dataRow.values = [
         idx + 1,
@@ -336,7 +366,6 @@ export default function LaporanPage() {
               <h3 className="text-sm font-bold text-slate-800">
                 Rekap Simpanan Anggota — Tahun Buku {selectedYear}
               </h3>
-              <p className="text-xs text-slate-400 mt-0.5">Diurutkan berdasarkan total simpanan tertinggi.</p>
             </div>
             <div className="flex items-center gap-2">
               <button
@@ -366,17 +395,31 @@ export default function LaporanPage() {
                 <thead className="bg-slate-50 text-xs text-slate-500 uppercase tracking-wider">
                   <tr>
                     <th className="px-4 py-3 text-left font-semibold">No</th>
-                    <th className="px-4 py-3 text-left font-semibold">Nama Anggota</th>
-                    <th className="px-4 py-3 text-left font-semibold">NIK</th>
-                    <th className="px-4 py-3 text-right font-semibold">Simpanan Pokok</th>
-                    <th className="px-4 py-3 text-right font-semibold">Simpanan Wajib</th>
-                    <th className="px-4 py-3 text-right font-semibold">Simpanan Sukarela</th>
-                    <th className="px-4 py-3 text-right font-semibold">Investasi</th>
-                    <th className="px-4 py-3 text-right font-semibold">Total Simpanan</th>
+                    <th className="px-4 py-3 font-semibold cursor-pointer select-none group hover:bg-slate-100 transition-colors text-left" onClick={() => handleSort("name")} aria-sort={sortKey === "name" ? (sortDirection === "asc" ? "ascending" : "descending") : "none"}>
+                      <div className="inline-flex items-center gap-1">Nama Anggota<SortIndicator active={sortKey === "name"} direction={sortDirection} /></div>
+                    </th>
+                    <th className="px-4 py-3 font-semibold cursor-pointer select-none group hover:bg-slate-100 transition-colors text-left" onClick={() => handleSort("nik")} aria-sort={sortKey === "nik" ? (sortDirection === "asc" ? "ascending" : "descending") : "none"}>
+                      <div className="inline-flex items-center gap-1">NIK<SortIndicator active={sortKey === "nik"} direction={sortDirection} /></div>
+                    </th>
+                    <th className="px-4 py-3 font-semibold cursor-pointer select-none group hover:bg-slate-100 transition-colors text-right" onClick={() => handleSort("pokok")} aria-sort={sortKey === "pokok" ? (sortDirection === "asc" ? "ascending" : "descending") : "none"}>
+                      <div className="inline-flex items-center gap-1 justify-end">Simpanan Pokok<SortIndicator active={sortKey === "pokok"} direction={sortDirection} /></div>
+                    </th>
+                    <th className="px-4 py-3 font-semibold cursor-pointer select-none group hover:bg-slate-100 transition-colors text-right" onClick={() => handleSort("wajib")} aria-sort={sortKey === "wajib" ? (sortDirection === "asc" ? "ascending" : "descending") : "none"}>
+                      <div className="inline-flex items-center gap-1 justify-end">Simpanan Wajib<SortIndicator active={sortKey === "wajib"} direction={sortDirection} /></div>
+                    </th>
+                    <th className="px-4 py-3 font-semibold cursor-pointer select-none group hover:bg-slate-100 transition-colors text-right" onClick={() => handleSort("sukarela")} aria-sort={sortKey === "sukarela" ? (sortDirection === "asc" ? "ascending" : "descending") : "none"}>
+                      <div className="inline-flex items-center gap-1 justify-end">Simpanan Sukarela<SortIndicator active={sortKey === "sukarela"} direction={sortDirection} /></div>
+                    </th>
+                    <th className="px-4 py-3 font-semibold cursor-pointer select-none group hover:bg-slate-100 transition-colors text-right" onClick={() => handleSort("investasi")} aria-sort={sortKey === "investasi" ? (sortDirection === "asc" ? "ascending" : "descending") : "none"}>
+                      <div className="inline-flex items-center gap-1 justify-end">Investasi<SortIndicator active={sortKey === "investasi"} direction={sortDirection} /></div>
+                    </th>
+                    <th className="px-4 py-3 font-semibold cursor-pointer select-none group hover:bg-slate-100 transition-colors text-right" onClick={() => handleSort("total")} aria-sort={sortKey === "total" ? (sortDirection === "asc" ? "ascending" : "descending") : "none"}>
+                      <div className="inline-flex items-center gap-1 justify-end">Total Simpanan<SortIndicator active={sortKey === "total"} direction={sortDirection} /></div>
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-50 bg-white">
-                  {summaries.map((row, index) => (
+                  {sortedSummaries.map((row, index) => (
                     <tr key={row.member.id} className="hover:bg-slate-50/60 transition">
                       <td className="px-4 py-3 text-slate-400 font-mono text-xs">{index + 1}</td>
                       <td className="px-4 py-3">
@@ -525,7 +568,7 @@ export default function LaporanPage() {
             </tr>
           </thead>
           <tbody>
-            {summaries.map((row, index) => (
+            {sortedSummaries.map((row, index) => (
               <tr key={row.member.id} className="border border-slate-300">
                 <td className="border border-slate-300 px-2 py-1 text-center">{index + 1}</td>
                 <td className="border border-slate-300 px-2 py-1 font-semibold">{row.member.name}</td>
