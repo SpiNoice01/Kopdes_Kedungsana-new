@@ -62,10 +62,18 @@ export type BackupCheckResult = {
   identity: string;
 };
 
+/** Identity used in backup audit logs for the signed-in admin, or null. */
+export const getBackupIdentity = async (): Promise<string | null> => {
+  const { data: sessionData } = await supabase.auth.getSession();
+  const user = sessionData.session?.user;
+  if (!user) return null;
+  return user.email || user.phone || user.id;
+};
+
 /**
  * Read-only check: does this admin still need to back up today? Does NOT
  * download anything — the actual download only happens from a real user
- * click (performBackupDownload), never automatically, so the browser never
+ * click (downloadBackupFile), never automatically, so the browser never
  * treats it as an unsolicited download and the admin always sees what's
  * happening via the lock modal.
  *
@@ -101,38 +109,44 @@ export const checkIfBackupNeeded = async (): Promise<BackupCheckResult | null> =
   return { needed: true, identity };
 };
 
-const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+export type BackupFileKind = "database" | "rat";
 
 /**
- * Actually builds both workbooks and triggers two separate downloads (raw
- * database dump, formatted RAT report), records the audit log entry, and
- * marks today as done in localStorage. Must be called from a real click
- * handler (user gesture) — e.g. the "Unduh Sekarang" button on the lock
- * modal — since triggering two downloads without one can get silently
- * blocked by the browser. The two are built/downloaded separately (rather
- * than combined into one file) so an admin can tell at a glance which file
- * is the raw database dump and which is the readable RAT report.
+ * Builds and downloads ONE of the two backup files. Each file has its own
+ * button on the lock modal, so every download comes from its own user
+ * gesture (no back-to-back downloads the browser might block) and the admin
+ * can see — and retry — each file independently. Throws on failure so the
+ * modal can show which file failed.
  */
-export const performBackupDownload = async (identity: string): Promise<void> => {
+export const downloadBackupFile = async (kind: BackupFileKind): Promise<void> => {
+  if (kind === "database") {
+    const workbook = await buildDatabaseBackupWorkbook();
+    downloadExcelBuffer(await workbook.xlsx.writeBuffer(), buildDatabaseBackupFilename());
+  } else {
+    const workbook = await buildRatReportWorkbook();
+    downloadExcelBuffer(await workbook.xlsx.writeBuffer(), buildRatReportFilename());
+  }
+};
+
+/**
+ * Records today's backup as done (audit log + localStorage). Called by the
+ * modal only after BOTH files have downloaded successfully, so the
+ * once-per-day requirement still covers the full pair of files.
+ */
+export const recordBackupCompleted = async (
+  identity: string,
+  source: "required" | "manual" = "required",
+): Promise<void> => {
   const { data: sessionData } = await supabase.auth.getSession();
   const user = sessionData.session?.user;
   if (!user) return;
 
-  const databaseWorkbook = await buildDatabaseBackupWorkbook();
-  const databaseBuffer = await databaseWorkbook.xlsx.writeBuffer();
-  downloadExcelBuffer(databaseBuffer, buildDatabaseBackupFilename());
-
-  // Small gap so the browser treats this as two distinct user-triggered
-  // downloads rather than a rapid-fire pair it might block after the first.
-  await delay(400);
-
-  const ratWorkbook = await buildRatReportWorkbook();
-  const ratBuffer = await ratWorkbook.xlsx.writeBuffer();
-  downloadExcelBuffer(ratBuffer, buildRatReportFilename());
+  const context =
+    source === "manual" ? "secara manual dari halaman Pengaturan" : "saat masuk ke halaman admin";
 
   await addAuditLog(
     BACKUP_ACTION,
-    `Salinan cadangan data (backup database + laporan RAT, 2 berkas: ${buildDatabaseBackupFilename()} & ${buildRatReportFilename()}) diunduh oleh ${identity} saat masuk ke halaman admin.`,
+    `Salinan cadangan data (backup database + laporan RAT, 2 berkas: ${buildDatabaseBackupFilename()} & ${buildRatReportFilename()}) diunduh oleh ${identity} ${context}.`,
     "success",
     identity,
   );

@@ -189,7 +189,7 @@ test("FR-01 login email (negatif & normal) + FR-46/FR-43 backup", async ({ brows
       fitur: "Backup/Restore",
       skenario: "Unduhan backup gagal, admin memilih Lewati",
       langkah:
-        "Setelah login, popup backup wajib muncul. Koneksi ke tabel members sengaja diputus (simulasi gangguan database), klik Unduh Sekarang, lalu klik 'Lewati untuk saat ini'",
+        "Setelah login, popup backup wajib muncul. Koneksi ke tabel members sengaja diputus (simulasi gangguan database), klik 'Unduh Backup Database', lalu klik 'Lewati untuk saat ini'",
       data: "Gangguan jaringan buatan pada request /rest/v1/members",
       expected:
         "Popup menampilkan pesan gagal dan tombol 'Lewati untuk saat ini' (tombol ini tidak tampil sebelum gagal); setelah dilewati admin bisa masuk ke panel admin",
@@ -198,8 +198,8 @@ test("FR-01 login email (negatif & normal) + FR-46/FR-43 backup", async ({ brows
       await modal.waitFor({ timeout: 60_000 });
       const skipBefore = await page.getByRole("button", { name: "Lewati untuk saat ini" }).count();
       await page.route(`${supabaseUrl}/rest/v1/members*`, (route) => route.abort());
-      await page.getByRole("button", { name: "Unduh Sekarang" }).click();
-      await page.getByText("Gagal mengunduh salinan cadangan").waitFor({ timeout: 60_000 });
+      await page.getByRole("button", { name: "Unduh Backup Database" }).click();
+      await modal.getByText(/^Gagal mengunduh/).waitFor({ timeout: 60_000 });
       const errText = clip((await modal.innerText()).replace(/\s+/g, " ").match(/Gagal mengunduh[^.]*/)?.[0] ?? "", 160);
       await extraShot(page, "FR-46_popup-error");
       await page.unroute(`${supabaseUrl}/rest/v1/members*`);
@@ -218,7 +218,8 @@ test("FR-01 login email (negatif & normal) + FR-46/FR-43 backup", async ({ brows
       fr: "FR-43",
       fitur: "Backup/Restore",
       skenario: "Unduh 2 berkas backup saat masuk admin",
-      langkah: "Muat ulang halaman admin (backup hari ini belum ada karena tadi dilewati), klik Unduh Sekarang, tunggu, klik Lanjutkan",
+      langkah:
+        "Muat ulang halaman admin (backup hari ini belum ada karena tadi dilewati), klik 'Unduh Backup Database', klik 'Unduh Laporan RAT', tunggu, klik Lanjutkan",
       data: "Akun admin yang sudah login",
       expected:
         "Popup muncul lagi; dua berkas terunduh (backup_database_*.xlsx berisi tabel mentah dan backup_laporan_rat_*.xlsx berisi laporan RAT); tombol Lanjutkan aktif setelah hitung mundur",
@@ -228,7 +229,10 @@ test("FR-01 login email (negatif & normal) + FR-46/FR-43 backup", async ({ brows
       await modal.waitFor({ timeout: 60_000 });
       const downloads: import("@playwright/test").Download[] = [];
       page.on("download", (d) => downloads.push(d));
-      await page.getByRole("button", { name: "Unduh Sekarang" }).click();
+      // Each file has its own button now; Lanjutkan only appears once both are downloaded.
+      await page.getByRole("button", { name: "Unduh Backup Database" }).click();
+      await modal.getByText("1 dari 2 berkas terunduh").waitFor({ timeout: 120_000 });
+      await page.getByRole("button", { name: "Unduh Laporan RAT" }).click();
       await page.getByText("Kedua berkas cadangan berhasil diunduh").waitFor({ timeout: 120_000 });
       const continueBtn = page.getByRole("button", { name: /Lanjutkan ke Admin Panel/ });
       const disabledAtStart = await continueBtn.isDisabled();

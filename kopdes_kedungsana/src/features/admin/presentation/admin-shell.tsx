@@ -9,7 +9,7 @@ import { BackupPromptModal } from "./backup-prompt-modal";
 import { SESSION_EXPIRED_EVENT, SessionExpiredModal } from "./session-expired-modal";
 import { addAuditLog } from "../../../utils/audit-logger";
 import { supabase } from "../../../utils/supabase-client";
-import { checkIfBackupNeeded, type BackupCheckResult } from "../utils/backup-guard";
+import { checkIfBackupNeeded, getBackupIdentity } from "../utils/backup-guard";
 
 type AdminShellProps = {
   children: ReactNode;
@@ -30,7 +30,10 @@ const navigationItems: NavigationItem[] = [
 export function AdminShell({ children }: AdminShellProps) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isSpreadsheetOpen, setIsSpreadsheetOpen] = useState(false);
-  const [backupPrompt, setBackupPrompt] = useState<BackupCheckResult | null>(null);
+  const [backupPrompt, setBackupPrompt] = useState<{
+    identity: string;
+    mode: "required" | "manual";
+  } | null>(null);
   const [isSessionExpired, setIsSessionExpired] = useState(false);
   const pathname = usePathname();
 
@@ -96,10 +99,21 @@ export function AdminShell({ children }: AdminShellProps) {
   useEffect(() => {
     checkIfBackupNeeded().then((result) => {
       if (result?.needed) {
-        setBackupPrompt(result);
+        setBackupPrompt({ identity: result.identity, mode: "required" });
       }
     });
   }, []);
+
+  const openManualBackup = async () => {
+    const identity = await getBackupIdentity();
+    if (!identity) {
+      setIsSessionExpired(true);
+      return;
+    }
+    setBackupPrompt({ identity, mode: "manual" });
+  };
+
+  const isSettingsPage = pathname.startsWith("/admin/pengaturan");
 
   return (
     <div className="h-screen w-screen overflow-hidden bg-primary-soft text-slate-900 flex flex-col print:h-auto print:w-auto print:overflow-visible print:block print:bg-white">
@@ -243,16 +257,32 @@ export function AdminShell({ children }: AdminShellProps) {
               </p>
             </div>
 
-            {/* Appbar Spreadsheet View Trigger Button */}
-            <button
-              onClick={() => setIsSpreadsheetOpen(true)}
-              className="inline-flex items-center gap-2 rounded-xl bg-green-700 hover:bg-green-800 text-white px-4.5 py-2 text-sm font-semibold shadow-sm transition-all hover:shadow-md cursor-pointer border-none outline-none"
-            >
-              <svg className="h-4.5 w-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-              </svg>
-              <span>Spreadsheet View</span>
-            </button>
+            <div className="flex items-center gap-2">
+              {/* Appbar manual backup trigger (Pengaturan page only) */}
+              {isSettingsPage && (
+                <button
+                  type="button"
+                  onClick={() => void openManualBackup()}
+                  className="inline-flex items-center gap-2 rounded-xl border border-primary/30 bg-white px-4 py-2 text-sm font-semibold text-primary shadow-sm transition-all hover:bg-primary/5 cursor-pointer"
+                >
+                  <svg className="h-4.5 w-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3" />
+                  </svg>
+                  <span>Backup Data</span>
+                </button>
+              )}
+
+              {/* Appbar Spreadsheet View Trigger Button */}
+              <button
+                onClick={() => setIsSpreadsheetOpen(true)}
+                className="inline-flex items-center gap-2 rounded-xl bg-green-700 hover:bg-green-800 text-white px-4.5 py-2 text-sm font-semibold shadow-sm transition-all hover:shadow-md cursor-pointer border-none outline-none"
+              >
+                <svg className="h-4.5 w-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                <span>Spreadsheet View</span>
+              </button>
+            </div>
           </header>
 
           <main className="flex-1 p-4 sm:p-6 overflow-y-auto bg-primary-soft print:p-0 print:overflow-visible print:bg-white print:block">{children}</main>
@@ -264,11 +294,15 @@ export function AdminShell({ children }: AdminShellProps) {
         onClose={() => setIsSpreadsheetOpen(false)}
       />
 
-      <BackupPromptModal
-        isOpen={!!backupPrompt}
-        identity={backupPrompt?.identity ?? ""}
-        onDone={() => setBackupPrompt(null)}
-      />
+      {/* Mounted only while open so each opening starts from a clean state. */}
+      {backupPrompt && (
+        <BackupPromptModal
+          isOpen
+          identity={backupPrompt.identity}
+          mode={backupPrompt.mode}
+          onDone={() => setBackupPrompt(null)}
+        />
+      )}
 
       <SessionExpiredModal isOpen={isSessionExpired} />
     </div>
