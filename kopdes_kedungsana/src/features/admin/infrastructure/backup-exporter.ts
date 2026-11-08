@@ -73,14 +73,32 @@ export const buildDatabaseBackupWorkbook = async (): Promise<ExcelJS.Workbook> =
   wb.created = new Date();
 
   for (const table of BACKUP_TABLES) {
-    const { data, error } = await supabase.from(table).select("*");
-    if (error) {
-      throw new Error(`Gagal mengambil data tabel ${table}: ${error.message}`);
-    }
-    buildRawTableSheet(wb, table, data ?? []);
+    buildRawTableSheet(wb, table, await fetchWholeTable(table));
   }
 
   return wb;
+};
+
+/**
+ * Every row of a table. PostgREST caps one request at 1000 rows, so a plain
+ * select("*") silently dropped everything past that from the backup; page
+ * through ordered by primary key until a short page comes back.
+ */
+const BACKUP_PAGE_SIZE = 1000;
+const fetchWholeTable = async (table: string): Promise<Record<string, unknown>[]> => {
+  const rows: Record<string, unknown>[] = [];
+  for (let from = 0; ; from += BACKUP_PAGE_SIZE) {
+    const { data, error } = await supabase
+      .from(table)
+      .select("*")
+      .order("id", { ascending: true })
+      .range(from, from + BACKUP_PAGE_SIZE - 1);
+    if (error) {
+      throw new Error(`Gagal mengambil data tabel ${table}: ${error.message}`);
+    }
+    rows.push(...(data ?? []));
+    if (!data || data.length < BACKUP_PAGE_SIZE) return rows;
+  }
 };
 
 /**

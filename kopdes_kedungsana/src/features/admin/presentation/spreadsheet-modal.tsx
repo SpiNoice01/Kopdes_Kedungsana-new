@@ -1,12 +1,11 @@
 "use client";
 
-import { buildSimpananSheet, buildShuSheet, downloadExcelBuffer } from "@/src/features/admin/utils/excel-exporter";
-import type { ExcelExportRow } from "@/src/features/admin/utils/excel-exporter";
-import { calculateShuPools, distributeMemberShu } from "@/src/features/admin/utils/shu-calculator";
-import { loadFiscalYearNetShu } from "@/src/features/admin/utils/shu-basis-loader";
+import { buildSimpananSheet, buildShuSheet, downloadExcelBuffer } from "@/src/features/admin/infrastructure/excel-exporter";
+import type { ExcelExportRow } from "@/src/features/admin/infrastructure/excel-exporter";
+import { calculateShuPools, distributeMemberShu } from "@/src/features/shu/domain/shu-calculator";
 import ExcelJS from "exceljs";
 import { useMemo, useState } from "react";
-import { addAuditLog } from "../../../utils/audit-logger";
+import { addAuditLog } from "@/src/features/audit-log/infrastructure/audit-logger";
 
 type MemberRow = {
   memberId: string;
@@ -25,8 +24,8 @@ interface ComputedMemberRow extends ExcelExportRow {
 }
 
 import { useEffect } from "react";
-import { memberDependencies } from "../../member/infrastructure/member-dependencies";
 import { loadSettingsAsync, unloadedSettings } from "@/src/actions/settings-actions";
+import { shuDependencies } from "@/src/features/shu/infrastructure/shu-dependencies";
 import type { KopdesSettings } from "@/src/features/settings/domain/settings";
 
 const formatRelativeDate = (dateStr: string): string => {
@@ -85,85 +84,25 @@ export default function SpreadsheetModal({ isOpen, onClose }: { isOpen: boolean;
     const fetchData = async () => {
       try {
         setIsLoading(true);
-        const [members, fetchedSettings] = await Promise.all([
-          memberDependencies.getMembersUseCase.execute(),
-          loadSettingsAsync()
-        ]);
+        const fetchedSettings = await loadSettingsAsync();
         setSettings(fetchedSettings);
 
         try {
-          setNetShu((await loadFiscalYearNetShu(fetchedSettings)) ?? 0);
+          setNetShu((await shuDependencies.getFiscalYearShuUseCase.netShu(fetchedSettings.activeFiscalYear)) ?? 0);
         } catch (e) {
           console.error("Failed to load fiscal year SHU for Spreadsheet Live", e);
           setNetShu(0);
         }
 
-        const records: MemberRow[] = [];
-        
-        for (const member of members) {
-          if (member.status !== "aktif") continue;
-
-          const joinYear = new Date(member.joinDate).getFullYear();
-          if (joinYear > fetchedSettings.activeFiscalYear) continue;
-
-          const [savings, serviceContributions, investments] = await Promise.all([
-            memberDependencies.getMemberMonthlySavingsUseCase.execute(member.id),
-            memberDependencies.getMemberServiceContributionsUseCase.execute(member.id),
-            memberDependencies.getMemberInvestmentsUseCase.execute(member.id),
-          ]);
-
-          let savingPokok = 0;
-          let savingWajib = 0;
-          let savingSukarela = 0;
-
-          for (const s of savings) {
-            let sYear;
-            if (s.period === "POKOK") {
-              sYear = new Date(s.inputDate).getFullYear();
-            } else {
-              sYear = parseInt(s.period.split("-")[0]);
-            }
-
-            if (sYear <= fetchedSettings.activeFiscalYear) {
-              if (s.period === "POKOK") {
-                savingPokok += s.requiredSaving;
-              } else {
-                savingWajib += s.requiredSaving;
-                savingSukarela += s.voluntarySaving;
-              }
-            }
-          }
-
-          let serviceContribution = 0;
-          for (const c of serviceContributions) {
-            const cYear = parseInt(c.period.split("-")[0]);
-            if (cYear <= fetchedSettings.activeFiscalYear) {
-              serviceContribution += c.amount;
-            }
-          }
-
-          // Always sum existing investment records regardless of the
-          // enableInvestasi toggle — the toggle only gates new entries via
-          // the input form, it must never retroactively hide money members
-          // already invested for a given fiscal year.
-          let investmentAmount = 0;
-          for (const inv of investments) {
-            if (inv.period === fetchedSettings.activeFiscalYear.toString()) {
-              investmentAmount += inv.amount;
-            }
-          }
-
-          records.push({
-            memberId: member.id,
-            memberName: member.name.toUpperCase(),
-            joinDate: member.joinDate,
-            savingPokok,
-            savingWajib,
-            savingSukarela,
-            serviceContribution,
-            investmentAmount,
-          });
-        }
+        // Same member filter and per-year totals as Quick SHU and the RAT
+        // bundle (GetShuBasisRowsUseCase), so the three can never disagree. It
+        // always sums existing investment records regardless of the
+        // enableInvestasi toggle — the toggle only gates new entries.
+        const basisRows = await shuDependencies.getShuBasisRowsUseCase.execute(fetchedSettings);
+        const records: MemberRow[] = basisRows.map((row) => ({
+          ...row,
+          memberName: row.memberName.toUpperCase(),
+        }));
         
         setRows(records);
         setOriginalRows([...records]);

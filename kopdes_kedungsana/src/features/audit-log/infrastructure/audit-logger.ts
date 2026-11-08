@@ -1,15 +1,8 @@
-export interface AuditLog {
-  id: string;
-  timestamp: string;
-  username: string;
-  action: string;
-  details: string;
-  ipAddress: string;
-  severity: "info" | "warning" | "danger" | "success";
-}
-
-import { supabase } from "./supabase-client";
+import { supabase } from "@/src/utils/supabase-client";
 import { recordAuditLog } from "@/src/actions/audit-log-actions";
+import type { AuditLog, AuditSeverity } from "../domain/audit-log";
+
+export type { AuditLog } from "../domain/audit-log";
 
 export const getAuditLogs = async (): Promise<AuditLog[]> => {
   try {
@@ -61,7 +54,7 @@ const FALLBACK_IDENTITY = "Admin Kopdes Kedungsana (sesi tidak diketahui)";
 export const addAuditLog = async (
   action: string,
   details: string,
-  severity: "info" | "warning" | "danger" | "success" = "info",
+  severity: AuditSeverity = "info",
   username?: string
 ): Promise<void> => {
   try {

@@ -25,6 +25,47 @@ export class SupabaseMemberRepository implements MemberRepository {
     return data.map(this.mapToMemberDomain);
   }
 
+  /**
+   * Reads every row of a ledger table, paging past PostgREST's per-request
+   * row cap (1000 by default). Ordered by member, period, id so pages are
+   * stable and each member's rows come out in period order. Throws on error
+   * — a partial read must never pass as complete balances.
+   */
+  private async fetchAllLedgerRows(table: string): Promise<any[]> {
+    const pageSize = 1000;
+    const rows: any[] = [];
+    for (let from = 0; ; from += pageSize) {
+      const { data, error } = await this.client
+        .from(table)
+        .select("*")
+        .order("member_id", { ascending: true })
+        .order("period", { ascending: true })
+        .order("id", { ascending: true })
+        .range(from, from + pageSize - 1);
+
+      if (error) {
+        console.error(`Supabase Error [fetchAll ${table}]:`, error);
+        throw new Error(`Gagal membaca tabel ${table}: ${error.message}`);
+      }
+      rows.push(...data);
+      if (data.length < pageSize) return rows;
+    }
+  }
+
+  async getAllMonthlySavings(): Promise<MemberMonthlySaving[]> {
+    return (await this.fetchAllLedgerRows("member_monthly_savings")).map(this.mapToSavingDomain);
+  }
+
+  async getAllServiceContributions(): Promise<MemberServiceContribution[]> {
+    return (await this.fetchAllLedgerRows("member_service_contributions")).map(
+      this.mapToServiceContributionDomain,
+    );
+  }
+
+  async getAllInvestments(): Promise<MemberInvestment[]> {
+    return (await this.fetchAllLedgerRows("member_investments")).map(this.mapToInvestmentDomain);
+  }
+
   async findById(id: string): Promise<Member | null> {
     const { data, error } = await this.client
       .from("members")

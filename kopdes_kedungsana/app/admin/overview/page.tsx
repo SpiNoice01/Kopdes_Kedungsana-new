@@ -32,8 +32,12 @@ export default function OverviewPage() {
     const fetchDashboardData = async () => {
       try {
         setIsLoading(true);
-        const stats = await memberDependencies.getCooperativeStatsUseCase.execute();
-        
+        const [stats, list, savingsByMember] = await Promise.all([
+          memberDependencies.getCooperativeStatsUseCase.execute(),
+          memberDependencies.getMembersUseCase.execute(),
+          memberDependencies.getMemberLedgersUseCase.savingsByMember(),
+        ]);
+
         setTotalMembers(stats.totalMembers);
         setSumPokok(stats.sumPokok);
         setSumWajib(stats.sumWajib);
@@ -42,7 +46,6 @@ export default function OverviewPage() {
         setTotalSavings(stats.totalSavings);
         setArrearsCount(stats.arrearsCount);
 
-        const list = await memberDependencies.getMembersUseCase.execute();
         const activeList = list.filter((m) => m.status === "aktif");
         setInactiveMembers(list.length - activeList.length);
 
@@ -58,11 +61,9 @@ export default function OverviewPage() {
           (trendMap[key] as any)._label = shortLabel;
         }
 
-        // Aggregate savings per period across all active members (re-use savings fetched above)
-        // We need to refetch since the loop above consumed them; we build a secondary pass
+        // Aggregate savings per period across all active members
         for (const member of activeList) {
-          const savings = await memberDependencies.getMemberMonthlySavingsUseCase.execute(member.id);
-          for (const s of savings) {
+          for (const s of savingsByMember.get(member.id) ?? []) {
             if (trendMap[s.period]) {
               trendMap[s.period].wajib += s.requiredSaving;
               trendMap[s.period].sukarela += s.voluntarySaving;

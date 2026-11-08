@@ -29,4 +29,20 @@ export class SupabaseAuthRepository implements AuthRepository {
       },
     };
   }
+
+  async hasActiveSession(): Promise<boolean> {
+    const { data } = await supabase.auth.getSession();
+    return Boolean(data.session);
+  }
+
+  async signOutLocal(): Promise<void> {
+    await supabase.auth.signOut({ scope: "local" });
+  }
+
+  watchSessionEnd(onEnded: () => void): () => void {
+    const { data: listener } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === "SIGNED_OUT" || !session) onEnded();
+    });
+    return () => listener.subscription.unsubscribe();
+  }
 }

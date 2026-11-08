@@ -1,7 +1,13 @@
-import { GetMembersUseCase } from "./get-members-use-case";
-import { GetMemberMonthlySavingsUseCase } from "./get-member-monthly-savings-use-case";
-import { GetMemberInvestmentsUseCase } from "./get-member-investments-use-case";
-import { loadSettingsAsync } from "@/src/actions/settings-actions";
+import type { GetMembersUseCase } from "./get-members-use-case";
+import type { GetMemberLedgersUseCase } from "./get-member-ledgers-use-case";
+import { calculateArrears } from "../domain/member-services";
+import type { KopdesSettings } from "@/src/features/settings/domain/settings";
+
+/**
+ * Sumber pengaturan koperasi. Diinjeksi (bukan diimpor dari actions) supaya
+ * lapisan application tidak bergantung ke lapisan luar.
+ */
+export type SettingsLoader = () => Promise<KopdesSettings>;
 
 /** Saldo simpanan kumulatif koperasi pada akhir satu bulan. */
 export interface MonthlyTrendPoint {
@@ -43,13 +49,17 @@ function shiftMonth(monthKey: string, delta: number): string {
 export class GetCooperativeStatsUseCase {
   constructor(
     private readonly getMembersUseCase: GetMembersUseCase,
-    private readonly getMemberMonthlySavingsUseCase: GetMemberMonthlySavingsUseCase,
-    private readonly getMemberInvestmentsUseCase: GetMemberInvestmentsUseCase
+    private readonly getMemberLedgersUseCase: GetMemberLedgersUseCase,
+    private readonly loadSettings: SettingsLoader,
   ) {}
 
   async execute(): Promise<CooperativeStats> {
-    const loadedSettings = await loadSettingsAsync();
-    const allMembers = await this.getMembersUseCase.execute();
+    const [loadedSettings, allMembers, savingsByMember, investmentsByMember] = await Promise.all([
+      this.loadSettings(),
+      this.getMembersUseCase.execute(),
+      this.getMemberLedgersUseCase.savingsByMember(),
+      this.getMemberLedgersUseCase.investmentsByMember(),
+    ]);
     const activeList = allMembers.filter((m) => m.status === "aktif");
 
     let runningPokok = 0;
@@ -71,10 +81,8 @@ export class GetCooperativeStatsUseCase {
     };
 
     for (const member of activeList) {
-      const [savings, investments] = await Promise.all([
-        this.getMemberMonthlySavingsUseCase.execute(member.id),
-        this.getMemberInvestmentsUseCase.execute(member.id),
-      ]);
+      const savings = savingsByMember.get(member.id) ?? [];
+      const investments = investmentsByMember.get(member.id) ?? [];
       const pokok = savings
         .filter((s) => s.period === "POKOK")
         .reduce((sum, s) => sum + s.requiredSaving, 0);
@@ -104,20 +112,9 @@ export class GetCooperativeStatsUseCase {
       runningSukarela += sukarela;
       runningInvestasi += investasi;
 
-      // Arrears Calculation
-      const monthlyTarget = loadedSettings.monthlyDuesAmount;
-      if (member.joinDate) {
-        const joinDate = new Date(member.joinDate);
-        const currentDate = new Date();
-        const yearsDiff = currentDate.getFullYear() - joinDate.getFullYear();
-        const monthsDiff = currentDate.getMonth() - joinDate.getMonth();
-        const monthsElapsed = Math.max(1, yearsDiff * 12 + monthsDiff + 1);
-
-        const target = monthsElapsed * monthlyTarget;
-        const paid = wajib;
-        if (target > paid) {
-          inArrears += 1;
-        }
+      // Aturan tunggakan yang sama dengan daftar & detail anggota (domain).
+      if (calculateArrears(member, savings, loadedSettings).arrears > 0) {
+        inArrears += 1;
       }
     }
 

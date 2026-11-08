@@ -9,6 +9,7 @@ import type { PublicMemberProfile } from "@/src/features/member/domain/member";
 import { searchMemberByNik } from "@/src/actions/nik-search-actions";
 import type { MemberMonthlySaving } from "@/src/features/member/domain/member-monthly-saving";
 import type { MemberInvestment } from "@/src/features/member/domain/member-investment";
+import { calculateArrears } from "@/src/features/member/domain/member-services";
 
 // Extracted Subcomponents
 import { MemberSavingsBarChart } from "../components/public-portal/charts";
@@ -96,18 +97,8 @@ export default function CekSimpananPage() {
     const totalInvestment = investments.reduce((sum, inv) => sum + inv.amount, 0);
     const totalAccumulated = principalAmount + totalRequired + totalVoluntary + totalInvestment;
 
-    // Arrears Calculation
-    const monthlyTarget = settings.monthlyDuesAmount;
-    const joinDate = new Date(member.joinDate);
-    const currentDate = new Date();
-    
-    const yearsDiff = currentDate.getFullYear() - joinDate.getFullYear();
-    const monthsDiff = currentDate.getMonth() - joinDate.getMonth();
-    const monthsElapsed = Math.max(1, (yearsDiff * 12) + monthsDiff + 1);
-    
-    const target = monthsElapsed * monthlyTarget;
-    const paid = totalRequired;
-    const arrears = Math.max(0, target - paid);
+    // Aturan tunggakan yang sama dengan panel admin (domain).
+    const { monthsElapsed, target, paid, arrears } = calculateArrears(member, savings, settings);
 
     return {
       principalAmount,

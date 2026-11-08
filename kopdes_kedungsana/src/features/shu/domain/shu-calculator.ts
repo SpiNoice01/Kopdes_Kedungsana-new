@@ -20,7 +20,7 @@ export const calculateShuPools = (
   return { netShu, danaAnggota };
 };
 
-export interface MemberShuBasisRow {
+export interface ShuBasisAmounts {
   savingPokok: number;
   savingWajib: number;
   savingSukarela: number;
@@ -40,7 +40,7 @@ export interface MemberShuResult {
  * is included because that is how the RAT report format the client uses as
  * reference computes it ("JML SIMPANAN" column).
  */
-export const memberSavingBasis = (row: MemberShuBasisRow): number =>
+export const memberSavingBasis = (row: ShuBasisAmounts): number =>
   row.savingPokok + row.savingWajib + row.savingSukarela + row.investmentAmount;
 
 export interface ShuBasisTotals {
@@ -48,7 +48,7 @@ export interface ShuBasisTotals {
   serviceBasis: number;
 }
 
-export const totalShuBasis = (rows: MemberShuBasisRow[]): ShuBasisTotals => ({
+export const totalShuBasis = (rows: ShuBasisAmounts[]): ShuBasisTotals => ({
   savingBasis: rows.reduce((sum, r) => sum + memberSavingBasis(r), 0),
   serviceBasis: rows.reduce((sum, r) => sum + r.serviceContribution, 0),
 });
@@ -78,7 +78,7 @@ export const calculateShuRate = (danaAnggota: number, totals: ShuBasisTotals): n
  * Anggota exactly, and each value is still within Rp 1 of basis × tarif.
  */
 export const distributeMemberShu = (
-  rows: MemberShuBasisRow[],
+  rows: ShuBasisAmounts[],
   danaAnggota: number
 ): MemberShuResult[] => {
   const totals = totalShuBasis(rows);

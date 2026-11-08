@@ -11,12 +11,15 @@ import { UpdateMemberPhotoUseCase } from "../application/update-member-photo-use
 import { UpdateMemberStatusUseCase } from "../application/update-member-status-use-case";
 import { UpdateMemberProfileUseCase } from "../application/update-member-profile-use-case";
 import { GetCooperativeStatsUseCase } from "../application/get-cooperative-stats-use-case";
+import { GetMemberLedgersUseCase } from "../application/get-member-ledgers-use-case";
+import { loadSettingsAsync } from "@/src/actions/settings-actions";
 import { SupabaseMemberRepository } from "./supabase-member-repository";
 
 const memberRepository = new SupabaseMemberRepository();
 const getMembersUseCase = new GetMembersUseCase(memberRepository);
 const getMemberMonthlySavingsUseCase = new GetMemberMonthlySavingsUseCase(memberRepository);
 const getMemberInvestmentsUseCase = new GetMemberInvestmentsUseCase(memberRepository);
+const getMemberLedgersUseCase = new GetMemberLedgersUseCase(memberRepository);
 
 export const memberDependencies = {
   getMembersUseCase,
@@ -33,14 +36,15 @@ export const memberDependencies = {
     memberRepository,
   ),
   getMemberInvestmentsUseCase,
+  getMemberLedgersUseCase,
   addMemberInvestmentUseCase: new AddMemberInvestmentUseCase(memberRepository),
   updateMemberPhotoUseCase: new UpdateMemberPhotoUseCase(memberRepository),
   updateMemberStatusUseCase: new UpdateMemberStatusUseCase(memberRepository),
   updateMemberProfileUseCase: new UpdateMemberProfileUseCase(memberRepository),
   getCooperativeStatsUseCase: new GetCooperativeStatsUseCase(
     getMembersUseCase,
-    getMemberMonthlySavingsUseCase,
-    getMemberInvestmentsUseCase
-  )
+    getMemberLedgersUseCase,
+    loadSettingsAsync,
+  ),
 };
 

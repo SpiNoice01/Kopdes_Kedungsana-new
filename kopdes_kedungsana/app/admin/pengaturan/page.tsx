@@ -2,16 +2,16 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { addAuditLog } from "@/src/utils/audit-logger";
+import { addAuditLog } from "@/src/features/audit-log/infrastructure/audit-logger";
 import { settingsDependencies } from "@/src/features/settings/infrastructure/settings-dependencies";
 import { formatCurrency } from "@/src/utils/formatters";
 import { getLastCommitDate } from "@/src/actions/get-build-info";
-import { supabase } from "@/src/utils/supabase-client";
+import { authDependencies } from "@/src/features/auth/infrastructure/auth-dependencies";
 
 import { loadSettingsAsync, saveSettingsAsync, defaultSettings } from "@/src/actions/settings-actions";
 import type { KopdesSettings } from "@/src/features/settings/domain/settings";
-import { parseBackupWorkbook, performDatabaseRestore } from "@/src/features/admin/utils/database-restore";
-import type { ParsedRestoreData, RestoreSummary } from "@/src/features/admin/utils/database-restore";
+import { parseBackupWorkbook, performDatabaseRestore } from "@/src/features/admin/infrastructure/database-restore";
+import type { ParsedRestoreData, RestoreSummary } from "@/src/features/admin/infrastructure/database-restore";
 
 export default function PengaturanPage() {
   const router = useRouter();
@@ -26,7 +26,7 @@ export default function PengaturanPage() {
     // The log needs the session's access token, so it must finish before
     // signOut() invalidates that session.
     await addAuditLog("LOGOUT", "Admin melakukan logout secara manual dari sistem.", "info");
-    await supabase.auth.signOut({ scope: "local" });
+    await authDependencies.authSessionUseCase.signOutLocal();
     router.push("/");
   };
 

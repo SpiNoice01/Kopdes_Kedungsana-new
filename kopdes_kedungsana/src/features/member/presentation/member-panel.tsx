@@ -3,7 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from "react";
-import { addAuditLog } from "../../../utils/audit-logger";
+import { addAuditLog } from "@/src/features/audit-log/infrastructure/audit-logger";
 import type { Member } from "../domain/member";
 import type { MemberMonthlySaving } from "../domain/member-monthly-saving";
 import { memberDependencies } from "../infrastructure/member-dependencies";
@@ -116,15 +116,15 @@ export function MemberPanel() {
   useEffect(() => {
     const loadMembersAndSavings = async () => {
       try {
-        const [list, fetchedSettings] = await Promise.all([
+        const [list, fetchedSettings, savingsByMember] = await Promise.all([
           memberDependencies.getMembersUseCase.execute(),
-          loadSettingsAsync()
+          loadSettingsAsync(),
+          memberDependencies.getMemberLedgersUseCase.savingsByMember(),
         ]);
-        
+
         const map: Record<string, MemberMonthlySaving[]> = {};
         for (const m of list) {
-          const savings = await memberDependencies.getMemberMonthlySavingsUseCase.execute(m.id);
-          map[m.id] = savings;
+          map[m.id] = savingsByMember.get(m.id) ?? [];
         }
         
         setSettings(fetchedSettings);

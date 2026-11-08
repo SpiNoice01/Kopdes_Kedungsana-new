@@ -24,12 +24,19 @@ This project uses [`next/font`](https://nextjs.org/docs/app/building-your-applic
 
 Project ini wajib mengikuti clean structure untuk setiap fitur:
 
-- `domain` untuk entity/contract
+- `domain` untuk entity/contract dan aturan bisnis murni (mis. `member-services.ts`, `shu-calculator.ts`)
 - `application` untuk use-case
-- `infrastructure` untuk implementasi data/repository
+- `infrastructure` untuk implementasi data/repository, adapter Supabase/Excel, dan `*-dependencies.ts` (tempat use case dirangkai)
 - `presentation` untuk UI/komponen
 
-Referensi aturan lengkap ada di [AGENTS.md](AGENTS.md).
+Arah dependensi selalu ke dalam:
+
+- `domain` tidak mengimpor apa pun di luar folder `domain`.
+- `application` hanya bergantung ke `domain` (milik fitur sendiri atau fitur lain) dan ke use case lain; repository dan sumber data diinjeksi lewat constructor, tidak diimpor langsung.
+- `presentation` dan halaman `app/` tidak memanggil Supabase langsung; selalu lewat `*Dependencies` atau adapter di `infrastructure`.
+- Data seluruh anggota (statistik, laporan, SHU) dibaca sekaligus lewat `GetMemberLedgersUseCase`, bukan query per anggota di dalam loop.
+
+Server Actions di `src/actions/` berperan sebagai adapter sisi server (composition root untuk kode yang berjalan di server). `src/utils/` hanya berisi client Supabase bersama dan formatter tampilan.
 
 ## Learn More
 

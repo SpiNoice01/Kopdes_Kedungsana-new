@@ -2,10 +2,11 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { memberDependencies } from "@/src/features/member/infrastructure/member-dependencies";
-import { addAuditLog } from "@/src/utils/audit-logger";
+import { addAuditLog } from "@/src/features/audit-log/infrastructure/audit-logger";
 import ExcelJS from "exceljs";
 import type { Member } from "@/src/features/member/domain/member";
 import type { MemberMonthlySaving } from "@/src/features/member/domain/member-monthly-saving";
+import { summarizeAnnualSavings } from "@/src/features/member/domain/member-services";
 import { loadSettingsAsync, unloadedSettings } from "@/src/actions/settings-actions";
 import type { KopdesSettings } from "@/src/features/settings/domain/settings";
 import { formatSignatoryName } from "@/src/utils/formatters";
@@ -55,9 +56,12 @@ export default function LaporanPage() {
     const loadReport = async () => {
       setIsLoading(true);
       try {
-        const [members, fetchedSettings] = await Promise.all([
+        const ledgers = memberDependencies.getMemberLedgersUseCase;
+        const [members, fetchedSettings, savingsByMember, investmentsByMember] = await Promise.all([
           memberDependencies.getMembersUseCase.execute(),
-          loadSettingsAsync()
+          loadSettingsAsync(),
+          ledgers.savingsByMember(),
+          ledgers.investmentsByMember(),
         ]);
         setSettings(fetchedSettings);
         const joinYears = members
@@ -72,47 +76,20 @@ export default function LaporanPage() {
           const joinYear = new Date(member.joinDate).getFullYear();
           if (joinYear > selectedYear) continue;
 
-          const [allSavings, allInvestments] = await Promise.all([
-            memberDependencies.getMemberMonthlySavingsUseCase.execute(member.id),
-            memberDependencies.getMemberInvestmentsUseCase.execute(member.id),
-          ]);
-
-          // Akumulasi simpanan hingga akhir tahun buku yang dipilih (saldo akhir)
-          const savingsUpToYear = allSavings.filter((s) => {
-            if (s.period === "POKOK") {
-              return new Date(s.inputDate).getFullYear() <= selectedYear;
-            }
-            const savingYear = parseInt(s.period.split("-")[0]);
-            return savingYear <= selectedYear;
-          });
-
-          const wajib = savingsUpToYear
-            .filter((s) => s.period !== "POKOK")
-            .reduce((sum, s) => sum + s.requiredSaving, 0);
-          const sukarela = savingsUpToYear.reduce((sum, s) => sum + s.voluntarySaving, 0);
-
-          const pokok = savingsUpToYear
-            .filter((s) => s.period === "POKOK")
-            .reduce((sum, s) => sum + s.requiredSaving, 0);
-
-          const investasi = allInvestments
-            .filter((inv) => parseInt(inv.period) <= selectedYear)
-            .reduce((sum, inv) => sum + inv.amount, 0);
-
-          results.push({
-            member,
-            pokok,
-            wajib,
-            sukarela,
-            investasi,
-            total: pokok + wajib + sukarela + investasi,
-            savingsInYear: savingsUpToYear,
-          });
+          // Saldo akhir s.d. tahun buku yang dipilih (aturan di domain).
+          const { savingsUpToYear, ...totals } = summarizeAnnualSavings(
+            savingsByMember.get(member.id) ?? [],
+            investmentsByMember.get(member.id) ?? [],
+            selectedYear,
+          );
+          results.push({ member, ...totals, savingsInYear: savingsUpToYear });
         }
 
         // Sort by total savings descending
         results.sort((a, b) => b.total - a.total);
         setSummaries(results);
+      } catch (error) {
+        console.error("Failed to load annual report data", error);
       } finally {
         setIsLoading(false);
       }

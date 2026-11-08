@@ -1,5 +1,5 @@
 import { supabase } from "@/src/utils/supabase-client";
-import { addAuditLog } from "@/src/utils/audit-logger";
+import { addAuditLog } from "@/src/features/audit-log/infrastructure/audit-logger";
 import { downloadExcelBuffer } from "./excel-exporter";
 import {
   buildDatabaseBackupWorkbook,

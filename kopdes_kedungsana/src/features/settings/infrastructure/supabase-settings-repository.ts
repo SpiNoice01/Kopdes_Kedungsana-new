@@ -1,9 +1,13 @@
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { supabase } from "@/src/utils/supabase-client";
 import type { KopdesSettings } from "../domain/settings";
+import type { SettingsRepository } from "../domain/settings-repository";
 
-export class SettingsRepository {
+export class SupabaseSettingsRepository implements SettingsRepository {
+  constructor(private readonly client: SupabaseClient = supabase) {}
+
   async getSettings(): Promise<KopdesSettings> {
-    const { data, error } = await supabase
+    const { data, error } = await this.client
       .from("cooperative_settings")
       .select("*")
       .limit(1)
@@ -46,7 +50,7 @@ export class SettingsRepository {
   }
 
   async updateSettings(settings: KopdesSettings): Promise<void> {
-    const { error } = await supabase
+    const { error } = await this.client
       .from("cooperative_settings")
       .update({
         cooperative_name: settings.cooperativeName,

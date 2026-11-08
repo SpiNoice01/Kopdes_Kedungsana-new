@@ -2,10 +2,10 @@
 
 import { useMemo, useState } from "react";
 import ExcelJS from "exceljs";
-import { addAuditLog } from "../../../src/utils/audit-logger";
-import { buildSimpananSheet, buildShuSheet, downloadExcelBuffer } from "@/src/features/admin/utils/excel-exporter";
-import { calculateShuPools, calculateShuRate, distributeMemberShu, totalShuBasis } from "@/src/features/admin/utils/shu-calculator";
-import { loadFiscalYearNetShu, loadMemberShuBasisRows, type MemberShuBasisRow } from "@/src/features/admin/utils/shu-basis-loader";
+import { addAuditLog } from "@/src/features/audit-log/infrastructure/audit-logger";
+import { buildSimpananSheet, buildShuSheet, downloadExcelBuffer } from "@/src/features/admin/infrastructure/excel-exporter";
+import { calculateShuPools, calculateShuRate, distributeMemberShu, totalShuBasis } from "@/src/features/shu/domain/shu-calculator";
+import type { MemberShuBasisRow } from "@/src/features/shu/application/get-shu-basis-rows-use-case";
 import { shuDependencies } from "@/src/features/shu/infrastructure/shu-dependencies";
 
 type HintProps = {
@@ -36,7 +36,7 @@ const formatShuRate = (rate: number) =>
   `${(rate * 100).toLocaleString("id-ID", { maximumFractionDigits: 4 })}%`;
 
 import { useEffect } from "react";
-import { supabase } from "@/src/utils/supabase-client";
+import { authDependencies } from "@/src/features/auth/infrastructure/auth-dependencies";
 import { notifySessionExpired } from "@/src/features/admin/presentation/session-expired-modal";
 import { loadSettingsAsync, defaultSettings } from "@/src/actions/settings-actions";
 import type { KopdesSettings } from "@/src/features/settings/domain/settings";
@@ -65,7 +65,7 @@ export default function QuickShuPage() {
         setSettings(loadedSettings);
 
         try {
-          const loadedNetShu = await loadFiscalYearNetShu(loadedSettings);
+          const loadedNetShu = await shuDependencies.getFiscalYearShuUseCase.netShu(loadedSettings.activeFiscalYear);
           setNetShu(loadedNetShu);
           setNetShuInput(loadedNetShu === null ? "" : String(loadedNetShu));
         } catch (e) {
@@ -75,7 +75,7 @@ export default function QuickShuPage() {
           );
         }
 
-        const records = await loadMemberShuBasisRows(loadedSettings);
+        const records = await shuDependencies.getShuBasisRowsUseCase.execute(loadedSettings);
         setRawMembers(records);
       } catch (e) {
         console.error("Failed to load Quick SHU data", e);
@@ -192,8 +192,7 @@ export default function QuickShuPage() {
 
     setIsSavingNetShu(true);
     try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      if (!sessionData.session) {
+      if (!(await authDependencies.authSessionUseCase.hasActiveSession())) {
         notifySessionExpired();
         return;
       }

@@ -13,6 +13,14 @@ export interface MemberRepository {
   getServiceContributionsByMemberId(memberId: string): Promise<MemberServiceContribution[]>;
   addServiceContribution(contribution: MemberServiceContribution): Promise<void>;
   getInvestmentsByMemberId(memberId: string): Promise<MemberInvestment[]>;
+  /**
+   * Bulk reads for cooperative-wide pages (stats, laporan, SHU). One query
+   * per table instead of one per member. Unlike the per-member reads these
+   * throw on failure, so a database error never looks like zero balances.
+   */
+  getAllMonthlySavings(): Promise<MemberMonthlySaving[]>;
+  getAllServiceContributions(): Promise<MemberServiceContribution[]>;
+  getAllInvestments(): Promise<MemberInvestment[]>;
   addInvestment(investment: MemberInvestment): Promise<void>;
   updatePhoto(id: string, photoUrl: string): Promise<void>;
   updateStatus(id: string, status: "aktif" | "nonaktif"): Promise<void>;

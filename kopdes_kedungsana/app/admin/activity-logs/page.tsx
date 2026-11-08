@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { getAuditLogs, clearAuditLogs, addAuditLog, AuditLog } from "../../../src/utils/audit-logger";
+import { getAuditLogs, clearAuditLogs, addAuditLog, AuditLog } from "@/src/features/audit-log/infrastructure/audit-logger";
 
 export default function ActivityLogsPage() {
   const [logs, setLogs] = useState<AuditLog[]>([]);

@@ -7,9 +7,9 @@ import { ReactNode, useEffect, useMemo, useState } from "react";
 import SpreadsheetModal from "./spreadsheet-modal";
 import { BackupPromptModal } from "./backup-prompt-modal";
 import { SESSION_EXPIRED_EVENT, SessionExpiredModal } from "./session-expired-modal";
-import { addAuditLog } from "../../../utils/audit-logger";
-import { supabase } from "../../../utils/supabase-client";
-import { checkIfBackupNeeded, getBackupIdentity } from "../utils/backup-guard";
+import { addAuditLog } from "@/src/features/audit-log/infrastructure/audit-logger";
+import { authDependencies } from "../../auth/infrastructure/auth-dependencies";
+import { checkIfBackupNeeded, getBackupIdentity } from "../infrastructure/backup-guard";
 
 type AdminShellProps = {
   children: ReactNode;
@@ -42,8 +42,7 @@ export function AdminShell({ children }: AdminShellProps) {
   // rejects writes. Block the whole panel until the admin logs in again.
   useEffect(() => {
     const checkSession = async () => {
-      const { data } = await supabase.auth.getSession();
-      if (!data.session) setIsSessionExpired(true);
+      if (!(await authDependencies.authSessionUseCase.hasActiveSession())) setIsSessionExpired(true);
     };
     void checkSession();
   }, [pathname]);
@@ -52,16 +51,13 @@ export function AdminShell({ children }: AdminShellProps) {
     const markExpired = () => setIsSessionExpired(true);
     const recheckOnReturn = async () => {
       if (document.visibilityState !== "visible") return;
-      const { data } = await supabase.auth.getSession();
-      if (!data.session) markExpired();
+      if (!(await authDependencies.authSessionUseCase.hasActiveSession())) markExpired();
     };
-    const { data: listener } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === "SIGNED_OUT" || !session) markExpired();
-    });
+    const stopWatchingSession = authDependencies.authSessionUseCase.watchSessionEnd(markExpired);
     window.addEventListener(SESSION_EXPIRED_EVENT, markExpired);
     document.addEventListener("visibilitychange", recheckOnReturn);
     return () => {
-      listener.subscription.unsubscribe();
+      stopWatchingSession();
       window.removeEventListener(SESSION_EXPIRED_EVENT, markExpired);
       document.removeEventListener("visibilitychange", recheckOnReturn);
     };

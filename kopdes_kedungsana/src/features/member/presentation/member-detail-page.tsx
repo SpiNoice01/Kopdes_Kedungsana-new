@@ -3,7 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from "react";
-import { addAuditLog } from "../../../utils/audit-logger";
+import { addAuditLog } from "@/src/features/audit-log/infrastructure/audit-logger";
 import { SectionCard } from "@/src/shared/widgets/section-card";
 import { StatusBadge } from "@/src/shared/widgets/status-badge";
 import type { Member } from "../domain/member";
