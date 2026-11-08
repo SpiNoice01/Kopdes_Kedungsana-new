@@ -1742,6 +1742,73 @@ export function MemberDetailPage({ memberId }: MemberDetailPageProps) {
                     />
                   </div>
                 </div>
+              ) : activePrintJob.type === "mutasi" ? (
+                /* Buku Mutasi Preview Panel */
+                <div className="border-2 border-dashed border-slate-300 rounded-2xl p-6 bg-slate-50/50 font-mono text-xs text-slate-700 space-y-4">
+                  <div className="text-center border-b-2 border-double border-slate-400 pb-3">
+                    <h4 className="font-bold text-sm uppercase text-slate-800">KOPERASI DESA KEDUNGSANA</h4>
+                    <p className="text-[10px] text-slate-500 mt-0.5">RT 01/RW 03, Kec. Plumbon, Cirebon</p>
+                    <p className="text-xs font-bold text-primary mt-2 uppercase tracking-wider">BUKU MUTASI SIMPANAN ANGGOTA</p>
+                    <p className="text-[10px] text-slate-400">Dicetak: {new Date().toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })}</p>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1 text-[11px]">
+                    <div className="flex"><span className="w-28 text-slate-400">Nama Anggota</span><span className="mr-1">:</span><span className="font-bold text-slate-800">{member.name}</span></div>
+                    <div className="flex"><span className="w-28 text-slate-400">Status</span><span className="mr-1">:</span><span className="font-bold uppercase">{member.status}</span></div>
+                    <div className="flex"><span className="w-28 text-slate-400">NIK</span><span className="mr-1">:</span><span className="font-bold text-slate-800">{member.nik}</span></div>
+                    <div className="flex"><span className="w-28 text-slate-400">Tgl. Bergabung</span><span className="mr-1">:</span><span>{member.joinDate}</span></div>
+                    <div className="flex"><span className="w-28 text-slate-400">Simpanan Pokok</span><span className="mr-1">:</span><span className="font-bold text-slate-800">{formatCurrency(principalSavingAmount)}</span></div>
+                  </div>
+
+                  <div className="overflow-x-auto">
+                    <table className="w-full border-collapse text-[10px] bg-white">
+                      <thead>
+                        <tr className="bg-slate-100">
+                          <th className="border border-slate-300 px-2 py-1 text-left">No</th>
+                          <th className="border border-slate-300 px-2 py-1 text-left">Periode</th>
+                          <th className="border border-slate-300 px-2 py-1 text-right">Simp. Wajib</th>
+                          <th className="border border-slate-300 px-2 py-1 text-right">Simp. Sukarela</th>
+                          <th className="border border-slate-300 px-2 py-1 text-right">Total Setor</th>
+                          <th className="border border-slate-300 px-2 py-1 text-center">Tgl Input</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(activePrintJob.data as MemberMonthlySaving[]).map((s, i) => (
+                          <tr key={s.id}>
+                            <td className="border border-slate-200 px-2 py-0.5 text-center">{i + 1}</td>
+                            <td className="border border-slate-200 px-2 py-0.5">{s.period}</td>
+                            <td className="border border-slate-200 px-2 py-0.5 text-right">{formatCurrency(s.requiredSaving)}</td>
+                            <td className="border border-slate-200 px-2 py-0.5 text-right">{formatCurrency(s.voluntarySaving)}</td>
+                            <td className="border border-slate-200 px-2 py-0.5 text-right font-bold">{formatCurrency(s.totalSaving)}</td>
+                            <td className="border border-slate-200 px-2 py-0.5 text-center">{s.inputDate}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot>
+                        <tr className="bg-slate-100 font-extrabold">
+                          <td colSpan={2} className="border border-slate-300 px-2 py-1 uppercase">Grand Total</td>
+                          <td className="border border-slate-300 px-2 py-1 text-right">{formatCurrency((activePrintJob.data as MemberMonthlySaving[]).reduce((sum, r) => sum + r.requiredSaving, 0))}</td>
+                          <td className="border border-slate-300 px-2 py-1 text-right">{formatCurrency((activePrintJob.data as MemberMonthlySaving[]).reduce((sum, r) => sum + r.voluntarySaving, 0))}</td>
+                          <td className="border border-slate-300 px-2 py-1 text-right">{formatCurrency((activePrintJob.data as MemberMonthlySaving[]).reduce((sum, r) => sum + r.totalSaving, 0))}</td>
+                          <td className="border border-slate-300 px-2 py-1"></td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+
+                  <div className="flex justify-between pt-6 border-t border-slate-200 text-center">
+                    <div className="w-1/2">
+                      <p className="text-slate-400">Anggota</p>
+                      <div className="h-14"></div>
+                      <p className="font-bold text-slate-800 border-t border-slate-300 pt-1 inline-block min-w-[100px]">{member.name}</p>
+                    </div>
+                    <div className="w-1/2">
+                      <p className="text-slate-400">Admin Koperasi</p>
+                      <div className="h-14"></div>
+                      <p className="font-bold text-slate-800 border-t border-slate-300 pt-1 inline-block min-w-[100px]">Admin Kedungsana</p>
+                    </div>
+                  </div>
+                </div>
               ) : (
                 /* Liquidation Preview Panel */
                 <div className="border-2 border-dashed border-slate-300 rounded-2xl p-6 bg-slate-50/50 font-serif text-xs text-slate-700 space-y-4">
@@ -1820,6 +1887,8 @@ export function MemberDetailPage({ memberId }: MemberDetailPageProps) {
                     addAuditLog("RECEIPT_PRINT", `Mencetak Kwitansi Setoran Simpanan: ${member.name} periode ${activePrintJob.data.period}`, "success");
                   } else if (activePrintJob.type === "kartu") {
                     addAuditLog("MEMBER_CARD_PRINT", `Mencetak Kartu Anggota: ${member.name}`, "success");
+                  } else if (activePrintJob.type === "mutasi") {
+                    addAuditLog("MUTASI_PERSONAL", `Mencetak Buku Mutasi Simpanan Anggota: ${member.name}`, "success");
                   } else {
                     addAuditLog("MUTASI_PERSONAL", `Mencetak dokumen Berita Acara Keluar Anggota: ${member.name}`, "success");
                   }
