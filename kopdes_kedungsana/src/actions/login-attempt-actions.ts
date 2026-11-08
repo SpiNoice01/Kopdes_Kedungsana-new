@@ -21,7 +21,7 @@ export type LoginRateLimitResult = { allowed: true } | { allowed: false };
  * Rate-limit gate for the admin login form, checked before the actual
  * Supabase sign-in call (see supabase-auth-repository.ts) so repeated
  * password guesses are throttled per IP — same pattern as the public NIK
- * search portal (see nik-search-actions.ts / setup_nik_search_rate_limit.sql).
+ * search portal (see nik-search-actions.ts / database/migrations/0001_schema.sql).
  * Sign-in itself stays a direct client-side supabase.auth call so the
  * browser session/cookies it establishes are unaffected.
  */

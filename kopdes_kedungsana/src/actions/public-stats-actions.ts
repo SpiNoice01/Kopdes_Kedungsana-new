@@ -14,7 +14,7 @@ import {
  * Cooperative-wide totals for the public landing page. Computed server-side
  * so the browser only ever receives the aggregate numbers, never the member
  * rows they are summed from (the anon key can no longer read those tables,
- * see setup_rls_lockdown_anon.sql).
+ * see database/migrations/0002_security.sql).
  */
 export async function getPublicCooperativeStats(): Promise<CooperativeStats> {
   const memberRepository = new SupabaseMemberRepository(createAdminClient());

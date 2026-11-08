@@ -71,7 +71,7 @@ export default function QuickShuPage() {
         } catch (e) {
           console.error("Failed to load fiscal year SHU", e);
           setNetShuLoadError(
-            "Data SHU tahun buku tidak dapat dimuat. Pastikan tabel fiscal_year_shu sudah dibuat (jalankan setup_fiscal_year_shu.sql di Supabase).",
+            "Data SHU tahun buku tidak dapat dimuat. Pastikan tabel fiscal_year_shu sudah dibuat (jalankan database/migrations/0001_schema.sql di Supabase).",
           );
         }
 
@@ -225,7 +225,7 @@ export default function QuickShuPage() {
       }
       setNetShuMessage({
         type: "error",
-        text: "Gagal menyimpan SHU bersih. Pastikan tabel fiscal_year_shu sudah dibuat (jalankan setup_fiscal_year_shu.sql di Supabase).",
+        text: "Gagal menyimpan SHU bersih. Pastikan tabel fiscal_year_shu sudah dibuat (jalankan database/migrations/0001_schema.sql di Supabase).",
       });
     } finally {
       setIsSavingNetShu(false);

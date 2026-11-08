@@ -81,12 +81,12 @@ export type NikSearchResult =
  * (app/cek-simpanan) — runs server-side specifically so the client never
  * has to fetch (and can never brute-force via network inspection) more than
  * one member's data per request. Rate-limited per IP via nik_search_attempts
- * (see setup_nik_search_rate_limit.sql) to slow down automated NIK-guessing,
+ * (see database/migrations/0001_schema.sql) to slow down automated NIK-guessing,
  * since Indonesian NIK has a guessable structure (fixed region code + birth
  * date + a 4-digit sequence) for anyone targeting one specific village's
  * membership. The member's savings and investments come back in the same
  * call because the anon key can no longer read those tables from the browser
- * (see setup_rls_lockdown_anon.sql). Only the fields the portal displays are
+ * (see database/migrations/0002_security.sql). Only the fields the portal displays are
  * returned (see PublicMemberProfile).
  */
 export async function searchMemberByNik(nik: string): Promise<NikSearchResult> {

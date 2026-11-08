@@ -8,10 +8,8 @@
 --   - Baris sudah ada -> hanya kolom identitas & pengurus yang diperbarui;
 --                       persentase SHU, iuran, dan tahun buku tidak disentuh.
 --
--- Jalankan setelah tabel cooperative_settings ada (setup_dev_schema.sql untuk
--- project baru) dan setelah setup_shu_dana_anggota.sql +
--- setup_drop_legacy_jasa_columns.sql. Selama kolom lama pct_jasa_modal /
--- pct_jasa_transaksi (NOT NULL, tanpa default) masih ada, INSERT di bawah gagal.
+-- Jalankan setelah database/migrations/0001_schema.sql.
+-- Untuk mengganti identitas di kemudian hari, cukup lewat halaman Pengaturan.
 
 BEGIN;
 

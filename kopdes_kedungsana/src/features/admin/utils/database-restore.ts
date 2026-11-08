@@ -20,7 +20,7 @@ const TRUNCATION_MARKER = "...[DIPOTONG,";
 const MAX_SAFE_RESTORE_TEXT_LENGTH = 30_000;
 
 // Columns that older backup files still carry but that were dropped from the
-// schema (setup_drop_legacy_jasa_columns.sql). Writing them back would make
+// schema (database/migrations/0001_schema.sql). Writing them back would make
 // the whole restore fail with "column not found", so they are skipped.
 const RETIRED_COLUMNS: Partial<Record<(typeof RESTORE_TABLES)[number], ReadonlySet<string>>> = {
   cooperative_settings: new Set(["pct_jasa_modal", "pct_jasa_transaksi"]),

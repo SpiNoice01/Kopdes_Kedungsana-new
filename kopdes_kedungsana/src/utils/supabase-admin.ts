@@ -8,7 +8,7 @@ const supabaseServiceRoleKey = process.env.SUPABASE_SECRET_KEY || "";
 /**
  * Service-role client for the public, unauthenticated Server Actions (NIK
  * search, landing page stats, login/NIK rate limits). These tables are no
- * longer readable with the anon key (see setup_rls_lockdown_anon.sql),
+ * longer readable with the anon key (see database/migrations/0002_security.sql),
  * so member data can only leave the database through these server-side
  * actions, one filtered result at a time. Never import this from client code:
  * the service role bypasses RLS entirely.

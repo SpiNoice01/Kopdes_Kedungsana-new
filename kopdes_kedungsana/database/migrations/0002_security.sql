@@ -1,34 +1,33 @@
--- Cabut akses anon key ke data anggota (temuan black-box FR-32).
+-- 0002 — Keamanan: Row Level Security (RLS) dan policy semua tabel aplikasi.
+-- Jalankan setelah 0001_schema.sql. Aman dijalankan ulang.
 --
--- Sebelum menjalankan:
---   1. SUPABASE_SECRET_KEY (Secret key sb_secret_...) sudah diisi di environment server (.env.local
---      dan Environment di dashboard Render). Portal Cek Simpanan, statistik landing page, dan rate limit
---      login/NIK sekarang membaca lewat Server Action dengan service role
---      (src/utils/supabase-admin.ts), bukan dengan anon key.
---   2. Kode versi baru sudah ter-deploy. Kode baru tetap jalan dengan policy
---      lama, jadi urutannya: deploy kode -> uji -> baru jalankan file ini.
---   3. Jalankan inspect_rls_policies.sql dulu dan simpan hasilnya sebagai
---      pembanding.
+-- Hasil akhir:
+--   - RLS aktif di 9 tabel aplikasi.
+--   - Admin (authenticated) boleh SELECT/INSERT/UPDATE data yang dipakai
+--     aplikasi. Tidak ada DELETE: aplikasi tidak pernah menghapus baris.
+--   - audit_logs append-only: hanya SELECT dan INSERT; UPDATE/DELETE juga
+--     dicabut di level GRANT.
+--   - Anon key (yang ada di browser) hanya boleh MEMBACA cooperative_settings
+--     (nama koperasi, pengurus, persentase SHU yang memang tampil publik).
+--     Data anggota tidak bisa dibaca atau diubah dengan anon key.
 --
--- Isi:
---   - Semua policy untuk role anon/public di 9 tabel aplikasi dihapus. Policy
---     produksi untuk members, member_monthly_savings dan cooperative_settings
---     dibuat lewat dashboard dan namanya tidak tercatat di repo, jadi dihapus
---     berdasarkan role, bukan nama.
---   - Admin (authenticated) dijamin tetap punya SELECT/INSERT/UPDATE. Policy
---     dibuat ulang hanya kalau belum ada, karena policy dashboard yang tidak
---     memilih role tercatat sebagai "public" dan ikut terhapus di langkah 1.
---   - audit_logs hanya SELECT dan INSERT; UPDATE/DELETE dicabut juga di level
---     GRANT supaya tidak bisa dibuka lagi hanya dengan menambah policy.
---   - cooperative_settings tetap boleh dibaca anon (SELECT saja): isinya nama
---     koperasi, pengurus dan persentase SHU yang memang tampil di halaman
---     publik, dan halaman publik membacanya langsung dari browser.
+-- SYARAT sebelum dijalankan di PRODUKSI (database baru boleh langsung):
+--   1. SUPABASE_SECRET_KEY (secret key sb_secret_... milik project yang sama)
+--      sudah diisi di Environment dashboard Render. Portal Cek Simpanan,
+--      statistik landing page, dan rate limit login/NIK membaca lewat Server
+--      Action dengan service role (src/utils/supabase-admin.ts).
+--   2. Kode versi terbaru sudah ter-deploy di Render.
+--   Kalau syarat belum terpenuhi, halaman publik dan login akan gagal.
+--
+-- Setelah dijalankan: cek dengan database/tools/inspect_schema.sql. Bagian
+-- "policies" untuk role anon tinggal "SELECT TO anon" di cooperative_settings.
 --
 -- Satu transaksi: kalau ada langkah gagal, tidak ada yang berubah.
 
 BEGIN;
 
--- 1. Hapus semua policy anon/public.
+-- 1. Hapus semua policy untuk anon/public. Policy produksi lama dibuat lewat
+--    dashboard dengan nama yang tidak tercatat, jadi dihapus berdasarkan role.
 DO $$
 DECLARE
   r record;
@@ -65,7 +64,7 @@ END $$;
 
 REVOKE UPDATE, DELETE, TRUNCATE ON public.audit_logs FROM anon, authenticated;
 
--- 3. Pastikan RLS aktif di semua tabel aplikasi.
+-- 3. RLS aktif di semua tabel aplikasi.
 ALTER TABLE public.members ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.member_monthly_savings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.member_investments ENABLE ROW LEVEL SECURITY;
@@ -76,8 +75,8 @@ ALTER TABLE public.fiscal_year_shu ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.login_attempts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.nik_search_attempts ENABLE ROW LEVEL SECURITY;
 
--- 4. Jamin akses admin (authenticated) sesuai operasi yang dipakai aplikasi.
---    Tidak ada DELETE di mana pun: aplikasi tidak pernah menghapus baris.
+-- 4. Akses admin (authenticated). Dibuat hanya kalau belum ada policy yang
+--    setara, supaya aman dijalankan ulang.
 CREATE FUNCTION pg_temp.ensure_authenticated_policy(tbl text, command text)
 RETURNS void
 LANGUAGE plpgsql
@@ -116,16 +115,12 @@ FROM (VALUES
   ('audit_logs', 'SELECT'), ('audit_logs', 'INSERT')
 ) AS required(t, c);
 
--- 5. Satu-satunya akses anon yang tersisa: membaca pengaturan koperasi.
+-- 5. Satu-satunya akses anon: membaca pengaturan koperasi untuk halaman publik.
+--    (Langkah 1 selalu menghapusnya dulu, jadi aman dibuat ulang.)
 CREATE POLICY "anon select" ON public.cooperative_settings
 FOR SELECT TO anon USING (true);
 
 -- login_attempts dan nik_search_attempts sengaja tanpa policy anon: hanya
--- Server Action (service role) yang mencatat dan menghitung percobaan, jadi
--- anon key tidak bisa lagi membaca IP orang lain atau mengisi baris palsu
--- untuk mengunci IP tertentu.
+-- Server Action (service role) yang mencatat dan menghitung percobaan.
 
 COMMIT;
-
--- Setelah COMMIT, jalankan ulang inspect_rls_policies.sql. Hasil query 3
--- seharusnya tinggal satu baris: cooperative_settings / SELECT / "anon select".

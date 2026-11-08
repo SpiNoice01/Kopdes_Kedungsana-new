@@ -224,8 +224,8 @@ Kolom "dugaan penyebab" adalah analisis dari angka, **belum dikonfirmasi bendaha
 |---|---|
 | Input & simpan SHU bersih | [app/admin/quick-shu/page.tsx](../app/admin/quick-shu/page.tsx) (`handleSaveNetShu`) |
 | Validasi SHU bersih | [save-fiscal-year-shu-use-case.ts](../src/features/shu/application/save-fiscal-year-shu-use-case.ts) |
-| Tabel SHU per tahun buku | [setup_fiscal_year_shu.sql](../setup_fiscal_year_shu.sql) |
-| Kolom pos Dana Anggota & PMDK | [setup_shu_dana_anggota.sql](../setup_shu_dana_anggota.sql) |
+| Tabel SHU per tahun buku | [0001_schema.sql](../database/migrations/0001_schema.sql) (`fiscal_year_shu`) |
+| Kolom pos Dana Anggota & PMDK | [0001_schema.sql](../database/migrations/0001_schema.sql) (`cooperative_settings`) |
 | 7 persentase pos (default) | [settings-actions.ts](../src/actions/settings-actions.ts), input di [pengaturan/page.tsx](../app/admin/pengaturan/page.tsx) |
 | Langkah 2: Dana Anggota | `calculateShuPools` di [shu-calculator.ts](../src/features/admin/utils/shu-calculator.ts) |
 | Langkah 3: Tarif SHU | `totalShuBasis`, `calculateShuRate` di [shu-calculator.ts](../src/features/admin/utils/shu-calculator.ts) |
