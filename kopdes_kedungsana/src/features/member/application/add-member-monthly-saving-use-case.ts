@@ -1,5 +1,6 @@
 import type { MemberMonthlySaving } from "../domain/member-monthly-saving";
 import type { MemberRepository } from "../domain/member-repository";
+import { todayLocalDateString } from "@/src/utils/local-date";
 
 export type AddMemberMonthlySavingPayload = {
   memberId: string;
@@ -60,7 +61,7 @@ export class AddMemberMonthlySavingUseCase {
       requiredSaving,
       voluntarySaving,
       totalSaving: requiredSaving + voluntarySaving,
-      inputDate: new Date().toISOString().slice(0, 10),
+      inputDate: todayLocalDateString(),
     };
 
     await this.memberRepository.addMonthlySaving(saving);

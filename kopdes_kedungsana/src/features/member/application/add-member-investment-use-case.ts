@@ -1,5 +1,6 @@
 import type { MemberInvestment } from "../domain/member-investment";
 import type { MemberRepository } from "../domain/member-repository";
+import { todayLocalDateString } from "@/src/utils/local-date";
 
 export type AddMemberInvestmentPayload = {
   memberId: string;
@@ -49,7 +50,7 @@ export class AddMemberInvestmentUseCase {
       memberId: payload.memberId,
       period: payload.period,
       amount,
-      inputDate: new Date().toISOString().slice(0, 10),
+      inputDate: todayLocalDateString(),
     };
 
     await this.memberRepository.addInvestment(investment);

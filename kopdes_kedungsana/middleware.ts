@@ -31,6 +31,16 @@ export async function middleware(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
+  const isLoginPage = request.nextUrl.pathname === "/login";
+
+  if (isLoginPage) {
+    // Sudah login: langsung ke panel admin, jangan tampilkan form lagi.
+    if (user) {
+      return NextResponse.redirect(new URL("/admin/overview", request.url));
+    }
+    return response;
+  }
+
   if (!user) {
     const loginUrl = new URL("/login", request.url);
     return NextResponse.redirect(loginUrl);
@@ -40,6 +50,6 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  // Match all request paths starting with /admin
-  matcher: "/admin/:path*",
+  // /admin/* wajib login; /login dialihkan ke panel admin bila sudah login.
+  matcher: ["/admin/:path*", "/login"],
 };

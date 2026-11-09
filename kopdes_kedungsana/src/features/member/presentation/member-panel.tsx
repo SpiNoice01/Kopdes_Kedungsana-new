@@ -12,6 +12,7 @@ import { scanKtpImage } from "@/src/actions/ktp-ocr-actions";
 import type { KopdesSettings } from "@/src/features/settings/domain/settings";
 import { formatCurrency } from "@/src/utils/formatters";
 import { calculateArrears } from "../domain/member-services";
+import { todayLocalDateString } from "@/src/utils/local-date";
 
 // Set true sementara kalau butuh lihat lagi teks mentah hasil OCR (mis. debugging
 // akurasi ekstraksi field baru). Dimatikan karena sudah tidak dibutuhkan sehari-hari.
@@ -754,7 +755,7 @@ export function MemberPanel() {
         requiredSaving: 100000,
         voluntarySaving: 0,
         totalSaving: 100000,
-        inputDate: new Date().toISOString().slice(0, 10),
+        inputDate: todayLocalDateString(),
       };
       
       const savingResult = await memberDependencies.addMemberMonthlySavingUseCase.execute(savingPayload);

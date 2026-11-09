@@ -142,8 +142,8 @@ export default function LaporanPage() {
   const handlePrint = () => {
     addAuditLog(
       "LAPORAN_PRINT",
-      `Mencetak Laporan Rekap Tahunan Simpanan Anggota Tahun Buku ${selectedYear}`,
-      "success"
+      `Membuka dialog cetak Laporan Rekap Tahunan Simpanan Anggota Tahun Buku ${selectedYear}`,
+      "info"
     );
     window.print();
   };

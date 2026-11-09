@@ -1,6 +1,7 @@
 import ExcelJS from "exceljs";
 import { supabase } from "@/src/utils/supabase-client";
 import { appendRatBundleSheets } from "./rat-bundle-exporter";
+import { todayLocalDateString } from "@/src/utils/local-date";
 
 const BACKUP_TABLES = [
   "members",
@@ -116,11 +117,11 @@ export const buildRatReportWorkbook = async (): Promise<ExcelJS.Workbook> => {
 };
 
 export const buildDatabaseBackupFilename = (date: Date = new Date()): string => {
-  const isoDate = date.toISOString().slice(0, 10); // YYYY-MM-DD
+  const isoDate = todayLocalDateString(date); // YYYY-MM-DD, WIB
   return `backup_database_kopdes_kedungsana_${isoDate}.xlsx`;
 };
 
 export const buildRatReportFilename = (date: Date = new Date()): string => {
-  const isoDate = date.toISOString().slice(0, 10); // YYYY-MM-DD
+  const isoDate = todayLocalDateString(date); // YYYY-MM-DD, WIB
   return `backup_laporan_rat_kopdes_kedungsana_${isoDate}.xlsx`;
 };

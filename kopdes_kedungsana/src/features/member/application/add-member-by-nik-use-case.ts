@@ -1,5 +1,6 @@
 import type { Member } from "../domain/member";
 import type { MemberRepository } from "../domain/member-repository";
+import { todayLocalDateString } from "@/src/utils/local-date";
 
 export type AddMemberByKtpPayload = {
   nik: string;
@@ -37,7 +38,7 @@ const buildMemberFromKtp = (payload: AddMemberByKtpPayload): Member => {
     gender: payload.gender,
     phone: payload.phone && payload.phone.trim() !== "" ? payload.phone : "-",
     address: payload.address.trim(),
-    joinDate: new Date().toISOString().slice(0, 10),
+    joinDate: todayLocalDateString(),
     status: "aktif",
     
     // Data Tambahan KTP

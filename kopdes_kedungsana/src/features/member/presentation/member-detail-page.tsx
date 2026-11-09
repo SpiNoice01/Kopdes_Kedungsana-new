@@ -1475,7 +1475,7 @@ export function MemberDetailPage({ memberId }: MemberDetailPageProps) {
                 <h2 className="font-bold text-base uppercase text-slate-905">{coopName}</h2>
                 <p className="text-[10px] text-slate-500 mt-0.5">{coopAddress}</p>
                 <h3 className="text-sm font-bold text-slate-800 mt-4 tracking-wider">BUKTI KWITANSI SETORAN SIMPANAN</h3>
-                <p className="text-[10px] text-slate-400 font-mono mt-1">No. KOPDES/REC/{activePrintJob.data.period.replace("-", "")}/{member.id.toUpperCase()}</p>
+                <p className="text-[10px] text-slate-400 font-mono mt-1">No. KOPDES/REC/{activePrintJob.data.period.replace("-", "")}/{activePrintJob.data.id.toUpperCase()}</p>
               </div>
               
               <div className="space-y-3 text-xs">
@@ -1693,7 +1693,7 @@ export function MemberDetailPage({ memberId }: MemberDetailPageProps) {
                     <h4 className="font-bold text-sm uppercase text-slate-800">{coopName}</h4>
                     <p className="text-[10px] text-slate-500 mt-0.5">{coopAddress}</p>
                     <p className="text-xs font-bold text-primary mt-2">KWITANSI SETORAN SIMPANAN</p>
-                    <p className="text-[10px] text-slate-400">No. KOPDES/REC/{activePrintJob.data.period.replace("-", "")}/{member.id.toUpperCase()}</p>
+                    <p className="text-[10px] text-slate-400">No. KOPDES/REC/{activePrintJob.data.period.replace("-", "")}/{activePrintJob.data.id.toUpperCase()}</p>
                   </div>
                   
                   <div className="space-y-2">
@@ -1891,13 +1891,13 @@ export function MemberDetailPage({ memberId }: MemberDetailPageProps) {
               <button
                 onClick={() => {
                   if (activePrintJob.type === "receipt") {
-                    addAuditLog("RECEIPT_PRINT", `Mencetak Kwitansi Setoran Simpanan: ${member.name} periode ${activePrintJob.data.period}`, "success");
+                    addAuditLog("RECEIPT_PRINT", `Membuka dialog cetak Kwitansi Setoran Simpanan: ${member.name} periode ${activePrintJob.data.period}`, "info");
                   } else if (activePrintJob.type === "kartu") {
-                    addAuditLog("MEMBER_CARD_PRINT", `Mencetak Kartu Anggota: ${member.name}`, "success");
+                    addAuditLog("MEMBER_CARD_PRINT", `Membuka dialog cetak Kartu Anggota: ${member.name}`, "info");
                   } else if (activePrintJob.type === "mutasi") {
-                    addAuditLog("MUTASI_PERSONAL", `Mencetak Buku Mutasi Simpanan Anggota: ${member.name}`, "success");
+                    addAuditLog("MUTASI_PERSONAL", `Membuka dialog cetak Buku Mutasi Simpanan Anggota: ${member.name}`, "info");
                   } else {
-                    addAuditLog("MUTASI_PERSONAL", `Mencetak dokumen Berita Acara Keluar Anggota: ${member.name}`, "success");
+                    addAuditLog("MUTASI_PERSONAL", `Membuka dialog cetak Berita Acara Keluar Anggota: ${member.name}`, "info");
                   }
                   window.print();
                 }}
