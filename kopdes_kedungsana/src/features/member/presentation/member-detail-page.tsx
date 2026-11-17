@@ -13,7 +13,7 @@ import type { MemberServiceContribution } from "../domain/member-service-contrib
 import { memberDependencies } from "../infrastructure/member-dependencies";
 import { defaultSettings, loadSettingsAsync } from "@/src/actions/settings-actions";
 import type { KopdesSettings } from "@/src/features/settings/domain/settings";
-import { formatCurrency, formatDate, formatPeriod } from "@/src/utils/formatters";
+import { formatCurrency, formatDate, formatPeriod, formatSignatoryName } from "@/src/utils/formatters";
 import { calculateArrears } from "../domain/member-services";
 
 type MemberDetailPageProps = {
@@ -195,6 +195,9 @@ export function MemberDetailPage({ memberId }: MemberDetailPageProps) {
   const coopName = settings?.cooperativeName || defaultSettings.cooperativeName;
   const coopAddress = settings?.address || defaultSettings.address;
   const coopLegal = settings?.legalNumber || defaultSettings.legalNumber;
+  // Penanda tangan dokumen cetak diambil dari Pengaturan, sama seperti Laporan Tahunan.
+  const treasurerName = formatSignatoryName(settings?.treasurerName);
+  const chairmanName = formatSignatoryName(settings?.chairmanName);
 
   useEffect(() => {
     return () => {
@@ -1495,7 +1498,7 @@ export function MemberDetailPage({ memberId }: MemberDetailPageProps) {
                 <div className="text-center w-1/2">
                   <p className="text-slate-500">Penerima Kas Koperasi</p>
                   <div className="h-20"></div>
-                  <p className="font-bold text-slate-950 border-t border-slate-400 pt-1 inline-block min-w-[120px]">Admin Kedungsana</p>
+                  <p className="font-bold text-slate-950 border-t border-slate-400 pt-1 inline-block min-w-[120px]">{treasurerName}</p>
                 </div>
               </div>
             </div>
@@ -1555,9 +1558,9 @@ export function MemberDetailPage({ memberId }: MemberDetailPageProps) {
                   <p className="font-bold border-t border-slate-400 pt-1 inline-block min-w-[100px]">{member.name}</p>
                 </div>
                 <div className="w-1/2">
-                  <p>Admin Koperasi,</p>
+                  <p>Bendahara Koperasi,</p>
                   <div className="h-14"></div>
-                  <p className="font-bold border-t border-slate-400 pt-1 inline-block min-w-[100px]">Admin Kedungsana</p>
+                  <p className="font-bold border-t border-slate-400 pt-1 inline-block min-w-[100px]">{treasurerName}</p>
                 </div>
               </div>
             </div>
@@ -1658,12 +1661,12 @@ export function MemberDetailPage({ memberId }: MemberDetailPageProps) {
                 <div className="w-1/3">
                   <p className="text-slate-500">Bendahara Koperasi</p>
                   <div className="h-16"></div>
-                  <p className="font-bold text-slate-900 border-t border-slate-400 pt-1 inline-block min-w-[90px]">Bendahara</p>
+                  <p className="font-bold text-slate-900 border-t border-slate-400 pt-1 inline-block min-w-[90px]">{treasurerName}</p>
                 </div>
                 <div className="w-1/3">
                   <p className="text-slate-500">Ketua Koperasi</p>
                   <div className="h-16"></div>
-                  <p className="font-bold text-slate-900 border-t border-slate-400 pt-1 inline-block min-w-[90px]">Ketua Koperasi</p>
+                  <p className="font-bold text-slate-900 border-t border-slate-400 pt-1 inline-block min-w-[90px]">{chairmanName}</p>
                 </div>
               </div>
             </div>
@@ -1710,9 +1713,9 @@ export function MemberDetailPage({ memberId }: MemberDetailPageProps) {
                       <p className="font-bold text-slate-800 border-t border-slate-200 pt-1 inline-block min-w-[100px]">{member.name}</p>
                     </div>
                     <div className="text-center w-1/2">
-                      <p className="text-slate-400">Penerima (Admin)</p>
+                      <p className="text-slate-400">Penerima (Bendahara)</p>
                       <div className="h-16"></div>
-                      <p className="font-bold text-slate-800 border-t border-slate-200 pt-1 inline-block min-w-[100px]">Admin Kedungsana</p>
+                      <p className="font-bold text-slate-800 border-t border-slate-200 pt-1 inline-block min-w-[100px]">{treasurerName}</p>
                     </div>
                   </div>
                 </div>
@@ -1810,9 +1813,9 @@ export function MemberDetailPage({ memberId }: MemberDetailPageProps) {
                       <p className="font-bold text-slate-800 border-t border-slate-300 pt-1 inline-block min-w-[100px]">{member.name}</p>
                     </div>
                     <div className="w-1/2">
-                      <p className="text-slate-400">Admin Koperasi</p>
+                      <p className="text-slate-400">Bendahara Koperasi</p>
                       <div className="h-14"></div>
-                      <p className="font-bold text-slate-800 border-t border-slate-300 pt-1 inline-block min-w-[100px]">Admin Kedungsana</p>
+                      <p className="font-bold text-slate-800 border-t border-slate-300 pt-1 inline-block min-w-[100px]">{treasurerName}</p>
                     </div>
                   </div>
                 </div>
@@ -1869,12 +1872,12 @@ export function MemberDetailPage({ memberId }: MemberDetailPageProps) {
                     <div className="w-1/3">
                       <p className="text-slate-400">Bendahara Kopdes</p>
                       <div className="h-14"></div>
-                      <p className="font-bold text-slate-800 border-t border-slate-300 pt-1 inline-block min-w-[80px]">Bendahara</p>
+                      <p className="font-bold text-slate-800 border-t border-slate-300 pt-1 inline-block min-w-[80px]">{treasurerName}</p>
                     </div>
                     <div className="w-1/3">
                       <p className="text-slate-400">Ketua Kopdes</p>
                       <div className="h-14"></div>
-                      <p className="font-bold text-slate-800 border-t border-slate-300 pt-1 inline-block min-w-[80px]">Ketua Koperasi</p>
+                      <p className="font-bold text-slate-800 border-t border-slate-300 pt-1 inline-block min-w-[80px]">{chairmanName}</p>
                     </div>
                   </div>
                 </div>
